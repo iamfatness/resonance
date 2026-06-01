@@ -1105,14 +1105,39 @@ button {
   font-weight: 850;
 }
 
-.manual-band input {
+.manual-band-slider {
   width: 100%;
   accent-color: var(--amber);
+}
+
+.manual-band-values {
+  display: grid;
+  grid-template-columns: minmax(0, 68px) 1fr;
+  gap: 8px;
+  align-items: center;
+}
+
+.manual-band-number {
+  width: 100%;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #151a1c;
+  color: var(--text);
+  padding: 0 6px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.manual-band-number:focus {
+  border-color: var(--teal);
+  outline: 0;
 }
 
 .manual-band strong {
   color: var(--muted);
   font-size: 12px;
+  text-align: right;
 }
 
 .direct-source {

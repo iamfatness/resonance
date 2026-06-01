@@ -860,22 +860,42 @@ function PlayerApp() {
               <button type="button" onClick={resetManualCurve}>Flat manual</button>
             </div>
             <div className="manual-band-grid">
-              {bands.map((band, index) => (
-                <label className="manual-band" key={band}>
-                  <span>{band}</span>
-                  <input
-                    type="range"
-                    min="-12"
-                    max="12"
-                    step="0.5"
-                    value={eqMode === 'Manual' ? manualCurve[index] : preset.curve[index]}
-                    onInput={(event) => setManualBand(index, Number(event.currentTarget.value))}
-                    onChange={(event) => setManualBand(index, Number(event.target.value))}
-                    aria-label={`${band} Hz manual EQ band`}
-                  />
-                  <strong>{effectiveCurve[index] > 0 ? '+' : ''}{effectiveCurve[index].toFixed(1)} dB</strong>
-                </label>
-              ))}
+              {bands.map((band, index) => {
+                const baseGain = eqMode === 'Manual' ? manualCurve[index] : preset.curve[index];
+                return (
+                  <label className="manual-band" key={band}>
+                    <span>{band}</span>
+                    <input
+                      className="manual-band-slider"
+                      type="range"
+                      min="-12"
+                      max="12"
+                      step="0.5"
+                      value={baseGain}
+                      onPointerDown={() => changeEqMode('Manual')}
+                      onFocus={() => changeEqMode('Manual')}
+                      onInput={(event) => setManualBand(index, Number(event.currentTarget.value))}
+                      onChange={(event) => setManualBand(index, Number(event.target.value))}
+                      aria-label={`${band} Hz manual EQ band`}
+                    />
+                    <div className="manual-band-values">
+                      <input
+                        className="manual-band-number"
+                        type="number"
+                        min="-12"
+                        max="12"
+                        step="0.5"
+                        value={baseGain}
+                        onFocus={() => changeEqMode('Manual')}
+                        onInput={(event) => setManualBand(index, Number(event.currentTarget.value))}
+                        onChange={(event) => setManualBand(index, Number(event.target.value))}
+                        aria-label={`${band} Hz manual EQ dB value`}
+                      />
+                      <strong>{effectiveCurve[index] > 0 ? '+' : ''}{effectiveCurve[index].toFixed(1)} dB</strong>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
           </div>
         </section>
