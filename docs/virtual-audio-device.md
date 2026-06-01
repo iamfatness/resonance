@@ -86,7 +86,7 @@ After installation, rerun:
 npm run driver:build
 ```
 
-Install the built SysVAD driver package from an elevated PowerShell window only after the build succeeds:
+Install the built SysVAD driver package from an elevated PowerShell window only after the build succeeds and only on a VM/test machine that does not require Secure Boot:
 
 ```powershell
 npm run driver:install:sysvad
@@ -95,19 +95,27 @@ npm run driver:install:sysvad
 The install script intentionally refuses to continue unless:
 
 - PowerShell is elevated.
+- Secure Boot is disabled.
 - Windows test signing is enabled.
 - the built componentized SysVAD package exists under `driver/audio/sysvad/x64/Debug/package`.
 
-Enable test signing from an elevated PowerShell window, then reboot:
+Enable test signing from an elevated PowerShell window on a VM/test machine, then reboot:
 
 ```powershell
 bcdedit /set testsigning on
 ```
 
+Do not turn off Secure Boot on a primary machine that must keep it enabled. For that environment, the Resonance driver needs to move from local WDK test signing to Microsoft driver signing:
+
+1. Create a Hardware Dev Center account.
+2. Sign the package with the required organization certificate.
+3. Submit the driver package for Microsoft attestation or HLK signing.
+4. Install the Microsoft-signed package on Secure Boot systems.
+
 ## First Milestones
 
 1. Build the unmodified SysVAD sample.
-2. Install the test-signed driver on a dedicated test machine or VM.
+2. Install the test-signed driver on a dedicated test machine or VM, or prepare Microsoft signing for Secure Boot machines.
 3. Confirm Windows exposes the virtual playback endpoint.
 4. Rename and reduce the endpoint set to the minimum Resonance device.
 5. Add a user-mode Resonance engine that captures from the virtual endpoint and outputs to the selected physical endpoint.

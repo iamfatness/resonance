@@ -60,6 +60,20 @@ function Test-IsAdmin {
   return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
+function Test-SecureBootEnabled {
+  try {
+    $state = Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\SecureBoot\State' -Name UEFISecureBootEnabled -ErrorAction Stop
+    return ([int]$state.UEFISecureBootEnabled -eq 1)
+  } catch {
+  }
+
+  try {
+    return [bool](Confirm-SecureBootUEFI)
+  } catch {
+    return $false
+  }
+}
+
 function Test-ExistsByFilter($Path, $Filter) {
   return [bool](Get-ChildItem -Path $Path -Recurse -Filter $Filter -ErrorAction SilentlyContinue | Select-Object -First 1)
 }
@@ -82,6 +96,7 @@ $hasDriverAppToolset = [bool](Get-ChildItem -Path $platforms -Recurse -ErrorActi
   $_.FullName -match 'WindowsApplicationForDrivers10\.0'
 } | Select-Object -First 1)
 $isAdmin = Test-IsAdmin
+$secureBoot = Test-SecureBootEnabled
 $testSigning = [bool](& bcdedit /enum '{current}' 2>$null | Select-String -Pattern 'testsigning\s+Yes')
 $packageDir = Join-Path $root 'driver\audio\sysvad\x64\Debug\package'
 $builtInf = Get-ChildItem -Path $packageDir -Filter 'ComponentizedAudioSample.inf' -ErrorAction SilentlyContinue |
@@ -98,7 +113,8 @@ $checks = @(
   [pscustomobject]@{ check = 'Kernel driver toolset'; status = Get-Status $hasKernelToolset; detail = 'WindowsKernelModeDriver10.0' },
   [pscustomobject]@{ check = 'Driver app toolset'; status = Get-Status $hasDriverAppToolset; detail = 'WindowsApplicationForDrivers10.0' },
   [pscustomobject]@{ check = 'Elevated shell'; status = Get-Status $isAdmin; detail = 'Required only for test signing and driver install' },
-  [pscustomobject]@{ check = 'Test signing'; status = Get-Status $testSigning; detail = 'Required only before installing test driver' },
+  [pscustomobject]@{ check = 'Secure Boot'; status = if ($secureBoot) { 'blocked' } else { 'ready' }; detail = if ($secureBoot) { 'Test-signed drivers cannot be used with Secure Boot enabled' } else { 'Compatible with local test-signed driver install' } },
+  [pscustomobject]@{ check = 'Test signing'; status = Get-Status $testSigning; detail = 'Only for VM/test machine installs without Secure Boot' },
   [pscustomobject]@{ check = 'Built SysVAD package'; status = Get-Status ([bool]$builtInf); detail = if ($builtInf) { $packageDir } else { 'Run npm run driver:build after toolsets are ready' } }
 )
 
@@ -121,9 +137,16 @@ if (-not $builtInf) {
   exit 0
 }
 
+if ($secureBoot) {
+  Write-Host ''
+  Write-Host 'Build output exists, but this package is test-signed and Secure Boot is enabled.'
+  Write-Host 'Do not install it on this machine. Use a VM/test machine for test-signed builds, or move to Microsoft attestation/production signing.'
+  exit 0
+}
+
 if (-not $isAdmin -or -not $testSigning) {
   Write-Host ''
-  Write-Host 'Build output exists. Before installing, open elevated PowerShell and enable test signing if needed:'
+  Write-Host 'Build output exists. For a VM/test machine only, open elevated PowerShell and enable test signing if needed:'
   Write-Host 'bcdedit /set testsigning on'
   Write-Host 'Then reboot and run: npm run driver:install:sysvad'
   exit 0
