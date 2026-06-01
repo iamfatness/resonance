@@ -1139,10 +1139,17 @@ function PlayerApp() {
 }
 
 function App() {
-  const [path, setPath] = useState(window.location.pathname);
+  function currentRoute() {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'app') return '/app';
+    if (params.get('view') === 'landing') return '/';
+    return window.location.pathname;
+  }
+
+  const [path, setPath] = useState(currentRoute);
 
   useEffect(() => {
-    const onPopState = () => setPath(window.location.pathname);
+    const onPopState = () => setPath(currentRoute());
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
@@ -1152,8 +1159,13 @@ function App() {
       const anchor = event.target.closest?.('a[href="/"], a[href="/app"]');
       if (!anchor) return;
       event.preventDefault();
-      window.history.pushState({}, '', anchor.getAttribute('href'));
-      setPath(window.location.pathname);
+      const href = anchor.getAttribute('href');
+      if (window.location.protocol === 'file:') {
+        window.history.pushState({}, '', href === '/app' ? '?view=app' : '?view=landing');
+      } else {
+        window.history.pushState({}, '', href);
+      }
+      setPath(currentRoute());
       window.scrollTo({ top: 0, behavior: 'auto' });
     }
 

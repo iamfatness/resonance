@@ -71,3 +71,31 @@ Deploy:
 ```powershell
 npm run deploy:worker
 ```
+
+## Desktop App
+
+Run the Electron desktop shell:
+
+```powershell
+npm run desktop:dev
+```
+
+Build and run the desktop shell from `dist`:
+
+```powershell
+npm run desktop:run
+```
+
+Desktop notes live in:
+
+```text
+docs/desktop-app.md
+```
+
+## Driver Work
+
+Build the local SysVAD sample once the WDK Visual Studio driver toolsets are installed:
+
+```powershell
+npm run driver:build
+```

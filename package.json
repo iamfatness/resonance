@@ -2,11 +2,15 @@
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "desktop:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-electron-dev.ps1",
+    "desktop:run": "npm run build && electron .",
+    "driver:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-sysvad.ps1",
     "preview": "vite preview --host 127.0.0.1",
     "package:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1",
     "deploy": "npm run build && wrangler pages deploy dist --project-name resonance --branch main --commit-dirty=true",
     "deploy:worker": "npm run build && wrangler deploy --config wrangler.worker.jsonc"
   },
+  "main": "electron/main.cjs",
   "dependencies": {
     "@vitejs/plugin-react": "latest",
     "lucide-react": "latest",
@@ -15,6 +19,7 @@
     "vite": "latest"
   },
   "devDependencies": {
+    "electron": "^39.2.7",
     "wrangler": "^4.95.0"
   }
 }

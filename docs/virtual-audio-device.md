@@ -71,11 +71,7 @@ Install the Windows Driver Kit integration for Visual Studio 2022 Build Tools. T
 After installation, rerun:
 
 ```powershell
-& 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\amd64\MSBuild.exe' `
-  driver\audio\sysvad\sysvad.sln `
-  /p:Configuration=Debug `
-  /p:Platform=x64 `
-  /m
+npm run driver:build
 ```
 
 ## First Milestones
