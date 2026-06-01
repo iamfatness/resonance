@@ -1,0 +1,17 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "resonance-app",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-06-01",
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application"
+  },
+  "routes": [
+    {
+      "pattern": "resonance.iamfatness.us/*",
+      "zone_name": "iamfatness.us"
+    }
+  ]
+}

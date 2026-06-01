@@ -1,0 +1,704 @@
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { createRoot } from 'react-dom/client';
+import {
+  AudioLines,
+  BadgeInfo,
+  CirclePlay,
+  Disc3,
+  Drum,
+  FastForward,
+  Gauge,
+  Guitar,
+  Heart,
+  History,
+  KeyboardMusic,
+  Library,
+  Link,
+  ListMusic,
+  Mic2,
+  Moon,
+  Music2,
+  Pause,
+  Play,
+  Plus,
+  Radio,
+  Repeat2,
+  Search,
+  Settings,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  SlidersHorizontal,
+  Sparkles,
+  SunMedium,
+  ThumbsDown,
+  ThumbsUp,
+  Upload,
+  Volume2,
+  WandSparkles,
+  Zap,
+} from 'lucide-react';
+import './styles.css';
+
+const demoVideoA = {
+  id: 'TW9d8vYrVFQ',
+  title: 'Elektronomia - Sky High [NCS Release]',
+  channel: 'NoCopyrightSounds',
+  duration: '4:01',
+};
+
+const demoVideoB = {
+  id: 'M7lc1UVf-VE',
+  title: 'YouTube embedded playback demo',
+  channel: 'YouTube Developers',
+  duration: '0:30',
+};
+
+const queueSeed = [
+  demoVideoA,
+  demoVideoB,
+  { id: 'DWcJFNfaw9c', title: 'Jazz Cafe Music - Relaxing Instrumental', channel: 'Cafe Music BGM', duration: '3:02:10' },
+  { id: 'hHW1oY26kxQ', title: 'Deep Focus Music - Ambient Study Mix', channel: 'Quiet Quest', duration: '2:58:44' },
+];
+
+const moodPresets = {
+  Focus: {
+    icon: Gauge,
+    curve: [2, 3.5, 2, 0, -2, -1, 1.5, 2],
+    instruments: { Vocal: 1.5, Bass: 1, Drums: -0.5, Guitar: 0, Synth: 2, Strings: 1 },
+    mix: { A: 72, B: 38 },
+    intent: 'Keeps Deck A clear and lowers Deck B into a bed for concentration.',
+  },
+  Lift: {
+    icon: SunMedium,
+    curve: [0, 1, 1.5, 2, 2.5, 3, 2, 1],
+    instruments: { Vocal: 2, Bass: 1, Drums: 2, Guitar: 1, Synth: 2.5, Strings: 1.5 },
+    mix: { A: 78, B: 58 },
+    intent: 'Raises both decks for a brighter, more energetic blend.',
+  },
+  Warmth: {
+    icon: Sparkles,
+    curve: [2.5, 3, 2, 1, 0, -1, -0.5, 0],
+    instruments: { Vocal: 1, Bass: 3, Drums: 1, Guitar: 1.5, Synth: -0.5, Strings: 2 },
+    mix: { A: 64, B: 62 },
+    intent: 'Balances both decks and emphasizes the low-mid mood curve.',
+  },
+  Drive: {
+    icon: Zap,
+    curve: [1, 2.5, 2, 1.5, 2, 2.5, 1, 0],
+    instruments: { Vocal: 1, Bass: 2.5, Drums: 3, Guitar: 2.5, Synth: 1, Strings: -0.5 },
+    mix: { A: 84, B: 72 },
+    intent: 'Pushes both decks forward for higher impact and percussion.',
+  },
+  Night: {
+    icon: Moon,
+    curve: [1.5, 2, 1, -1, -2, -2.5, -1, 0.5],
+    instruments: { Vocal: -0.5, Bass: 2, Drums: -1, Guitar: 0, Synth: 1.5, Strings: 2 },
+    mix: { A: 48, B: 28 },
+    intent: 'Drops total YouTube volume and softens the second deck.',
+  },
+};
+
+const bands = [31, 62, 125, 250, 500, '1k', '2k', '4k'];
+const bandFreqs = [31, 62, 125, 250, 500, 1000, 2000, 4000];
+const instrumentMeta = {
+  Vocal: { icon: Mic2, band: '1k-4k' },
+  Bass: { icon: Disc3, band: '62-125' },
+  Drums: { icon: Drum, band: '125-2k' },
+  Guitar: { icon: Guitar, band: '250-4k' },
+  Synth: { icon: KeyboardMusic, band: '500-4k' },
+  Strings: { icon: WandSparkles, band: '1k-8k' },
+};
+
+function parseYoutubeId(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  if (/^[a-zA-Z0-9_-]{11}$/.test(trimmed)) return trimmed;
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname.includes('youtu.be')) return url.pathname.slice(1).split('/')[0] || null;
+    if (url.hostname.includes('youtube.com')) {
+      if (url.searchParams.get('v')) return url.searchParams.get('v');
+      const shorts = url.pathname.match(/\/shorts\/([a-zA-Z0-9_-]{11})/);
+      if (shorts) return shorts[1];
+      const embed = url.pathname.match(/\/embed\/([a-zA-Z0-9_-]{11})/);
+      if (embed) return embed[1];
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+function useYouTubePlayer(videoId, volume) {
+  const containerRef = useRef(null);
+  const playerRef = useRef(null);
+  const [ready, setReady] = useState(false);
+  const [playing, setPlaying] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    function loadPlayer() {
+      if (cancelled || !containerRef.current || !window.YT?.Player) return;
+      playerRef.current = new window.YT.Player(containerRef.current, {
+        videoId,
+        playerVars: {
+          autoplay: 0,
+          controls: 1,
+          modestbranding: 1,
+          rel: 0,
+          playsinline: 1,
+        },
+        events: {
+          onReady: () => {
+            playerRef.current?.setVolume?.(volume);
+            setReady(true);
+          },
+          onStateChange: (event) => setPlaying(event.data === window.YT.PlayerState.PLAYING),
+        },
+      });
+    }
+
+    if (!window.YT) {
+      const tag = document.createElement('script');
+      tag.src = 'https://www.youtube.com/iframe_api';
+      document.head.appendChild(tag);
+    }
+
+    const previous = window.onYouTubeIframeAPIReady;
+    window.onYouTubeIframeAPIReady = () => {
+      previous?.();
+      loadPlayer();
+    };
+
+    if (window.YT?.Player) loadPlayer();
+
+    return () => {
+      cancelled = true;
+      playerRef.current?.destroy?.();
+      playerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!ready) return;
+    playerRef.current?.loadVideoById?.(videoId);
+    playerRef.current?.setVolume?.(volume);
+  }, [ready, videoId]);
+
+  useEffect(() => {
+    if (!ready) return;
+    playerRef.current?.setVolume?.(volume);
+    if (volume === 0) playerRef.current?.mute?.();
+    else playerRef.current?.unMute?.();
+  }, [ready, volume]);
+
+  return {
+    containerRef,
+    ready,
+    playing,
+    toggle: () => {
+      if (!ready) return;
+      if (playing) playerRef.current.pauseVideo();
+      else playerRef.current.playVideo();
+    },
+    play: () => ready && playerRef.current?.playVideo?.(),
+    pause: () => ready && playerRef.current?.pauseVideo?.(),
+  };
+}
+
+function useLocalEq(activePreset, curve, sourceUrl) {
+  const audioRef = useRef(null);
+  const graphRef = useRef(null);
+  const contextRef = useRef(null);
+  const filtersRef = useRef([]);
+  const analyserRef = useRef(null);
+  const [localFileUrl, setLocalFileUrl] = useState('');
+  const [enabled, setEnabled] = useState(false);
+
+  useEffect(() => {
+    return () => {
+      if (localFileUrl) URL.revokeObjectURL(localFileUrl);
+    };
+  }, [localFileUrl]);
+
+  useEffect(() => {
+    filtersRef.current.forEach((filter, index) => {
+      filter.gain.setTargetAtTime(curve[index] ?? 0, contextRef.current?.currentTime ?? 0, 0.02);
+    });
+  }, [curve, activePreset]);
+
+  useEffect(() => {
+    const canvas = graphRef.current;
+    const analyser = analyserRef.current;
+    if (!canvas || !analyser) return undefined;
+
+    const ctx = canvas.getContext('2d');
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    let frame = 0;
+
+    function draw() {
+      frame = requestAnimationFrame(draw);
+      const { width, height } = canvas;
+      analyser.getByteFrequencyData(data);
+      ctx.clearRect(0, 0, width, height);
+      ctx.fillStyle = '#091012';
+      ctx.fillRect(0, 0, width, height);
+      const count = 42;
+      const gap = 3;
+      const barWidth = (width - gap * (count - 1)) / count;
+      for (let i = 0; i < count; i += 1) {
+        const value = data[Math.floor((i / count) * data.length)] / 255;
+        const barHeight = Math.max(5, value * (height - 12));
+        const x = i * (barWidth + gap);
+        const gradient = ctx.createLinearGradient(0, height - barHeight, 0, height);
+        gradient.addColorStop(0, '#f6b44a');
+        gradient.addColorStop(0.35, '#35d0c4');
+        gradient.addColorStop(1, '#147b77');
+        ctx.fillStyle = gradient;
+        ctx.fillRect(x, height - barHeight, barWidth, barHeight);
+      }
+    }
+
+    draw();
+    return () => cancelAnimationFrame(frame);
+  }, [enabled]);
+
+  const activate = async () => {
+    const audio = audioRef.current;
+    if (!audio || enabled) return;
+
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const context = new AudioContext();
+    const source = context.createMediaElementSource(audio);
+    const filters = bandFreqs.map((frequency) => {
+      const filter = context.createBiquadFilter();
+      filter.type = 'peaking';
+      filter.frequency.value = frequency;
+      filter.Q.value = 1;
+      filter.gain.value = 0;
+      return filter;
+    });
+    const analyser = context.createAnalyser();
+    analyser.fftSize = 256;
+
+    source.connect(filters[0]);
+    filters.forEach((filter, index) => {
+      filter.connect(filters[index + 1] || analyser);
+    });
+    analyser.connect(context.destination);
+
+    contextRef.current = context;
+    filtersRef.current = filters;
+    analyserRef.current = analyser;
+    setEnabled(true);
+  };
+
+  const audioSource = localFileUrl || sourceUrl;
+
+  return {
+    audioRef,
+    graphRef,
+    audioSource,
+    enabled,
+    setFile(file) {
+      if (!file) return;
+      if (localFileUrl) URL.revokeObjectURL(localFileUrl);
+      setLocalFileUrl(URL.createObjectURL(file));
+    },
+    activate,
+  };
+}
+
+function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, setVolume, active, onActivate }) {
+  return (
+    <article className={`deck ${active ? 'active' : ''}`}>
+      <div className="deck-topline">
+        <button className="deck-label" onClick={onActivate} type="button">
+          <Music2 size={17} />
+          <span>Deck {label}</span>
+        </button>
+        <span className="deck-state">{player.ready ? 'YouTube ready' : 'Loading'}</span>
+      </div>
+      <form className="deck-search" onSubmit={onSubmit}>
+        <Search size={16} />
+        <input
+          aria-label={`Deck ${label} YouTube URL or video ID`}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={`Load Deck ${label}`}
+        />
+        <button type="submit">Load</button>
+      </form>
+      <div className="video-frame">
+        <div ref={player.containerRef} className="youtube-target" />
+      </div>
+      <div className="deck-meta">
+        <div>
+          <h1>{video.title}</h1>
+          <p>{video.channel} - YouTube playback - {video.duration}</p>
+        </div>
+        <button className="icon-button" onClick={player.toggle} aria-label={player.playing ? `Pause Deck ${label}` : `Play Deck ${label}`}>
+          {player.playing ? <Pause size={18} /> : <Play size={18} />}
+        </button>
+      </div>
+      <label className="deck-volume">
+        <span><Volume2 size={16} />Deck {label}</span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={volume}
+          onChange={(event) => setVolume(Number(event.target.value))}
+          aria-label={`Deck ${label} volume`}
+        />
+        <strong>{volume}%</strong>
+      </label>
+    </article>
+  );
+}
+
+function App() {
+  const [deckA, setDeckA] = useState(demoVideoA);
+  const [deckB, setDeckB] = useState(demoVideoB);
+  const [queryA, setQueryA] = useState('https://www.youtube.com/watch?v=TW9d8vYrVFQ');
+  const [queryB, setQueryB] = useState('https://www.youtube.com/watch?v=M7lc1UVf-VE');
+  const [activeDeck, setActiveDeck] = useState('A');
+  const [activePreset, setActivePreset] = useState('Focus');
+  const [deckVolumes, setDeckVolumes] = useState(moodPresets.Focus.mix);
+  const [directUrl, setDirectUrl] = useState('');
+  const [eqMode, setEqMode] = useState('Direct');
+  const preset = moodPresets[activePreset];
+  const [instrumentBoosts, setInstrumentBoosts] = useState(preset.instruments);
+  const playerA = useYouTubePlayer(deckA.id, deckVolumes.A);
+  const playerB = useYouTubePlayer(deckB.id, deckVolumes.B);
+  const localEq = useLocalEq(activePreset, preset.curve, directUrl);
+
+  const eqPath = useMemo(() => {
+    const max = Math.max(...preset.curve.map((point) => Math.abs(point)), 12);
+    return preset.curve
+      .map((gain, index) => {
+        const x = 20 + index * 51;
+        const y = 78 - (gain / max) * 46;
+        return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
+      })
+      .join(' ');
+  }, [preset.curve]);
+
+  function applyMoodPreset(name) {
+    const nextPreset = moodPresets[name];
+    setActivePreset(name);
+    setInstrumentBoosts(nextPreset.instruments);
+    setDeckVolumes(nextPreset.mix);
+    setEqMode('Preset Guide');
+  }
+
+  function setDeckVolume(deck, value) {
+    setDeckVolumes((current) => ({ ...current, [deck]: value }));
+  }
+
+  function loadVideo(nextVideo, targetDeck = activeDeck) {
+    if (targetDeck === 'A') {
+      setDeckA(nextVideo);
+      setQueryA(`https://www.youtube.com/watch?v=${nextVideo.id}`);
+    } else {
+      setDeckB(nextVideo);
+      setQueryB(`https://www.youtube.com/watch?v=${nextVideo.id}`);
+    }
+  }
+
+  function submitVideo(event, targetDeck) {
+    event.preventDefault();
+    const id = parseYoutubeId(targetDeck === 'A' ? queryA : queryB);
+    if (!id) return;
+    loadVideo({ id, title: `Custom Deck ${targetDeck} video`, channel: 'YouTube', duration: '--:--' }, targetDeck);
+  }
+
+  function toggleBothDecks() {
+    if (playerA.playing || playerB.playing) {
+      playerA.pause();
+      playerB.pause();
+      return;
+    }
+    playerA.play();
+    playerB.play();
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <div className="brand">
+          <AudioLines aria-hidden="true" />
+          <span>Resonance</span>
+        </div>
+        <form className="searchbar" onSubmit={(event) => submitVideo(event, activeDeck)}>
+          <Search size={18} />
+          <input
+            aria-label="Active deck YouTube URL or video ID"
+            value={activeDeck === 'A' ? queryA : queryB}
+            onChange={(event) => (activeDeck === 'A' ? setQueryA(event.target.value) : setQueryB(event.target.value))}
+            placeholder={`Paste a YouTube link for Deck ${activeDeck}`}
+          />
+          <button type="submit">Load</button>
+        </form>
+        <div className="source-pill">
+          <Link size={16} />
+          <span>Active</span>
+          <strong>Deck {activeDeck}</strong>
+        </div>
+        <button className="icon-button" aria-label="Settings"><Settings size={18} /></button>
+      </header>
+
+      <aside className="sidebar">
+        <nav>
+          <a className="active" href="#now"><CirclePlay size={18} />Now Playing</a>
+          <a href="#library"><Library size={18} />Library</a>
+          <a href="#playlists"><ListMusic size={18} />Playlists</a>
+          <a href="#history"><History size={18} />History</a>
+          <a href="#liked"><Heart size={18} />Liked Videos</a>
+          <a href="#radio"><Radio size={18} />Radio</a>
+        </nav>
+        <section>
+          <div className="section-title">
+            <span>Playlists</span>
+            <Plus size={16} />
+          </div>
+          {['Focus Mix', 'Late Night', 'Studio Sessions', 'Reference Tracks', 'Drum Drives'].map((name, index) => (
+            <button className="playlist-row" key={name}>
+              <span>{name}</span>
+              <span>{[24, 31, 18, 12, 27][index]}</span>
+            </button>
+          ))}
+        </section>
+      </aside>
+
+      <section className="player-panel" id="now">
+        <div className="deck-grid">
+          <VideoDeck
+            label="A"
+            video={deckA}
+            query={queryA}
+            setQuery={setQueryA}
+            onSubmit={(event) => submitVideo(event, 'A')}
+            player={playerA}
+            volume={deckVolumes.A}
+            setVolume={(value) => setDeckVolume('A', value)}
+            active={activeDeck === 'A'}
+            onActivate={() => setActiveDeck('A')}
+          />
+          <VideoDeck
+            label="B"
+            video={deckB}
+            query={queryB}
+            setQuery={setQueryB}
+            onSubmit={(event) => submitVideo(event, 'B')}
+            player={playerB}
+            volume={deckVolumes.B}
+            setVolume={(value) => setDeckVolume('B', value)}
+            active={activeDeck === 'B'}
+            onActivate={() => setActiveDeck('B')}
+          />
+        </div>
+
+        <div className="mix-status">
+          <div>
+            <h2>{activePreset} mix is active</h2>
+            <p>{preset.intent}</p>
+          </div>
+          <div className="track-actions">
+            <button className="icon-button" aria-label="Like"><ThumbsUp size={18} /></button>
+            <button className="icon-button" aria-label="Dislike"><ThumbsDown size={18} /></button>
+            <button className="icon-button" aria-label="Queue"><ListMusic size={18} /></button>
+          </div>
+        </div>
+
+        <div className="queue-header">
+          <h2>Load Into Deck {activeDeck}</h2>
+          <label className="toggle">
+            <input type="checkbox" checked readOnly />
+            <span>Use selected deck</span>
+          </label>
+        </div>
+        <div className="queue">
+          {queueSeed.map((item) => (
+            <button
+              className={`queue-item ${item.id === deckA.id || item.id === deckB.id ? 'selected' : ''}`}
+              key={item.id}
+              onClick={() => loadVideo(item)}
+            >
+              <div className="thumb">
+                <img alt="" src={`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`} />
+              </div>
+              <div>
+                <strong>{item.title}</strong>
+                <span>{item.channel}</span>
+              </div>
+              <small>{item.duration}</small>
+              <SlidersHorizontal size={16} />
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <aside className="eq-panel">
+        <section>
+          <div className="panel-heading">
+            <h2>Mood Presets</h2>
+            <BadgeInfo size={16} />
+          </div>
+          <div className="preset-grid">
+            {Object.entries(moodPresets).map(([name, data]) => {
+              const Icon = data.icon;
+              return (
+                <button
+                  className={`preset-button ${activePreset === name ? 'active' : ''}`}
+                  key={name}
+                  onClick={() => applyMoodPreset(name)}
+                >
+                  <Icon size={21} />
+                  <span>{name}</span>
+                </button>
+              );
+            })}
+          </div>
+          <div className="preset-effect">
+            <strong>{activePreset}</strong>
+            <span>Deck A {deckVolumes.A}%</span>
+            <span>Deck B {deckVolumes.B}%</span>
+          </div>
+        </section>
+
+        <section>
+          <div className="panel-heading">
+            <h2>Instrument Boost</h2>
+            <BadgeInfo size={16} />
+          </div>
+          <div className="instrument-grid">
+            {Object.entries(instrumentMeta).map(([name, meta]) => {
+              const Icon = meta.icon;
+              return (
+                <label className="instrument" key={name}>
+                  <Icon size={20} />
+                  <span>{name}</span>
+                  <input
+                    type="range"
+                    min="-6"
+                    max="6"
+                    step="0.5"
+                    value={instrumentBoosts[name]}
+                    onChange={(event) =>
+                      setInstrumentBoosts((current) => ({ ...current, [name]: Number(event.target.value) }))
+                    }
+                  />
+                  <strong>{instrumentBoosts[name] > 0 ? '+' : ''}{instrumentBoosts[name].toFixed(1)} dB</strong>
+                  <small>{meta.band}</small>
+                </label>
+              );
+            })}
+          </div>
+        </section>
+
+        <section>
+          <div className="panel-heading">
+            <h2>8-Band Equalizer</h2>
+            <select value={eqMode} onChange={(event) => setEqMode(event.target.value)}>
+              <option>Direct</option>
+              <option>Preset Guide</option>
+            </select>
+          </div>
+          <div className="eq-graph">
+            <svg viewBox="0 0 400 130" role="img" aria-label={`${activePreset} EQ curve`}>
+              <g className="grid-lines">
+                {[20, 49, 78, 107].map((y) => <line key={y} x1="0" x2="400" y1={y} y2={y} />)}
+                {[20, 71, 122, 173, 224, 275, 326, 377].map((x) => <line key={x} x1={x} x2={x} y1="8" y2="118" />)}
+              </g>
+              <path d={eqPath} className="eq-line" />
+              {preset.curve.map((gain, index) => (
+                <circle key={bands[index]} cx={20 + index * 51} cy={78 - (gain / 12) * 46} r="6" />
+              ))}
+            </svg>
+            <div className="band-labels">
+              {bands.map((band) => <span key={band}>{band}</span>)}
+            </div>
+          </div>
+        </section>
+
+        <section className="direct-source">
+          <div className="panel-heading">
+            <h2>Direct Audio EQ</h2>
+            <BadgeInfo size={16} />
+          </div>
+          <div className="direct-controls">
+            <label className="file-button">
+              <Upload size={16} />
+              <span>Audio File</span>
+              <input
+                type="file"
+                accept="audio/*"
+                onChange={(event) => localEq.setFile(event.target.files?.[0])}
+              />
+            </label>
+            <input
+              value={directUrl}
+              onChange={(event) => setDirectUrl(event.target.value)}
+              placeholder="Direct audio URL with CORS"
+            />
+          </div>
+          <audio
+            ref={localEq.audioRef}
+            src={localEq.audioSource || undefined}
+            controls
+            crossOrigin="anonymous"
+            onPlay={localEq.activate}
+          />
+          <canvas ref={localEq.graphRef} width="460" height="120" />
+        </section>
+
+        <div className="compat-note">
+          <BadgeInfo size={18} />
+          <p>
+            EQ and instrument boosts process direct audio sources. YouTube iframe audio is isolated by the browser,
+            so mood presets apply YouTube deck volumes plus preset guidance, while direct audio receives the real EQ curve.
+          </p>
+        </div>
+      </aside>
+
+      <footer className="transport">
+        <button className="icon-button" aria-label="Shuffle"><Shuffle size={19} /></button>
+        <button className="icon-button" aria-label="Previous"><SkipBack size={21} /></button>
+        <button className="play-button" onClick={toggleBothDecks} aria-label={playerA.playing || playerB.playing ? 'Pause both decks' : 'Play both decks'}>
+          {playerA.playing || playerB.playing ? <Pause size={27} /> : <Play size={27} />}
+        </button>
+        <button className="icon-button" aria-label="Next"><SkipForward size={21} /></button>
+        <button className="icon-button" aria-label="Repeat"><Repeat2 size={19} /></button>
+        <div className="mini-track">
+          <img alt="" src={`https://i.ytimg.com/vi/${activeDeck === 'A' ? deckA.id : deckB.id}/mqdefault.jpg`} />
+          <div>
+            <strong>{activeDeck === 'A' ? deckA.title : deckB.title}</strong>
+            <span>Deck {activeDeck} selected</span>
+          </div>
+        </div>
+        <div className="progress">
+          <span>Preset: {activePreset}</span>
+          <div><i style={{ width: `${Math.max(8, Math.min(96, (deckVolumes.A + deckVolumes.B) / 2))}%` }} /></div>
+          <span>A {deckVolumes.A}% / B {deckVolumes.B}%</span>
+        </div>
+        <Volume2 size={19} />
+        <input
+          className="volume"
+          type="range"
+          min="0"
+          max="100"
+          value={deckVolumes[activeDeck]}
+          onChange={(event) => setDeckVolume(activeDeck, Number(event.target.value))}
+          aria-label={`Deck ${activeDeck} volume`}
+        />
+        <FastForward size={18} />
+      </footer>
+    </main>
+  );
+}
+
+createRoot(document.getElementById('root')).render(<App />);
