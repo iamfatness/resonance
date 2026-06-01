@@ -34,6 +34,18 @@ Build the web UI and open it in Electron:
 npm run desktop:run
 ```
 
+Create a local Windows package:
+
+```powershell
+npm run desktop:package
+```
+
+The package is created at:
+
+```text
+release/Resonance-local/Resonance.exe
+```
+
 ## Current Scope
 
 - Desktop shell opens the app view by default.

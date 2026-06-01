@@ -87,6 +87,18 @@ Build and run the desktop shell from `dist`:
 npm run desktop:run
 ```
 
+Create a local Windows desktop package:
+
+```powershell
+npm run desktop:package
+```
+
+The packaged app is written to:
+
+```text
+release/Resonance-local/Resonance.exe
+```
+
 Desktop notes live in:
 
 ```text
