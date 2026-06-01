@@ -9,6 +9,7 @@
     "native:wasapi-meter": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-wasapi-meter.ps1",
     "driver:install:wdk-buildtools": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-wdk-buildtools.ps1",
     "driver:preflight": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/driver-preflight.ps1",
+    "driver:customize:resonance": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/customize-sysvad-resonance.ps1",
     "driver:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-sysvad.ps1",
     "driver:install:sysvad": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-sysvad.ps1",
     "preview": "vite preview --host 127.0.0.1",

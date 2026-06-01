@@ -53,6 +53,19 @@ npm run driver:preflight
 npm run driver:build
 ```
 
+Customize the ignored SysVAD checkout into the current Resonance prototype before building:
+
+```powershell
+npm run driver:customize:resonance
+npm run driver:build
+```
+
+The customization keeps the Microsoft sample project structure, but changes the local driver workspace to:
+
+- expose a single virtual playback endpoint,
+- use Resonance-facing device/provider strings,
+- use a Resonance root hardware ID for the componentized package.
+
 If the WDK files are installed but the Visual Studio platform toolsets are missing, add the Visual Studio WDK component:
 
 ```powershell
@@ -115,9 +128,9 @@ Do not turn off Secure Boot on a primary machine that must keep it enabled. For 
 ## First Milestones
 
 1. Build the unmodified SysVAD sample.
-2. Install the test-signed driver on a dedicated test machine or VM, or prepare Microsoft signing for Secure Boot machines.
-3. Confirm Windows exposes the virtual playback endpoint.
-4. Rename and reduce the endpoint set to the minimum Resonance device.
+2. Rename and reduce the endpoint set to the minimum Resonance virtual playback device.
+3. Install the test-signed driver on a dedicated test machine or VM, or prepare Microsoft signing for Secure Boot machines.
+4. Confirm Windows exposes the virtual playback endpoint.
 5. Add a user-mode Resonance engine that captures from the virtual endpoint and outputs to the selected physical endpoint.
 6. Wire the existing mood presets into the engine as real DSP parameters.
 
