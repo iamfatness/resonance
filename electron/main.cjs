@@ -16,6 +16,13 @@ function startAudioEngineProcess() {
   });
 
   engineProcess.on('message', (message = {}) => {
+    if (message.type === 'METERS') {
+      BrowserWindow.getAllWindows().forEach((window) => {
+        window.webContents.send('engine:meters', message.meters);
+      });
+      return;
+    }
+
     if (message.type !== 'STATE') return;
     engineState = message.state;
     BrowserWindow.getAllWindows().forEach((window) => {

@@ -47,7 +47,17 @@ const engineState = {
     scannedAt: null,
   },
   lastStartedAt: null,
+  meters: {
+    inputPeak: 0,
+    outputPeak: 0,
+    inputRms: 0,
+    outputRms: 0,
+    clipping: false,
+    updatedAt: null,
+  },
 };
+
+let meterTimer = null;
 
 function send(message) {
   if (process.send) process.send(message);
@@ -55,6 +65,46 @@ function send(message) {
 
 function publishState(requestId) {
   send({ type: 'STATE', requestId, state: engineState });
+}
+
+function publishMeters() {
+  send({ type: 'METERS', meters: engineState.meters });
+}
+
+function nextMockMeters() {
+  const now = Date.now();
+  const seconds = now / 1000;
+  const movement = (Math.sin(seconds * 2.1) + 1) / 2;
+  const transient = (Math.sin(seconds * 8.7) + 1) / 2;
+  const gain = Math.max(0, Math.min(1.2, engineState.settings.outputGain ?? 0.9));
+  const inputPeak = Math.min(0.98, 0.18 + movement * 0.58 + transient * 0.16);
+  const inputRms = Math.min(0.86, inputPeak * (0.48 + movement * 0.16));
+  const outputPeak = Math.min(1, inputPeak * gain);
+  const outputRms = Math.min(1, inputRms * gain);
+
+  engineState.meters = {
+    inputPeak: Number(inputPeak.toFixed(3)),
+    outputPeak: Number(outputPeak.toFixed(3)),
+    inputRms: Number(inputRms.toFixed(3)),
+    outputRms: Number(outputRms.toFixed(3)),
+    clipping: outputPeak >= 0.98,
+    updatedAt: new Date(now).toISOString(),
+  };
+}
+
+function startMetering() {
+  if (meterTimer) return;
+  meterTimer = setInterval(() => {
+    if (engineState.status !== 'running') return;
+    nextMockMeters();
+    publishMeters();
+  }, 120);
+}
+
+function stopMetering() {
+  if (!meterTimer) return;
+  clearInterval(meterTimer);
+  meterTimer = null;
 }
 
 function normalizeDevice(device, fallbackRole) {
@@ -157,12 +207,25 @@ function refreshDevices(requestId) {
 function start(requestId) {
   engineState.status = 'running';
   engineState.lastStartedAt = new Date().toISOString();
+  nextMockMeters();
+  startMetering();
   publishState(requestId);
+  publishMeters();
 }
 
 function stop(requestId) {
   engineState.status = 'idle';
+  stopMetering();
+  engineState.meters = {
+    inputPeak: 0,
+    outputPeak: 0,
+    inputRms: 0,
+    outputRms: 0,
+    clipping: false,
+    updatedAt: new Date().toISOString(),
+  };
   publishState(requestId);
+  publishMeters();
 }
 
 function updateSettings(requestId, settings = {}) {
@@ -170,6 +233,10 @@ function updateSettings(requestId, settings = {}) {
     ...engineState.settings,
     ...settings,
   };
+  if (engineState.status === 'running') {
+    nextMockMeters();
+    publishMeters();
+  }
   publishState(requestId);
 }
 
@@ -189,3 +256,7 @@ process.on('message', (message = {}) => {
 });
 
 refreshDevices();
+
+process.on('disconnect', () => {
+  stopMetering();
+});

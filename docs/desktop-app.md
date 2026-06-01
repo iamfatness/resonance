@@ -39,12 +39,14 @@ npm run desktop:run
 - Desktop shell opens the app view by default.
 - Node integration is disabled.
 - A preload bridge exposes minimal desktop metadata at `window.resonanceDesktop`.
+- A preload bridge exposes `window.resonanceDesktop.engine` for engine state, settings, devices, and meters.
 - External links open in the system browser.
+- The desktop app can enumerate Windows audio endpoints and show mock engine meters.
 
 ## Next Desktop Milestones
 
-1. Add a desktop settings page for audio device selection.
-2. Add a user-mode audio engine process.
-3. Add IPC between Electron and the audio engine.
+1. Add a native WASAPI helper for reliable endpoint enumeration and format discovery.
+2. Capture from a loopback or virtual playback endpoint.
+3. Render processed PCM to the selected output endpoint.
 4. Detect virtual audio driver installation status.
 5. Surface install/test status in the UI.

@@ -15,5 +15,10 @@ contextBridge.exposeInMainWorld('resonanceDesktop', {
       ipcRenderer.on('engine:state', listener);
       return () => ipcRenderer.removeListener('engine:state', listener);
     },
+    onMeters: (callback) => {
+      const listener = (_event, meters) => callback(meters);
+      ipcRenderer.on('engine:meters', listener);
+      return () => ipcRenderer.removeListener('engine:meters', listener);
+    },
   },
 });

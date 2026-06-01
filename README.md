@@ -98,6 +98,13 @@ Audio engine notes live in:
 docs/audio-engine.md
 ```
 
+Current desktop backend status:
+
+- Windows audio endpoint enumeration.
+- Engine start/stop controls.
+- Desktop-only input/output meter display.
+- Mock DSP/metering until the WASAPI PCM backend is wired.
+
 ## Driver Work
 
 Build the local SysVAD sample once the WDK Visual Studio driver toolsets are installed:

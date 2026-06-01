@@ -417,6 +417,7 @@ function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, se
 function useDesktopEngine(settings) {
   const desktopApi = typeof window !== 'undefined' ? window.resonanceDesktop : null;
   const [engineState, setEngineState] = useState(null);
+  const [meters, setMeters] = useState(null);
 
   useEffect(() => {
     if (!desktopApi?.engine) return undefined;
@@ -436,6 +437,14 @@ function useDesktopEngine(settings) {
   }, [desktopApi]);
 
   useEffect(() => {
+    if (!desktopApi?.engine?.onMeters) return undefined;
+    let cancelled = false;
+    return desktopApi.engine.onMeters((nextMeters) => {
+      if (!cancelled) setMeters(nextMeters);
+    });
+  }, [desktopApi]);
+
+  useEffect(() => {
     if (!desktopApi?.engine) return;
     desktopApi.engine.updateSettings(settings).catch(() => {});
   }, [desktopApi, settings]);
@@ -443,6 +452,7 @@ function useDesktopEngine(settings) {
   return {
     isDesktop: Boolean(desktopApi?.isDesktop),
     state: engineState,
+    meters: meters || engineState?.meters || null,
     start: () => desktopApi?.engine?.start?.(),
     stop: () => desktopApi?.engine?.stop?.(),
     refreshDevices: () => desktopApi?.engine?.refreshDevices?.(),
@@ -454,6 +464,7 @@ function DesktopEnginePanel({ engine }) {
   if (!engine.isDesktop) return null;
 
   const state = engine.state || { status: 'starting', devices: { inputs: [], outputs: [] } };
+  const meters = engine.meters || { inputPeak: 0, outputPeak: 0, inputRms: 0, outputRms: 0, clipping: false };
   const inputs = state.devices?.inputs || [];
   const outputs = state.devices?.outputs || [];
 
@@ -497,6 +508,18 @@ function DesktopEnginePanel({ engine }) {
       <div className="engine-actions">
         <button type="button" onClick={engine.start} disabled={state.status === 'running'}>Start Engine</button>
         <button type="button" onClick={engine.stop} disabled={state.status !== 'running'}>Stop</button>
+      </div>
+      <div className="engine-meter-grid">
+        <div className="engine-meter">
+          <span>Input</span>
+          <div><i style={{ width: `${Math.round((meters.inputPeak || 0) * 100)}%` }} /></div>
+          <strong>{Math.round((meters.inputPeak || 0) * 100)}%</strong>
+        </div>
+        <div className={`engine-meter ${meters.clipping ? 'clipping' : ''}`}>
+          <span>Output</span>
+          <div><i style={{ width: `${Math.round((meters.outputPeak || 0) * 100)}%` }} /></div>
+          <strong>{Math.round((meters.outputPeak || 0) * 100)}%</strong>
+        </div>
       </div>
       <p>
         The engine is running in {state.mode || 'mock'} mode. Device enumeration is live; PCM capture/render is the next backend step.

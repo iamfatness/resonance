@@ -2,9 +2,9 @@
 
 The desktop audio engine is a user-mode process started by Electron.
 
-## Current Prototype
+## Current Backend
 
-The current engine is a process boundary and control protocol, not real WASAPI processing yet.
+The current engine is a process boundary, control protocol, Windows endpoint enumerator, and live mock metering backend. Real WASAPI PCM capture/render is not wired yet.
 
 ```text
 Electron main process
@@ -19,6 +19,8 @@ The engine reports:
 - Windows audio endpoint enumeration
 - selected input/output device IDs
 - active EQ settings
+- live input/output peak meters
+- clipping status
 
 Enumerate audio devices from the command line:
 
@@ -33,7 +35,7 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 ## Next Milestones
 
 1. Replace PowerShell endpoint enumeration with a native WASAPI helper.
-2. Capture from a loopback/virtual playback endpoint.
-3. Render processed PCM to the selected output endpoint.
-4. Move the Web Audio EQ model into a shared DSP config shape.
-5. Add limiter and metering events back to the renderer.
+2. Replace mock metering with real PCM peak/RMS metering.
+3. Capture from a loopback/virtual playback endpoint.
+4. Render processed PCM to the selected output endpoint.
+5. Move the Web Audio EQ model into a shared DSP config shape.

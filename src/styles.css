@@ -1370,6 +1370,52 @@ button {
   cursor: not-allowed;
 }
 
+.engine-meter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.engine-meter {
+  display: grid;
+  grid-template-columns: 54px 1fr 42px;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0d1112;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.engine-meter div {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #2f3638;
+}
+
+.engine-meter i {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--teal), var(--amber));
+  transition: width 90ms linear;
+}
+
+.engine-meter.clipping i {
+  background: var(--red);
+}
+
+.engine-meter strong {
+  color: var(--text);
+  text-align: right;
+}
+
 .desktop-engine-panel p {
   margin: 0;
   color: var(--muted);
@@ -1809,6 +1855,10 @@ canvas {
   }
 
   .engine-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .engine-meter-grid {
     grid-template-columns: 1fr;
   }
 }
