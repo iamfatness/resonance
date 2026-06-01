@@ -664,7 +664,7 @@ button {
   border-bottom: 1px solid var(--line);
 }
 
-.sidebar a,
+.sidebar nav button,
 .playlist-row {
   width: 100%;
   height: 42px;
@@ -681,11 +681,12 @@ button {
   cursor: pointer;
 }
 
-.sidebar a {
+.sidebar nav button {
   justify-content: flex-start;
+  font: inherit;
 }
 
-.sidebar a.active {
+.sidebar nav button.active {
   background: #171c1e;
   color: var(--teal);
 }
@@ -701,6 +702,19 @@ button {
   font-weight: 800;
 }
 
+.section-title button {
+  border: 0;
+  background: transparent;
+  color: var(--teal);
+  cursor: pointer;
+  font: inherit;
+}
+
+.sidebar-panel {
+  display: grid;
+  gap: 7px;
+}
+
 .playlist-row {
   height: 32px;
   color: #d7dbd6;
@@ -714,6 +728,93 @@ button {
 
 .playlist-row span:last-child {
   color: var(--muted);
+}
+
+.side-track {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  padding: 7px;
+  text-align: left;
+}
+
+.side-track:hover,
+.side-track.active {
+  border-color: var(--line);
+  background: #111617;
+}
+
+.side-track.active {
+  color: var(--teal);
+}
+
+.side-track img {
+  width: 44px;
+  height: 33px;
+  border-radius: 5px;
+  object-fit: cover;
+  background: #171c1e;
+}
+
+.side-track span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.side-track strong,
+.side-track small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-track strong {
+  font-size: 13px;
+}
+
+.side-track small,
+.side-empty {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.library-stat {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #111617;
+  color: var(--muted);
+}
+
+.library-stat strong {
+  color: var(--teal);
+}
+
+.side-action {
+  height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #181d1f;
+  color: var(--teal);
+  cursor: pointer;
+  font-weight: 850;
 }
 
 .player-panel {

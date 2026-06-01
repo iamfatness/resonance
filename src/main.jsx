@@ -783,12 +783,15 @@ function PlayerApp() {
   const [activeDeck, setActiveDeck] = useState('A');
   const [deckCount, setDeckCount] = useState(isIOS ? 1 : 2);
   const [selectedPlaylistName, setSelectedPlaylistName] = useState(playlistCatalog[0].name);
+  const [activeSidePanel, setActiveSidePanel] = useState('playlists');
   const [activePreset, setActivePreset] = useState('Focus');
   const [deckVolumes, setDeckVolumes] = useState(moodPresets.Focus.mix);
   const [directUrl, setDirectUrl] = useState('');
   const [eqMode, setEqMode] = useState('Preset');
   const [appEqBypassed, setAppEqBypassed] = useState(false);
   const [pluginChain, setPluginChain] = useState([]);
+  const [likedVideos, setLikedVideos] = useState([demoVideoA.id]);
+  const [playHistory, setPlayHistory] = useState([demoVideoA]);
   const [manualCurve, setManualCurve] = useState(flatCurve);
   const preset = moodPresets[activePreset];
   const [instrumentBoosts, setInstrumentBoosts] = useState(preset.instruments);
@@ -871,6 +874,7 @@ function PlayerApp() {
   }
 
   function selectPlaylist(playlist) {
+    setActiveSidePanel('playlists');
     setSelectedPlaylistName(playlist.name);
     applyMoodPreset(playlist.mood);
     loadVideo(playlist.tracks[0], 'A');
@@ -907,6 +911,24 @@ function PlayerApp() {
       setDeckB(nextVideo);
       setQueryB(`https://www.youtube.com/watch?v=${nextVideo.id}`);
     }
+    setPlayHistory((current) => [nextVideo, ...current.filter((item) => item.id !== nextVideo.id)].slice(0, 12));
+  }
+
+  function toggleLikedVideo(video = activeDeck === 'A' ? deckA : deckB) {
+    setLikedVideos((current) => (
+      current.includes(video.id) ? current.filter((id) => id !== video.id) : [video.id, ...current]
+    ));
+  }
+
+  function startRadio() {
+    const pool = playlistCatalog.flatMap((playlist) => playlist.tracks);
+    const nextVideo = pool[Math.floor(Math.random() * pool.length)] || demoVideoA;
+    setActiveSidePanel('radio');
+    loadVideo(nextVideo, activeInputDeck);
+  }
+
+  function sidebarLoad(video) {
+    loadVideo(video, activeInputDeck);
   }
 
   function submitVideo(event, targetDeck) {
@@ -976,35 +998,132 @@ function PlayerApp() {
 
       <aside className="sidebar">
         <nav>
-          <a className="active" href="#now"><CirclePlay size={18} />Now Playing</a>
-          <a href="#library"><Library size={18} />Library</a>
-          <a href="#playlists"><ListMusic size={18} />Playlists</a>
-          <a href="#history"><History size={18} />History</a>
-          <a href="#liked"><Heart size={18} />Liked Videos</a>
-          <a href="#radio"><Radio size={18} />Radio</a>
-        </nav>
-        <section>
-          <div className="section-title">
-            <span>Playlists</span>
-            <Plus size={16} />
-          </div>
-          {playlistCatalog.map((playlist, index) => (
+          {[
+            ['now', CirclePlay, 'Now Playing'],
+            ['library', Library, 'Library'],
+            ['playlists', ListMusic, 'Playlists'],
+            ['history', History, 'History'],
+            ['liked', Heart, 'Liked Videos'],
+            ['radio', Radio, 'Radio'],
+          ].map(([panel, Icon, label]) => (
             <button
-              className={`playlist-row ${selectedPlaylistName === playlist.name ? 'active' : ''}`}
-              key={playlist.name}
-              onClick={() => selectPlaylist(playlist)}
+              className={activeSidePanel === panel ? 'active' : ''}
+              key={panel}
+              type="button"
+              onClick={() => setActiveSidePanel(panel)}
             >
-              <span>{playlist.name}</span>
-              <span>{[24, 31, 18, 27][index]}</span>
+              <Icon size={18} />
+              <span>{label}</span>
             </button>
           ))}
-          {['Reference Tracks'].map((name) => (
-            <button className="playlist-row" key={name}>
-              <span>{name}</span>
-              <span>12</span>
+        </nav>
+        {activeSidePanel === 'now' && (
+          <section className="sidebar-panel">
+            <div className="section-title">
+              <span>Now Playing</span>
+              <button type="button" onClick={() => toggleLikedVideo()}>
+                {likedVideos.includes((activeDeck === 'A' ? deckA : deckB).id) ? <ThumbsUp size={15} /> : <Heart size={15} />}
+              </button>
+            </div>
+            {[['A', deckA], ...(isSingleDeck ? [] : [['B', deckB]])].map(([label, video]) => (
+              <button
+                className={`side-track ${activeDeck === label ? 'active' : ''}`}
+                key={label}
+                type="button"
+                onClick={() => setActiveDeck(label)}
+              >
+                <img alt="" src={`https://i.ytimg.com/vi/${video.id}/default.jpg`} />
+                <span>
+                  <strong>Deck {label}</strong>
+                  <small>{video.title}</small>
+                </span>
+              </button>
+            ))}
+          </section>
+        )}
+        {activeSidePanel === 'library' && (
+          <section className="sidebar-panel">
+            <div className="section-title">
+              <span>Library</span>
+              <Library size={16} />
+            </div>
+            <div className="library-stat"><strong>{playlistCatalog.length}</strong><span>Playlists</span></div>
+            <div className="library-stat"><strong>{new Set(playlistCatalog.flatMap((playlist) => playlist.tracks.map((track) => track.id))).size}</strong><span>Tracks</span></div>
+            <div className="library-stat"><strong>{likedVideos.length}</strong><span>Liked</span></div>
+          </section>
+        )}
+        {activeSidePanel === 'playlists' && (
+          <section className="sidebar-panel">
+            <div className="section-title">
+              <span>Playlists</span>
+              <Plus size={16} />
+            </div>
+            {playlistCatalog.map((playlist, index) => (
+              <button
+                className={`playlist-row ${selectedPlaylistName === playlist.name ? 'active' : ''}`}
+                key={playlist.name}
+                onClick={() => selectPlaylist(playlist)}
+                type="button"
+              >
+                <span>{playlist.name}</span>
+                <span>{playlist.tracks.length || [24, 31, 18, 27][index]}</span>
+              </button>
+            ))}
+            <button className="playlist-row" type="button" onClick={() => setActivePreset('Focus')}>
+              <span>Reference Tracks</span>
+              <span>{queueSeed.length}</span>
             </button>
-          ))}
-        </section>
+          </section>
+        )}
+        {activeSidePanel === 'history' && (
+          <section className="sidebar-panel">
+            <div className="section-title">
+              <span>History</span>
+              <button type="button" onClick={() => setPlayHistory([])}>Clear</button>
+            </div>
+            {playHistory.length === 0 && <p className="side-empty">No recent playback.</p>}
+            {playHistory.map((video) => (
+              <button className="side-track" key={video.id} type="button" onClick={() => sidebarLoad(video)}>
+                <img alt="" src={`https://i.ytimg.com/vi/${video.id}/default.jpg`} />
+                <span>
+                  <strong>{video.title}</strong>
+                  <small>{video.channel}</small>
+                </span>
+              </button>
+            ))}
+          </section>
+        )}
+        {activeSidePanel === 'liked' && (
+          <section className="sidebar-panel">
+            <div className="section-title">
+              <span>Liked Videos</span>
+              <Heart size={16} />
+            </div>
+            {queueSeed.filter((video) => likedVideos.includes(video.id)).length === 0 && <p className="side-empty">Like a deck to pin it here.</p>}
+            {queueSeed.filter((video) => likedVideos.includes(video.id)).map((video) => (
+              <button className="side-track" key={video.id} type="button" onClick={() => sidebarLoad(video)}>
+                <img alt="" src={`https://i.ytimg.com/vi/${video.id}/default.jpg`} />
+                <span>
+                  <strong>{video.title}</strong>
+                  <small>{video.channel}</small>
+                </span>
+              </button>
+            ))}
+          </section>
+        )}
+        {activeSidePanel === 'radio' && (
+          <section className="sidebar-panel">
+            <div className="section-title">
+              <span>Radio</span>
+              <Radio size={16} />
+            </div>
+            <button className="side-action" type="button" onClick={startRadio}>
+              <Shuffle size={16} />
+              Start from library
+            </button>
+            <p className="side-empty">Radio picks a track from the current library and loads it into the active deck.</p>
+          </section>
+        )}
       </aside>
 
       <section className="player-panel" id="now">

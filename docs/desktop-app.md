@@ -57,6 +57,7 @@ release/Resonance-local/Resonance.exe
 - The UI can stage plugin chain settings and bypass the app EQ.
 - The engine persists selected devices, EQ bypass, and plugin-chain settings under the user's app data folder.
 - The desktop panel shows readiness diagnostics for native metering, SysVAD source, WDK toolsets, virtual device status, and plugin host status.
+- The left sidebar switches between functional Now Playing, Library, Playlist, History, Liked Videos, and Radio panels.
 
 ## Next Desktop Milestones
 
