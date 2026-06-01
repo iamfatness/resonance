@@ -1,7 +1,72 @@
-const { app, BrowserWindow, Menu, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
+const { fork } = require('node:child_process');
 const path = require('node:path');
 
 const isDev = Boolean(process.env.RESONANCE_DEV_SERVER_URL);
+let engineProcess = null;
+let engineState = null;
+let requestCounter = 0;
+const pendingEngineRequests = new Map();
+
+function startAudioEngineProcess() {
+  if (engineProcess) return;
+
+  engineProcess = fork(path.join(__dirname, '..', 'engine', 'audio-engine.cjs'), [], {
+    stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
+  });
+
+  engineProcess.on('message', (message = {}) => {
+    if (message.type !== 'STATE') return;
+    engineState = message.state;
+    BrowserWindow.getAllWindows().forEach((window) => {
+      window.webContents.send('engine:state', engineState);
+    });
+
+    const pending = pendingEngineRequests.get(message.requestId);
+    if (pending) {
+      pending.resolve(engineState);
+      pendingEngineRequests.delete(message.requestId);
+    }
+  });
+
+  engineProcess.on('exit', () => {
+    engineProcess = null;
+    engineState = { status: 'stopped', mode: 'offline' };
+    BrowserWindow.getAllWindows().forEach((window) => {
+      window.webContents.send('engine:state', engineState);
+    });
+  });
+}
+
+function sendEngineCommand(type, payload = {}) {
+  startAudioEngineProcess();
+  const requestId = `${Date.now()}-${requestCounter += 1}`;
+
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      pendingEngineRequests.delete(requestId);
+      reject(new Error(`Audio engine did not respond to ${type}.`));
+    }, 5000);
+
+    pendingEngineRequests.set(requestId, {
+      resolve: (state) => {
+        clearTimeout(timeout);
+        resolve(state);
+      },
+      reject,
+    });
+
+    engineProcess.send({ type, requestId, ...payload });
+  });
+}
+
+function registerIpc() {
+  ipcMain.handle('engine:getState', () => sendEngineCommand('GET_STATE'));
+  ipcMain.handle('engine:start', () => sendEngineCommand('START'));
+  ipcMain.handle('engine:stop', () => sendEngineCommand('STOP'));
+  ipcMain.handle('engine:updateSettings', (_event, settings) => sendEngineCommand('UPDATE_SETTINGS', { settings }));
+  ipcMain.handle('engine:selectDevices', (_event, devices) => sendEngineCommand('SELECT_DEVICES', { devices }));
+}
 
 function createMainWindow() {
   const window = new BrowserWindow({
@@ -76,6 +141,8 @@ if (!singleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    registerIpc();
+    startAudioEngineProcess();
     createMenu();
     createMainWindow();
   });
@@ -87,4 +154,11 @@ app.on('activate', () => {
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
+});
+
+app.on('before-quit', () => {
+  if (engineProcess) {
+    engineProcess.kill();
+    engineProcess = null;
+  }
 });

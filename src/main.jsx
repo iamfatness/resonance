@@ -414,6 +414,92 @@ function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, se
   );
 }
 
+function useDesktopEngine(settings) {
+  const desktopApi = typeof window !== 'undefined' ? window.resonanceDesktop : null;
+  const [engineState, setEngineState] = useState(null);
+
+  useEffect(() => {
+    if (!desktopApi?.engine) return undefined;
+    let cancelled = false;
+
+    desktopApi.engine.getState()
+      .then((state) => {
+        if (!cancelled) setEngineState(state);
+      })
+      .catch(() => {
+        if (!cancelled) setEngineState({ status: 'offline', mode: 'unavailable' });
+      });
+
+    return desktopApi.engine.onState((state) => {
+      if (!cancelled) setEngineState(state);
+    });
+  }, [desktopApi]);
+
+  useEffect(() => {
+    if (!desktopApi?.engine) return;
+    desktopApi.engine.updateSettings(settings).catch(() => {});
+  }, [desktopApi, settings]);
+
+  return {
+    isDesktop: Boolean(desktopApi?.isDesktop),
+    state: engineState,
+    start: () => desktopApi?.engine?.start?.(),
+    stop: () => desktopApi?.engine?.stop?.(),
+    selectDevices: (devices) => desktopApi?.engine?.selectDevices?.(devices),
+  };
+}
+
+function DesktopEnginePanel({ engine }) {
+  if (!engine.isDesktop) return null;
+
+  const state = engine.state || { status: 'starting', devices: { inputs: [], outputs: [] } };
+  const inputs = state.devices?.inputs || [];
+  const outputs = state.devices?.outputs || [];
+
+  return (
+    <section className="desktop-engine-panel">
+      <div className="panel-heading">
+        <h2>Desktop Audio Engine</h2>
+        <span>{state.status}</span>
+      </div>
+      <div className="engine-grid">
+        <label>
+          <span>Input</span>
+          <select
+            value={state.inputDeviceId || ''}
+            onChange={(event) => engine.selectDevices({ inputDeviceId: event.target.value })}
+          >
+            <option value="">Select input</option>
+            {inputs.map((device) => (
+              <option value={device.id} key={device.id} disabled={!device.available}>
+                {device.name}{device.available ? '' : ' (not installed)'}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          <span>Output</span>
+          <select
+            value={state.outputDeviceId || 'default-output'}
+            onChange={(event) => engine.selectDevices({ outputDeviceId: event.target.value })}
+          >
+            {outputs.map((device) => (
+              <option value={device.id} key={device.id}>{device.name}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+      <div className="engine-actions">
+        <button type="button" onClick={engine.start} disabled={state.status === 'running'}>Start Engine</button>
+        <button type="button" onClick={engine.stop} disabled={state.status !== 'running'}>Stop</button>
+      </div>
+      <p>
+        The engine is running in {state.mode || 'mock'} mode until the Windows virtual audio driver and WASAPI backend are wired.
+      </p>
+    </section>
+  );
+}
+
 const docsColumns = [
   {
     icon: Radio,
@@ -656,6 +742,13 @@ function PlayerApp() {
     () => applyInstrumentBoosts(baseCurve, instrumentBoosts),
     [baseCurve, instrumentBoosts],
   );
+  const desktopEngineSettings = useMemo(() => ({
+    preset: activePreset,
+    eqMode,
+    curve: effectiveCurve,
+    outputGain: deckVolumes.A / 100,
+  }), [activePreset, deckVolumes.A, effectiveCurve, eqMode]);
+  const desktopEngine = useDesktopEngine(desktopEngineSettings);
   const localEq = useLocalEq(activePreset, effectiveCurve, directUrl);
 
   const eqPath = useMemo(() => {
@@ -895,6 +988,8 @@ function PlayerApp() {
           />
           <canvas ref={localEq.graphRef} width="460" height="120" />
         </section>
+
+        <DesktopEnginePanel engine={desktopEngine} />
 
         <div className={`deck-grid ${isSingleDeck ? 'single-deck' : ''}`}>
           <VideoDeck

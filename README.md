@@ -92,6 +92,12 @@ Desktop notes live in:
 docs/desktop-app.md
 ```
 
+Audio engine notes live in:
+
+```text
+docs/audio-engine.md
+```
+
 ## Driver Work
 
 Build the local SysVAD sample once the WDK Visual Studio driver toolsets are installed:

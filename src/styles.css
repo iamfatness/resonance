@@ -1276,6 +1276,80 @@ button {
   height: 74px;
 }
 
+.desktop-engine-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid rgba(243, 180, 71, 0.42);
+  border-radius: 7px;
+  background:
+    linear-gradient(180deg, rgba(243, 180, 71, 0.08), transparent 68%),
+    #101516;
+}
+
+.desktop-engine-panel .panel-heading span {
+  color: var(--amber);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.engine-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.engine-grid label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.engine-grid select {
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0d1112;
+  color: var(--text);
+  padding: 0 9px;
+}
+
+.engine-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.engine-actions button {
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #181d1f;
+  color: var(--teal);
+  cursor: pointer;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.engine-actions button:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+.desktop-engine-panel p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .direct-controls {
   display: grid;
   grid-template-columns: 130px 1fr;
@@ -1700,6 +1774,10 @@ canvas {
   }
 
   .direct-controls {
+    grid-template-columns: 1fr;
+  }
+
+  .engine-grid {
     grid-template-columns: 1fr;
   }
 }
