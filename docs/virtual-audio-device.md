@@ -71,6 +71,12 @@ This wraps Visual Studio Installer with Microsoft's component ID:
 Component.Microsoft.Windows.DriverKit.BuildTools
 ```
 
+Check the local driver readiness state without installing anything:
+
+```powershell
+npm run driver:preflight
+```
+
 ## Required Local Setup
 
 Install the Windows Driver Kit integration for Visual Studio 2022 Build Tools. The required pieces are:
