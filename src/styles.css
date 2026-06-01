@@ -1145,6 +1145,24 @@ button {
   gap: 10px;
 }
 
+.priority-source {
+  border-color: rgba(56, 213, 200, 0.55);
+  background:
+    linear-gradient(180deg, rgba(56, 213, 200, 0.07), transparent 70%),
+    #101516;
+}
+
+.player-source {
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid rgba(56, 213, 200, 0.55);
+  border-radius: 7px;
+}
+
+.player-source canvas {
+  height: 74px;
+}
+
 .direct-controls {
   display: grid;
   grid-template-columns: 130px 1fr;
