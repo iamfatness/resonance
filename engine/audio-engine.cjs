@@ -1,8 +1,10 @@
 const { execFile } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const rootDir = path.resolve(__dirname, '..');
 const listAudioDevicesScript = path.join(rootDir, 'scripts', 'list-audio-devices.ps1');
+const wasapiMeterExe = path.join(rootDir, 'native', 'wasapi-meter', 'build', 'Release', 'resonance-wasapi-meter.exe');
 
 const engineState = {
   status: 'idle',
@@ -58,6 +60,15 @@ const engineState = {
 };
 
 let meterTimer = null;
+let nativeMeterBusy = false;
+
+function hasNativeMeter() {
+  return fs.existsSync(wasapiMeterExe);
+}
+
+function syncEngineMode() {
+  engineState.mode = hasNativeMeter() ? 'wasapi-loopback-meter' : 'windows-enumeration';
+}
 
 function send(message) {
   if (process.send) process.send(message);
@@ -69,6 +80,19 @@ function publishState(requestId) {
 
 function publishMeters() {
   send({ type: 'METERS', meters: engineState.meters });
+}
+
+function normalizeMeterPayload(payload) {
+  const outputPeak = Math.max(0, Math.min(1, Number(payload.peak) || 0));
+  const outputRms = Math.max(0, Math.min(1, Number(payload.rms) || 0));
+  return {
+    inputPeak: outputPeak,
+    outputPeak,
+    inputRms: outputRms,
+    outputRms,
+    clipping: Boolean(payload.clipping) || outputPeak >= 0.98,
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 function nextMockMeters() {
@@ -96,15 +120,46 @@ function startMetering() {
   if (meterTimer) return;
   meterTimer = setInterval(() => {
     if (engineState.status !== 'running') return;
-    nextMockMeters();
-    publishMeters();
-  }, 120);
+    if (!hasNativeMeter()) {
+      syncEngineMode();
+      nextMockMeters();
+      publishMeters();
+      return;
+    }
+
+    if (nativeMeterBusy) return;
+    nativeMeterBusy = true;
+    syncEngineMode();
+    execFile(
+      wasapiMeterExe,
+      ['--duration-ms', '250'],
+      { windowsHide: true, timeout: 2000 },
+      (error, stdout) => {
+        nativeMeterBusy = false;
+        if (engineState.status !== 'running') return;
+        if (error) {
+          nextMockMeters();
+          publishMeters();
+          return;
+        }
+
+        try {
+          const parsed = JSON.parse(stdout.trim());
+          engineState.meters = normalizeMeterPayload(parsed);
+        } catch {
+          nextMockMeters();
+        }
+        publishMeters();
+      },
+    );
+  }, 350);
 }
 
 function stopMetering() {
   if (!meterTimer) return;
   clearInterval(meterTimer);
   meterTimer = null;
+  nativeMeterBusy = false;
 }
 
 function normalizeDevice(device, fallbackRole) {
@@ -205,9 +260,10 @@ function refreshDevices(requestId) {
 }
 
 function start(requestId) {
+  syncEngineMode();
   engineState.status = 'running';
   engineState.lastStartedAt = new Date().toISOString();
-  nextMockMeters();
+  if (!hasNativeMeter()) nextMockMeters();
   startMetering();
   publishState(requestId);
   publishMeters();
@@ -233,7 +289,7 @@ function updateSettings(requestId, settings = {}) {
     ...engineState.settings,
     ...settings,
   };
-  if (engineState.status === 'running') {
+  if (engineState.status === 'running' && !hasNativeMeter()) {
     nextMockMeters();
     publishMeters();
   }
@@ -255,6 +311,7 @@ process.on('message', (message = {}) => {
   if (message.type === 'SELECT_DEVICES') selectDevices(message.requestId, message.devices);
 });
 
+syncEngineMode();
 refreshDevices();
 
 process.on('disconnect', () => {

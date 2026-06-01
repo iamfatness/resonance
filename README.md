@@ -103,7 +103,14 @@ Current desktop backend status:
 - Windows audio endpoint enumeration.
 - Engine start/stop controls.
 - Desktop-only input/output meter display.
-- Mock DSP/metering until the WASAPI PCM backend is wired.
+- Native WASAPI loopback metering when the helper is built.
+- Mock DSP/meter fallback when the native helper is missing.
+
+Build the native WASAPI meter helper:
+
+```powershell
+npm run native:wasapi-meter
+```
 
 ## Driver Work
 

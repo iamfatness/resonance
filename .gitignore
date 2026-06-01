@@ -3,4 +3,5 @@ dist/
 .vite/
 .wrangler/
 driver/
+native/wasapi-meter/build/
 *.local

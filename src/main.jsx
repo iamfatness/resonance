@@ -522,7 +522,7 @@ function DesktopEnginePanel({ engine }) {
         </div>
       </div>
       <p>
-        The engine is running in {state.mode || 'mock'} mode. Device enumeration is live; PCM capture/render is the next backend step.
+        The engine is running in {state.mode || 'mock'} mode. Build the native helper to show real WASAPI loopback meters; routing remains the next backend step.
       </p>
       {state.deviceScan?.error && <p className="engine-error">{state.deviceScan.error}</p>}
     </section>

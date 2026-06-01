@@ -4,7 +4,7 @@ The desktop audio engine is a user-mode process started by Electron.
 
 ## Current Backend
 
-The current engine is a process boundary, control protocol, Windows endpoint enumerator, and live mock metering backend. Real WASAPI PCM capture/render is not wired yet.
+The current engine is a process boundary, control protocol, Windows endpoint enumerator, and live metering backend. When the native helper is built, Resonance reads default-output WASAPI loopback levels for real peak/RMS meters; otherwise it falls back to generated development meters. Real processed PCM routing is not wired yet.
 
 ```text
 Electron main process
@@ -28,6 +28,12 @@ Enumerate audio devices from the command line:
 npm run audio:devices
 ```
 
+Build the native WASAPI meter helper:
+
+```powershell
+npm run native:wasapi-meter
+```
+
 ## Why This Boundary Exists
 
 Real audio routing should not run inside the renderer UI. Keeping the engine in a separate process lets Resonance restart audio processing, report failures, and later swap the mock backend for a native WASAPI backend without restructuring the app.
@@ -35,7 +41,7 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 ## Next Milestones
 
 1. Replace PowerShell endpoint enumeration with a native WASAPI helper.
-2. Replace mock metering with real PCM peak/RMS metering.
+2. Select specific WASAPI loopback/output endpoints instead of only the system default meter.
 3. Capture from a loopback/virtual playback endpoint.
 4. Render processed PCM to the selected output endpoint.
 5. Move the Web Audio EQ model into a shared DSP config shape.
