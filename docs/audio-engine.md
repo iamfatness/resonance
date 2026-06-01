@@ -19,6 +19,8 @@ The engine reports:
 - Windows audio endpoint enumeration
 - selected input/output device IDs
 - active EQ settings
+- app EQ bypass state
+- staged plugin-chain settings
 - live input/output peak meters
 - clipping status
 
@@ -45,3 +47,4 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 3. Capture from a loopback/virtual playback endpoint.
 4. Render processed PCM to the selected output endpoint.
 5. Move the Web Audio EQ model into a shared DSP config shape.
+6. Add native VST3 plugin hosting for staged plugin chains.

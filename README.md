@@ -10,6 +10,7 @@ Resonance is a web-based music player prototype for mixing two YouTube videos an
 - Queue loading into the selected deck.
 - Mood presets that adjust deck mix levels and instrument boost guidance.
 - Direct audio file / URL EQ path for real browser-side audio filtering.
+- Plugin rack controls with app EQ bypass.
 - Chrome extension prototype for real current-tab EQ using `chrome.tabCapture`.
 - Cloudflare Worker deployment for `resonance.iamfatness.us`.
 
@@ -98,6 +99,12 @@ Audio engine notes live in:
 docs/audio-engine.md
 ```
 
+Plugin hosting notes live in:
+
+```text
+docs/plugin-hosting.md
+```
+
 Current desktop backend status:
 
 - Windows audio endpoint enumeration.
@@ -105,6 +112,7 @@ Current desktop backend status:
 - Desktop-only input/output meter display.
 - Native WASAPI loopback metering when the helper is built.
 - Mock DSP/meter fallback when the native helper is missing.
+- Plugin chain settings and app EQ bypass controls.
 
 Build the native WASAPI meter helper:
 

@@ -128,6 +128,11 @@ const moodPresets = {
 const bands = [31, 62, 125, 250, 500, '1k', '2k', '4k'];
 const bandFreqs = [31, 62, 125, 250, 500, 1000, 2000, 4000];
 const flatCurve = Array(bands.length).fill(0);
+
+const pluginCatalog = [
+  { id: 'waves-vst3', name: 'Waves VST3', vendor: 'Waves', status: 'Planned' },
+  { id: 'vst3-generic', name: 'VST3 Plugin', vendor: 'Desktop host', status: 'Planned' },
+];
 const instrumentMeta = {
   Vocal: { icon: Mic2, band: '1k-4k' },
   Bass: { icon: Disc3, band: '62-125' },
@@ -524,6 +529,13 @@ function DesktopEnginePanel({ engine }) {
       <p>
         The engine is running in {state.mode || 'mock'} mode. Build the native helper to show real WASAPI loopback meters; routing remains the next backend step.
       </p>
+      {state.pluginHost && (
+        <div className="plugin-host-status">
+          <span>Plugin host</span>
+          <strong>{state.pluginHost.status}</strong>
+          <small>{state.settings?.appEqBypassed ? 'App EQ bypassed' : `${state.settings?.pluginChain?.length || 0} plugins staged`}</small>
+        </div>
+      )}
       {state.deviceScan?.error && <p className="engine-error">{state.deviceScan.error}</p>}
     </section>
   );
@@ -757,6 +769,8 @@ function PlayerApp() {
   const [deckVolumes, setDeckVolumes] = useState(moodPresets.Focus.mix);
   const [directUrl, setDirectUrl] = useState('');
   const [eqMode, setEqMode] = useState('Preset');
+  const [appEqBypassed, setAppEqBypassed] = useState(false);
+  const [pluginChain, setPluginChain] = useState([]);
   const [manualCurve, setManualCurve] = useState(flatCurve);
   const preset = moodPresets[activePreset];
   const [instrumentBoosts, setInstrumentBoosts] = useState(preset.instruments);
@@ -771,25 +785,28 @@ function PlayerApp() {
     () => applyInstrumentBoosts(baseCurve, instrumentBoosts),
     [baseCurve, instrumentBoosts],
   );
+  const processedCurve = appEqBypassed ? flatCurve : effectiveCurve;
   const desktopEngineSettings = useMemo(() => ({
     preset: activePreset,
     eqMode,
-    curve: effectiveCurve,
+    curve: processedCurve,
+    appEqBypassed,
+    pluginChain,
     outputGain: deckVolumes.A / 100,
-  }), [activePreset, deckVolumes.A, effectiveCurve, eqMode]);
+  }), [activePreset, appEqBypassed, deckVolumes.A, eqMode, pluginChain, processedCurve]);
   const desktopEngine = useDesktopEngine(desktopEngineSettings);
-  const localEq = useLocalEq(activePreset, effectiveCurve, directUrl);
+  const localEq = useLocalEq(activePreset, processedCurve, directUrl);
 
   const eqPath = useMemo(() => {
-    const max = Math.max(...effectiveCurve.map((point) => Math.abs(point)), 12);
-    return effectiveCurve
+    const max = Math.max(...processedCurve.map((point) => Math.abs(point)), 12);
+    return processedCurve
       .map((gain, index) => {
         const x = 20 + index * 51;
         const y = 78 - (gain / max) * 46;
         return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
       })
       .join(' ');
-  }, [effectiveCurve]);
+  }, [processedCurve]);
 
   function applyMoodPreset(name) {
     const nextPreset = moodPresets[name];
@@ -845,6 +862,22 @@ function PlayerApp() {
     const nextDeckCount = Number(value);
     setDeckCount(nextDeckCount);
     if (nextDeckCount === 1) setActiveDeck('A');
+  }
+
+  function togglePlugin(pluginId) {
+    setPluginChain((current) => {
+      if (current.some((plugin) => plugin.id === pluginId)) {
+        return current.filter((plugin) => plugin.id !== pluginId);
+      }
+      const plugin = pluginCatalog.find((item) => item.id === pluginId);
+      return plugin ? [...current, { ...plugin, bypassed: false }] : current;
+    });
+  }
+
+  function togglePluginBypass(pluginId) {
+    setPluginChain((current) => current.map((plugin) => (
+      plugin.id === pluginId ? { ...plugin, bypassed: !plugin.bypassed } : plugin
+    )));
   }
 
   function loadVideo(nextVideo, targetDeck = activeInputDeck) {
@@ -1114,7 +1147,50 @@ function PlayerApp() {
             <strong>{activePreset}</strong>
             <span>Deck A {deckVolumes.A}%</span>
             {!isSingleDeck && <span>Deck B {deckVolumes.B}%</span>}
-            <span>EQ {eqMode}</span>
+            <span>EQ {appEqBypassed ? 'Bypassed' : eqMode}</span>
+          </div>
+        </section>
+
+        <section>
+          <div className="panel-heading">
+            <h2>Plugin Rack</h2>
+            <SlidersHorizontal size={16} />
+          </div>
+          <label className="eq-bypass-toggle">
+            <input
+              type="checkbox"
+              checked={appEqBypassed}
+              onChange={(event) => setAppEqBypassed(event.target.checked)}
+            />
+            <span>Bypass app EQ</span>
+            <strong>{appEqBypassed ? 'On' : 'Off'}</strong>
+          </label>
+          <div className="plugin-list">
+            {pluginCatalog.map((plugin) => {
+              const selectedPlugin = pluginChain.find((item) => item.id === plugin.id);
+              return (
+                <article className={`plugin-item ${selectedPlugin ? 'active' : ''}`} key={plugin.id}>
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(selectedPlugin)}
+                      onChange={() => togglePlugin(plugin.id)}
+                    />
+                    <span>
+                      <strong>{plugin.name}</strong>
+                      <small>{plugin.vendor}</small>
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!selectedPlugin}
+                    onClick={() => togglePluginBypass(plugin.id)}
+                  >
+                    {selectedPlugin?.bypassed ? 'Bypassed' : plugin.status}
+                  </button>
+                </article>
+              );
+            })}
           </div>
         </section>
 
@@ -1163,7 +1239,7 @@ function PlayerApp() {
                 {[20, 71, 122, 173, 224, 275, 326, 377].map((x) => <line key={x} x1={x} x2={x} y1="8" y2="118" />)}
               </g>
               <path d={eqPath} className="eq-line" />
-              {effectiveCurve.map((gain, index) => (
+              {processedCurve.map((gain, index) => (
                 <circle key={bands[index]} cx={20 + index * 51} cy={78 - (gain / 12) * 46} r="6" />
               ))}
             </svg>
@@ -1208,7 +1284,7 @@ function PlayerApp() {
                         onChange={(event) => setManualBand(index, Number(event.target.value))}
                         aria-label={`${band} Hz manual EQ dB value`}
                       />
-                      <strong>{effectiveCurve[index] > 0 ? '+' : ''}{effectiveCurve[index].toFixed(1)} dB</strong>
+                      <strong>{processedCurve[index] > 0 ? '+' : ''}{processedCurve[index].toFixed(1)} dB</strong>
                     </div>
                   </label>
                 );

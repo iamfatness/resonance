@@ -15,7 +15,15 @@ const engineState = {
     preset: 'Focus',
     eqMode: 'Preset',
     curve: [2, 3.5, 2, 0, -2, -1, 1.5, 2],
+    appEqBypassed: false,
+    pluginChain: [],
     outputGain: 0.9,
+  },
+  pluginHost: {
+    status: 'planned',
+    formats: ['VST3'],
+    vendors: ['Waves'],
+    note: 'Native plugin hosting is not active until the desktop audio router can process PCM.',
   },
   devices: {
     inputs: [
@@ -288,6 +296,8 @@ function updateSettings(requestId, settings = {}) {
   engineState.settings = {
     ...engineState.settings,
     ...settings,
+    appEqBypassed: Boolean(settings.appEqBypassed ?? engineState.settings.appEqBypassed),
+    pluginChain: Array.isArray(settings.pluginChain) ? settings.pluginChain : engineState.settings.pluginChain,
   };
   if (engineState.status === 'running' && !hasNativeMeter()) {
     nextMockMeters();
