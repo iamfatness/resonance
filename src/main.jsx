@@ -445,6 +445,7 @@ function useDesktopEngine(settings) {
     state: engineState,
     start: () => desktopApi?.engine?.start?.(),
     stop: () => desktopApi?.engine?.stop?.(),
+    refreshDevices: () => desktopApi?.engine?.refreshDevices?.(),
     selectDevices: (devices) => desktopApi?.engine?.selectDevices?.(devices),
   };
 }
@@ -461,6 +462,10 @@ function DesktopEnginePanel({ engine }) {
       <div className="panel-heading">
         <h2>Desktop Audio Engine</h2>
         <span>{state.status}</span>
+      </div>
+      <div className="engine-scan">
+        <span>Devices: {state.deviceScan?.status || 'pending'}</span>
+        <button type="button" onClick={engine.refreshDevices}>Rescan</button>
       </div>
       <div className="engine-grid">
         <label>
@@ -494,8 +499,9 @@ function DesktopEnginePanel({ engine }) {
         <button type="button" onClick={engine.stop} disabled={state.status !== 'running'}>Stop</button>
       </div>
       <p>
-        The engine is running in {state.mode || 'mock'} mode until the Windows virtual audio driver and WASAPI backend are wired.
+        The engine is running in {state.mode || 'mock'} mode. Device enumeration is live; PCM capture/render is the next backend step.
       </p>
+      {state.deviceScan?.error && <p className="engine-error">{state.deviceScan.error}</p>}
     </section>
   );
 }

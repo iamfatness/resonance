@@ -4,6 +4,7 @@
     "build": "vite build",
     "desktop:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-electron-dev.ps1",
     "desktop:run": "npm run build && electron .",
+    "audio:devices": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/list-audio-devices.ps1",
     "driver:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-sysvad.ps1",
     "preview": "vite preview --host 127.0.0.1",
     "package:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1",

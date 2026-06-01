@@ -16,9 +16,15 @@ Electron main process
 The engine reports:
 
 - running/idle status
-- mock input/output devices
+- Windows audio endpoint enumeration
 - selected input/output device IDs
 - active EQ settings
+
+Enumerate audio devices from the command line:
+
+```powershell
+npm run audio:devices
+```
 
 ## Why This Boundary Exists
 
@@ -26,7 +32,7 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 
 ## Next Milestones
 
-1. Add a native WASAPI device enumeration helper.
+1. Replace PowerShell endpoint enumeration with a native WASAPI helper.
 2. Capture from a loopback/virtual playback endpoint.
 3. Render processed PCM to the selected output endpoint.
 4. Move the Web Audio EQ model into a shared DSP config shape.

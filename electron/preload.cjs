@@ -5,6 +5,7 @@ contextBridge.exposeInMainWorld('resonanceDesktop', {
   isDesktop: true,
   engine: {
     getState: () => ipcRenderer.invoke('engine:getState'),
+    refreshDevices: () => ipcRenderer.invoke('engine:refreshDevices'),
     start: () => ipcRenderer.invoke('engine:start'),
     stop: () => ipcRenderer.invoke('engine:stop'),
     updateSettings: (settings) => ipcRenderer.invoke('engine:updateSettings', settings),
