@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "Resonance EQ",
+  "description": "Capture the current tab audio and apply Resonance EQ presets.",
+  "version": "0.1.0",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "activeTab",
+    "offscreen",
+    "storage",
+    "tabCapture",
+    "tabs"
+  ],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://music.youtube.com/*"
+  ],
+  "action": {
+    "default_title": "Resonance EQ",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}

@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Resonance EQ</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main class="popup">
+      <header>
+        <div>
+          <strong>Resonance EQ</strong>
+          <span id="statusText">Inactive</span>
+        </div>
+        <button id="toggleCapture" type="button">Start</button>
+      </header>
+
+      <section>
+        <label>
+          Mood
+          <select id="presetSelect">
+            <option>Focus</option>
+            <option>Lift</option>
+            <option>Warmth</option>
+            <option>Drive</option>
+            <option>Night</option>
+          </select>
+        </label>
+        <label class="switch-row">
+          <span>Manual EQ</span>
+          <input id="manualToggle" type="checkbox" />
+        </label>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <span>8-band EQ</span>
+          <button id="flatButton" type="button">Flat</button>
+        </div>
+        <div id="eqBands" class="band-grid"></div>
+      </section>
+
+      <section>
+        <div class="section-heading">
+          <span>Instrument Boost</span>
+        </div>
+        <div id="instrumentBands" class="instrument-grid"></div>
+      </section>
+
+      <section>
+        <label>
+          Output gain
+          <input id="outputGain" type="range" min="0" max="1.2" step="0.01" />
+        </label>
+      </section>
+
+      <p id="errorText" class="error" hidden></p>
+    </main>
+    <script src="popup.js"></script>
+  </body>
+</html>
