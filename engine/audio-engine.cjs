@@ -7,6 +7,7 @@ const listAudioDevicesScript = path.join(rootDir, 'scripts', 'list-audio-devices
 const wasapiMeterExe = path.join(rootDir, 'native', 'wasapi-meter', 'build', 'Release', 'resonance-wasapi-meter.exe');
 const sysvadSolution = path.join(rootDir, 'driver', 'audio', 'sysvad', 'sysvad.sln');
 const buildToolsPlatforms = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Microsoft\\VC\\v170\\Platforms';
+const windowsKitsRoot = 'C:\\Program Files (x86)\\Windows Kits\\10';
 const settingsDir = path.join(process.env.APPDATA || rootDir, 'Resonance');
 const settingsPath = path.join(settingsDir, 'engine-settings.json');
 
@@ -111,9 +112,29 @@ function findDirectoryByName(startDir, targetName, maxDepth = 6) {
   return false;
 }
 
+function findFileByName(startDir, targetName, maxDepth = 6) {
+  if (!fs.existsSync(startDir) || maxDepth < 0) return false;
+  let entries = [];
+  try {
+    entries = fs.readdirSync(startDir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+
+  for (const entry of entries) {
+    const entryPath = path.join(startDir, entry.name);
+    if (entry.isFile() && entry.name === targetName) return true;
+    if (entry.isDirectory() && findFileByName(entryPath, targetName, maxDepth - 1)) return true;
+  }
+  return false;
+}
+
 function buildDiagnostics() {
   const hasKernelToolset = findDirectoryByName(buildToolsPlatforms, 'WindowsKernelModeDriver10.0');
   const hasDriverAppToolset = findDirectoryByName(buildToolsPlatforms, 'WindowsApplicationForDrivers10.0');
+  const hasWdkKernelHeader = findFileByName(path.join(windowsKitsRoot, 'Include'), 'portcls.h');
+  const hasWdkPortClsLib = findFileByName(path.join(windowsKitsRoot, 'Lib'), 'portcls.lib');
+  const hasWdkFiles = hasWdkKernelHeader && hasWdkPortClsLib;
   const hasNativeMeterHelper = hasNativeMeter();
   const hasSysvadSource = fs.existsSync(sysvadSolution);
   const hasPersistedSettings = fs.existsSync(settingsPath);
@@ -157,12 +178,18 @@ function buildDiagnostics() {
         detail: hasSysvadSource ? sysvadSolution : 'Clone the Microsoft SysVAD sample into driver/audio/sysvad.',
       },
       {
+        id: 'wdk-files',
+        label: 'WDK files',
+        status: hasWdkFiles ? 'ready' : 'blocked',
+        detail: hasWdkFiles ? 'Kernel audio headers and libraries are installed.' : 'Install the Windows Driver Kit files.',
+      },
+      {
         id: 'wdk-toolsets',
-        label: 'WDK driver toolsets',
+        label: 'VS WDK build tools',
         status: hasKernelToolset && hasDriverAppToolset ? 'ready' : 'blocked',
         detail: hasKernelToolset && hasDriverAppToolset
           ? 'Windows driver build toolsets are installed.'
-          : 'Missing WindowsKernelModeDriver10.0 and/or WindowsApplicationForDrivers10.0.',
+          : 'Missing Component.Microsoft.Windows.DriverKit.BuildTools.',
       },
       {
         id: 'virtual-device',

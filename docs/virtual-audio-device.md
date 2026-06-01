@@ -59,6 +59,18 @@ It failed because these platform toolsets are missing:
 - `WindowsKernelModeDriver10.0`
 - `WindowsApplicationForDrivers10.0`
 
+If the WDK files are installed but those Visual Studio platform toolsets are still missing, add the Visual Studio WDK Build Tools component:
+
+```powershell
+npm run driver:install:wdk-buildtools
+```
+
+This wraps Visual Studio Installer with Microsoft's component ID:
+
+```text
+Component.Microsoft.Windows.DriverKit.BuildTools
+```
+
 ## Required Local Setup
 
 Install the Windows Driver Kit integration for Visual Studio 2022 Build Tools. The required pieces are:
