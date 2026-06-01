@@ -64,6 +64,29 @@ const queueSeed = [
   { id: 'hHW1oY26kxQ', title: 'Deep Focus Music - Ambient Study Mix', channel: 'Quiet Quest', duration: '2:58:44' },
 ];
 
+const playlistCatalog = [
+  {
+    name: 'Focus Mix',
+    mood: 'Focus',
+    tracks: [demoVideoA, queueSeed[3], queueSeed[2], demoVideoB],
+  },
+  {
+    name: 'Late Night',
+    mood: 'Night',
+    tracks: [queueSeed[3], queueSeed[2], demoVideoB, demoVideoA],
+  },
+  {
+    name: 'Studio Sessions',
+    mood: 'Warmth',
+    tracks: [queueSeed[2], demoVideoA, queueSeed[3], demoVideoB],
+  },
+  {
+    name: 'Drum Drives',
+    mood: 'Drive',
+    tracks: [demoVideoA, demoVideoB, queueSeed[2], queueSeed[3]],
+  },
+];
+
 const moodPresets = {
   Focus: {
     icon: Gauge,
@@ -155,6 +178,11 @@ function parseYoutubeId(value) {
     return null;
   }
   return null;
+}
+
+function isIOSDevice() {
+  if (typeof navigator === 'undefined') return false;
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 function useYouTubePlayer(videoId, volume) {
@@ -602,11 +630,13 @@ function LandingPage() {
 }
 
 function PlayerApp() {
+  const isIOS = useMemo(() => isIOSDevice(), []);
   const [deckA, setDeckA] = useState(demoVideoA);
   const [deckB, setDeckB] = useState(demoVideoB);
   const [queryA, setQueryA] = useState('https://www.youtube.com/watch?v=TW9d8vYrVFQ');
   const [queryB, setQueryB] = useState('https://www.youtube.com/watch?v=M7lc1UVf-VE');
   const [activeDeck, setActiveDeck] = useState('A');
+  const [selectedPlaylistName, setSelectedPlaylistName] = useState(playlistCatalog[0].name);
   const [activePreset, setActivePreset] = useState('Focus');
   const [deckVolumes, setDeckVolumes] = useState(moodPresets.Focus.mix);
   const [directUrl, setDirectUrl] = useState('');
@@ -616,6 +646,8 @@ function PlayerApp() {
   const [instrumentBoosts, setInstrumentBoosts] = useState(preset.instruments);
   const playerA = useYouTubePlayer(deckA.id, deckVolumes.A);
   const playerB = useYouTubePlayer(deckB.id, deckVolumes.B);
+  const selectedPlaylist = playlistCatalog.find((playlist) => playlist.name === selectedPlaylistName) || playlistCatalog[0];
+  const activeInputDeck = isIOS ? 'A' : activeDeck;
   const baseCurve = eqMode === 'Manual' ? manualCurve : preset.curve;
   const effectiveCurve = useMemo(
     () => applyInstrumentBoosts(baseCurve, instrumentBoosts),
@@ -641,6 +673,11 @@ function PlayerApp() {
     setDeckVolumes(nextPreset.mix);
     setEqMode('Preset');
   }
+
+  useEffect(() => {
+    if (!isIOS || activeDeck === 'A') return;
+    setActiveDeck('A');
+  }, [activeDeck, isIOS]);
 
   function setInstrumentBoost(name, value) {
     setInstrumentBoosts((current) => ({ ...current, [name]: value }));
@@ -668,8 +705,15 @@ function PlayerApp() {
     setDeckVolumes((current) => ({ ...current, [deck]: value }));
   }
 
-  function loadVideo(nextVideo, targetDeck = activeDeck) {
-    if (targetDeck === 'A') {
+  function selectPlaylist(playlist) {
+    setSelectedPlaylistName(playlist.name);
+    applyMoodPreset(playlist.mood);
+    loadVideo(playlist.tracks[0], 'A');
+  }
+
+  function loadVideo(nextVideo, targetDeck = activeInputDeck) {
+    const safeTargetDeck = isIOS ? 'A' : targetDeck;
+    if (safeTargetDeck === 'A') {
       setDeckA(nextVideo);
       setQueryA(`https://www.youtube.com/watch?v=${nextVideo.id}`);
     } else {
@@ -680,12 +724,17 @@ function PlayerApp() {
 
   function submitVideo(event, targetDeck) {
     event.preventDefault();
-    const id = parseYoutubeId(targetDeck === 'A' ? queryA : queryB);
+    const safeTargetDeck = isIOS ? 'A' : targetDeck;
+    const id = parseYoutubeId(safeTargetDeck === 'A' ? queryA : queryB);
     if (!id) return;
-    loadVideo({ id, title: `Custom Deck ${targetDeck} video`, channel: 'YouTube', duration: '--:--' }, targetDeck);
+    loadVideo({ id, title: `Custom Deck ${safeTargetDeck} video`, channel: 'YouTube', duration: '--:--' }, safeTargetDeck);
   }
 
   function toggleBothDecks() {
+    if (isIOS) {
+      playerA.toggle();
+      return;
+    }
     if (playerA.playing || playerB.playing) {
       playerA.pause();
       playerB.pause();
@@ -702,20 +751,20 @@ function PlayerApp() {
           <AudioLines aria-hidden="true" />
           <span>Resonance</span>
         </div>
-        <form className="searchbar" onSubmit={(event) => submitVideo(event, activeDeck)}>
+        <form className="searchbar" onSubmit={(event) => submitVideo(event, activeInputDeck)}>
           <Search size={18} />
           <input
             aria-label="Active deck YouTube URL or video ID"
-            value={activeDeck === 'A' ? queryA : queryB}
-            onChange={(event) => (activeDeck === 'A' ? setQueryA(event.target.value) : setQueryB(event.target.value))}
-            placeholder={`Paste a YouTube link for Deck ${activeDeck}`}
+            value={activeInputDeck === 'A' ? queryA : queryB}
+            onChange={(event) => (activeInputDeck === 'A' ? setQueryA(event.target.value) : setQueryB(event.target.value))}
+            placeholder={isIOS ? 'Paste a YouTube link' : `Paste a YouTube link for Deck ${activeInputDeck}`}
           />
           <button type="submit">Load</button>
         </form>
         <div className="source-pill">
           <Link size={16} />
-          <span>Active</span>
-          <strong>Deck {activeDeck}</strong>
+          <span>{isIOS ? 'iOS' : 'Active'}</span>
+          <strong>{isIOS ? 'Single Deck' : `Deck ${activeDeck}`}</strong>
         </div>
         <button className="icon-button" aria-label="Settings"><Settings size={18} /></button>
       </header>
@@ -734,16 +783,56 @@ function PlayerApp() {
             <span>Playlists</span>
             <Plus size={16} />
           </div>
-          {['Focus Mix', 'Late Night', 'Studio Sessions', 'Reference Tracks', 'Drum Drives'].map((name, index) => (
+          {playlistCatalog.map((playlist, index) => (
+            <button
+              className={`playlist-row ${selectedPlaylistName === playlist.name ? 'active' : ''}`}
+              key={playlist.name}
+              onClick={() => selectPlaylist(playlist)}
+            >
+              <span>{playlist.name}</span>
+              <span>{[24, 31, 18, 27][index]}</span>
+            </button>
+          ))}
+          {['Reference Tracks'].map((name) => (
             <button className="playlist-row" key={name}>
               <span>{name}</span>
-              <span>{[24, 31, 18, 12, 27][index]}</span>
+              <span>12</span>
             </button>
           ))}
         </section>
       </aside>
 
       <section className="player-panel" id="now">
+        <section className="mobile-playlists" aria-label="Mobile playlists">
+          <div className="panel-heading">
+            <h2>Playlists</h2>
+            <span>{selectedPlaylist.tracks.length} tracks</span>
+          </div>
+          <div className="mobile-playlist-strip">
+            {playlistCatalog.map((playlist) => (
+              <button
+                className={`mobile-playlist-card ${selectedPlaylistName === playlist.name ? 'active' : ''}`}
+                key={playlist.name}
+                onClick={() => selectPlaylist(playlist)}
+                type="button"
+              >
+                <strong>{playlist.name}</strong>
+                <span>{playlist.mood}</span>
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {isIOS && (
+          <section className="ios-limits">
+            <BadgeInfo size={18} />
+            <div>
+              <strong>iOS YouTube mode</strong>
+              <p>iPhone and iPad browsers only allow one YouTube video stream at a time. Playlists load into Deck A for reliable mobile playback.</p>
+            </div>
+          </section>
+        )}
+
         <section className="direct-source priority-source player-source">
           <div className="panel-heading">
             <h2>Upload / Paste Audio</h2>
@@ -775,7 +864,7 @@ function PlayerApp() {
           <canvas ref={localEq.graphRef} width="460" height="120" />
         </section>
 
-        <div className="deck-grid">
+        <div className={`deck-grid ${isIOS ? 'single-deck' : ''}`}>
           <VideoDeck
             label="A"
             video={deckA}
@@ -788,24 +877,26 @@ function PlayerApp() {
             active={activeDeck === 'A'}
             onActivate={() => setActiveDeck('A')}
           />
-          <VideoDeck
-            label="B"
-            video={deckB}
-            query={queryB}
-            setQuery={setQueryB}
-            onSubmit={(event) => submitVideo(event, 'B')}
-            player={playerB}
-            volume={deckVolumes.B}
-            setVolume={(value) => setDeckVolume('B', value)}
-            active={activeDeck === 'B'}
-            onActivate={() => setActiveDeck('B')}
-          />
+          {!isIOS && (
+            <VideoDeck
+              label="B"
+              video={deckB}
+              query={queryB}
+              setQuery={setQueryB}
+              onSubmit={(event) => submitVideo(event, 'B')}
+              player={playerB}
+              volume={deckVolumes.B}
+              setVolume={(value) => setDeckVolume('B', value)}
+              active={activeDeck === 'B'}
+              onActivate={() => setActiveDeck('B')}
+            />
+          )}
         </div>
 
         <div className="mix-status">
           <div>
-            <h2>{activePreset} mix is active</h2>
-            <p>{preset.intent}</p>
+            <h2>{activePreset} {isIOS ? 'playlist mode' : 'mix is active'}</h2>
+            <p>{isIOS ? `${selectedPlaylist.name} is ready for single-deck iOS playback.` : preset.intent}</p>
           </div>
           <div className="track-actions">
             <button className="icon-button" aria-label="Like"><ThumbsUp size={18} /></button>
@@ -815,16 +906,16 @@ function PlayerApp() {
         </div>
 
         <div className="queue-header">
-          <h2>Load Into Deck {activeDeck}</h2>
+          <h2>{isIOS ? selectedPlaylist.name : `Load Into Deck ${activeDeck}`}</h2>
           <label className="toggle">
             <input type="checkbox" checked readOnly />
-            <span>Use selected deck</span>
+            <span>{isIOS ? 'iOS single deck' : 'Use selected deck'}</span>
           </label>
         </div>
         <div className="queue">
-          {queueSeed.map((item) => (
+          {selectedPlaylist.tracks.map((item) => (
             <button
-              className={`queue-item ${item.id === deckA.id || item.id === deckB.id ? 'selected' : ''}`}
+              className={`queue-item ${item.id === deckA.id || (!isIOS && item.id === deckB.id) ? 'selected' : ''}`}
               key={item.id}
               onClick={() => loadVideo(item)}
             >
@@ -996,8 +1087,8 @@ function PlayerApp() {
         </div>
         <div className="progress">
           <span>Preset: {activePreset}</span>
-          <div><i style={{ width: `${Math.max(8, Math.min(96, (deckVolumes.A + deckVolumes.B) / 2))}%` }} /></div>
-          <span>A {deckVolumes.A}% / B {deckVolumes.B}%</span>
+          <div><i style={{ width: `${Math.max(8, Math.min(96, isIOS ? deckVolumes.A : (deckVolumes.A + deckVolumes.B) / 2))}%` }} /></div>
+          <span>{isIOS ? `Deck A ${deckVolumes.A}%` : `A ${deckVolumes.A}% / B ${deckVolumes.B}%`}</span>
         </div>
         <Volume2 size={19} />
         <input
@@ -1005,9 +1096,9 @@ function PlayerApp() {
           type="range"
           min="0"
           max="100"
-          value={deckVolumes[activeDeck]}
-          onChange={(event) => setDeckVolume(activeDeck, Number(event.target.value))}
-          aria-label={`Deck ${activeDeck} volume`}
+          value={deckVolumes[activeInputDeck]}
+          onChange={(event) => setDeckVolume(activeInputDeck, Number(event.target.value))}
+          aria-label={`Deck ${activeInputDeck} volume`}
         />
         <FastForward size={18} />
       </footer>

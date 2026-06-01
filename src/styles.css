@@ -674,6 +674,11 @@ button {
   font-size: 14px;
 }
 
+.playlist-row.active {
+  background: #171c1e;
+  color: var(--teal);
+}
+
 .playlist-row span:last-child {
   color: var(--muted);
 }
@@ -689,6 +694,43 @@ button {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
+}
+
+.deck-grid.single-deck {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.mobile-playlists {
+  display: none;
+}
+
+.ios-limits {
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 12px;
+  padding: 12px;
+  border: 1px solid rgba(243, 180, 71, 0.45);
+  border-radius: 7px;
+  background: rgba(243, 180, 71, 0.08);
+  color: var(--muted);
+}
+
+.ios-limits svg {
+  color: var(--amber);
+}
+
+.ios-limits strong {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--text);
+}
+
+.ios-limits p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.4;
 }
 
 .deck {
@@ -1505,6 +1547,58 @@ canvas {
   .eq-panel {
     border: 0;
     padding: 12px;
+  }
+
+  .mobile-playlists {
+    display: grid;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #101516;
+  }
+
+  .mobile-playlist-strip {
+    display: grid;
+    grid-auto-columns: minmax(138px, 1fr);
+    grid-auto-flow: column;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
+  .mobile-playlist-card {
+    display: grid;
+    gap: 6px;
+    min-height: 68px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #0d1112;
+    color: var(--text);
+    padding: 10px;
+    text-align: left;
+  }
+
+  .mobile-playlist-card.active {
+    border-color: var(--teal);
+    background: rgba(56, 213, 200, 0.1);
+  }
+
+  .mobile-playlist-card strong {
+    overflow: hidden;
+    font-size: 14px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-playlist-card span {
+    color: var(--muted);
+    font-size: 12px;
+  }
+
+  .deck-grid {
+    grid-template-columns: 1fr;
   }
 
   .preset-grid {
