@@ -949,6 +949,10 @@ button {
 }
 
 .preset-effect {
+  display: grid;
+  grid-template-columns: 1fr auto auto auto;
+  gap: 10px;
+  align-items: center;
   margin-top: 10px;
   padding: 9px 10px;
   border: 1px solid var(--line);
@@ -1045,6 +1049,70 @@ button {
   color: var(--muted);
   font-size: 12px;
   text-align: center;
+}
+
+.manual-eq {
+  display: grid;
+  gap: 10px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #101516;
+}
+
+.manual-eq-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.manual-eq-header button {
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #181d1f;
+  color: var(--teal);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.manual-band-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.manual-band {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid #252c2f;
+  border-radius: 6px;
+  background: #0d1112;
+}
+
+.manual-band span {
+  color: #dfe4df;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.manual-band input {
+  width: 100%;
+  accent-color: var(--amber);
+}
+
+.manual-band strong {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .direct-source {
@@ -1369,6 +1437,11 @@ canvas {
 
   .instrument-grid {
     grid-template-columns: repeat(2, 1fr);
+  }
+
+  .preset-effect,
+  .manual-band-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .track-row,

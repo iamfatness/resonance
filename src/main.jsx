@@ -104,6 +104,7 @@ const moodPresets = {
 
 const bands = [31, 62, 125, 250, 500, '1k', '2k', '4k'];
 const bandFreqs = [31, 62, 125, 250, 500, 1000, 2000, 4000];
+const flatCurve = Array(bands.length).fill(0);
 const instrumentMeta = {
   Vocal: { icon: Mic2, band: '1k-4k' },
   Bass: { icon: Disc3, band: '62-125' },
@@ -112,6 +113,28 @@ const instrumentMeta = {
   Synth: { icon: KeyboardMusic, band: '500-4k' },
   Strings: { icon: WandSparkles, band: '1k-8k' },
 };
+
+const instrumentBandWeights = {
+  Vocal: [0, 0, 0, 0.15, 0.55, 0.9, 0.8, 0.45],
+  Bass: [0.25, 0.9, 0.85, 0.35, 0, 0, 0, 0],
+  Drums: [0.1, 0.35, 0.85, 0.75, 0.35, 0.6, 0.35, 0.15],
+  Guitar: [0, 0, 0.15, 0.65, 0.75, 0.75, 0.55, 0.35],
+  Synth: [0, 0.15, 0.25, 0.45, 0.75, 0.85, 0.85, 0.55],
+  Strings: [0, 0, 0.05, 0.25, 0.45, 0.8, 0.9, 0.8],
+};
+
+function clampGain(value) {
+  return Math.max(-12, Math.min(12, Number(value.toFixed(2))));
+}
+
+function applyInstrumentBoosts(baseCurve, boosts) {
+  return baseCurve.map((gain, bandIndex) => {
+    const instrumentGain = Object.entries(boosts).reduce((total, [name, boost]) => {
+      return total + (instrumentBandWeights[name]?.[bandIndex] || 0) * boost * 0.65;
+    }, 0);
+    return clampGain(gain + instrumentGain);
+  });
+}
 
 function parseYoutubeId(value) {
   const trimmed = value.trim();
@@ -548,30 +571,58 @@ function PlayerApp() {
   const [activePreset, setActivePreset] = useState('Focus');
   const [deckVolumes, setDeckVolumes] = useState(moodPresets.Focus.mix);
   const [directUrl, setDirectUrl] = useState('');
-  const [eqMode, setEqMode] = useState('Direct');
+  const [eqMode, setEqMode] = useState('Preset');
+  const [manualCurve, setManualCurve] = useState(flatCurve);
   const preset = moodPresets[activePreset];
   const [instrumentBoosts, setInstrumentBoosts] = useState(preset.instruments);
   const playerA = useYouTubePlayer(deckA.id, deckVolumes.A);
   const playerB = useYouTubePlayer(deckB.id, deckVolumes.B);
-  const localEq = useLocalEq(activePreset, preset.curve, directUrl);
+  const baseCurve = eqMode === 'Manual' ? manualCurve : preset.curve;
+  const effectiveCurve = useMemo(
+    () => applyInstrumentBoosts(baseCurve, instrumentBoosts),
+    [baseCurve, instrumentBoosts],
+  );
+  const localEq = useLocalEq(activePreset, effectiveCurve, directUrl);
 
   const eqPath = useMemo(() => {
-    const max = Math.max(...preset.curve.map((point) => Math.abs(point)), 12);
-    return preset.curve
+    const max = Math.max(...effectiveCurve.map((point) => Math.abs(point)), 12);
+    return effectiveCurve
       .map((gain, index) => {
         const x = 20 + index * 51;
         const y = 78 - (gain / max) * 46;
         return `${index === 0 ? 'M' : 'L'} ${x} ${y}`;
       })
       .join(' ');
-  }, [preset.curve]);
+  }, [effectiveCurve]);
 
   function applyMoodPreset(name) {
     const nextPreset = moodPresets[name];
     setActivePreset(name);
     setInstrumentBoosts(nextPreset.instruments);
     setDeckVolumes(nextPreset.mix);
-    setEqMode('Preset Guide');
+    setEqMode('Preset');
+  }
+
+  function setInstrumentBoost(name, value) {
+    setInstrumentBoosts((current) => ({ ...current, [name]: value }));
+  }
+
+  function setManualBand(index, value) {
+    setEqMode('Manual');
+    setManualCurve((current) => {
+      const startingCurve = eqMode === 'Manual' ? current : preset.curve;
+      return startingCurve.map((gain, bandIndex) => (bandIndex === index ? value : gain));
+    });
+  }
+
+  function resetManualCurve() {
+    setManualCurve(flatCurve);
+    setEqMode('Manual');
+  }
+
+  function changeEqMode(mode) {
+    if (mode === 'Manual' && eqMode !== 'Manual') setManualCurve(preset.curve);
+    setEqMode(mode);
   }
 
   function setDeckVolume(deck, value) {
@@ -746,6 +797,7 @@ function PlayerApp() {
             <strong>{activePreset}</strong>
             <span>Deck A {deckVolumes.A}%</span>
             <span>Deck B {deckVolumes.B}%</span>
+            <span>EQ {eqMode}</span>
           </div>
         </section>
 
@@ -767,9 +819,9 @@ function PlayerApp() {
                     max="6"
                     step="0.5"
                     value={instrumentBoosts[name]}
-                    onChange={(event) =>
-                      setInstrumentBoosts((current) => ({ ...current, [name]: Number(event.target.value) }))
-                    }
+                    onInput={(event) => setInstrumentBoost(name, Number(event.currentTarget.value))}
+                    onChange={(event) => setInstrumentBoost(name, Number(event.target.value))}
+                    aria-label={`${name} instrument boost`}
                   />
                   <strong>{instrumentBoosts[name] > 0 ? '+' : ''}{instrumentBoosts[name].toFixed(1)} dB</strong>
                   <small>{meta.band}</small>
@@ -782,24 +834,48 @@ function PlayerApp() {
         <section>
           <div className="panel-heading">
             <h2>8-Band Equalizer</h2>
-            <select value={eqMode} onChange={(event) => setEqMode(event.target.value)}>
-              <option>Direct</option>
-              <option>Preset Guide</option>
+            <select value={eqMode} onChange={(event) => changeEqMode(event.target.value)}>
+              <option>Preset</option>
+              <option>Manual</option>
             </select>
           </div>
           <div className="eq-graph">
-            <svg viewBox="0 0 400 130" role="img" aria-label={`${activePreset} EQ curve`}>
+            <svg viewBox="0 0 400 130" role="img" aria-label={`${eqMode} EQ curve with instrument boosts`}>
               <g className="grid-lines">
                 {[20, 49, 78, 107].map((y) => <line key={y} x1="0" x2="400" y1={y} y2={y} />)}
                 {[20, 71, 122, 173, 224, 275, 326, 377].map((x) => <line key={x} x1={x} x2={x} y1="8" y2="118" />)}
               </g>
               <path d={eqPath} className="eq-line" />
-              {preset.curve.map((gain, index) => (
+              {effectiveCurve.map((gain, index) => (
                 <circle key={bands[index]} cx={20 + index * 51} cy={78 - (gain / 12) * 46} r="6" />
               ))}
             </svg>
             <div className="band-labels">
               {bands.map((band) => <span key={band}>{band}</span>)}
+            </div>
+          </div>
+          <div className="manual-eq">
+            <div className="manual-eq-header">
+              <span>{eqMode === 'Manual' ? 'Manual base curve' : `${activePreset} base curve`}</span>
+              <button type="button" onClick={resetManualCurve}>Flat manual</button>
+            </div>
+            <div className="manual-band-grid">
+              {bands.map((band, index) => (
+                <label className="manual-band" key={band}>
+                  <span>{band}</span>
+                  <input
+                    type="range"
+                    min="-12"
+                    max="12"
+                    step="0.5"
+                    value={eqMode === 'Manual' ? manualCurve[index] : preset.curve[index]}
+                    onInput={(event) => setManualBand(index, Number(event.currentTarget.value))}
+                    onChange={(event) => setManualBand(index, Number(event.target.value))}
+                    aria-label={`${band} Hz manual EQ band`}
+                  />
+                  <strong>{effectiveCurve[index] > 0 ? '+' : ''}{effectiveCurve[index].toFixed(1)} dB</strong>
+                </label>
+              ))}
             </div>
           </div>
         </section>
