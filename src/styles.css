@@ -519,7 +519,7 @@ button {
 .topbar {
   grid-column: 1 / -1;
   display: grid;
-  grid-template-columns: 240px minmax(420px, 1fr) auto 44px;
+  grid-template-columns: 240px minmax(360px, 1fr) auto auto 44px;
   gap: 16px;
   align-items: center;
   padding: 14px 18px;
@@ -582,6 +582,7 @@ button {
 }
 
 .source-pill,
+.deck-count-control,
 .icon-button {
   height: 40px;
   display: inline-flex;
@@ -602,6 +603,38 @@ button {
 .source-pill strong {
   color: var(--teal);
   font-weight: 700;
+}
+
+.deck-count-control {
+  gap: 0;
+  overflow: hidden;
+  padding: 0;
+}
+
+.deck-count-control button {
+  height: 100%;
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 11px;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.deck-count-control button:last-child {
+  border-right: 0;
+}
+
+.deck-count-control button.active {
+  background: rgba(56, 213, 200, 0.14);
+  color: var(--teal);
+}
+
+.deck-count-control button:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
 }
 
 .icon-button {
@@ -1535,7 +1568,17 @@ canvas {
   }
 
   .searchbar {
+    grid-column: 1 / -1;
     grid-template-columns: 22px 1fr 58px;
+  }
+
+  .deck-count-control {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .deck-count-control button {
+    flex: 1;
   }
 
   .source-pill,

@@ -636,6 +636,7 @@ function PlayerApp() {
   const [queryA, setQueryA] = useState('https://www.youtube.com/watch?v=TW9d8vYrVFQ');
   const [queryB, setQueryB] = useState('https://www.youtube.com/watch?v=M7lc1UVf-VE');
   const [activeDeck, setActiveDeck] = useState('A');
+  const [deckCount, setDeckCount] = useState(isIOS ? 1 : 2);
   const [selectedPlaylistName, setSelectedPlaylistName] = useState(playlistCatalog[0].name);
   const [activePreset, setActivePreset] = useState('Focus');
   const [deckVolumes, setDeckVolumes] = useState(moodPresets.Focus.mix);
@@ -647,7 +648,9 @@ function PlayerApp() {
   const playerA = useYouTubePlayer(deckA.id, deckVolumes.A);
   const playerB = useYouTubePlayer(deckB.id, deckVolumes.B);
   const selectedPlaylist = playlistCatalog.find((playlist) => playlist.name === selectedPlaylistName) || playlistCatalog[0];
-  const activeInputDeck = isIOS ? 'A' : activeDeck;
+  const effectiveDeckCount = isIOS ? 1 : deckCount;
+  const isSingleDeck = effectiveDeckCount === 1;
+  const activeInputDeck = isSingleDeck ? 'A' : activeDeck;
   const baseCurve = eqMode === 'Manual' ? manualCurve : preset.curve;
   const effectiveCurve = useMemo(
     () => applyInstrumentBoosts(baseCurve, instrumentBoosts),
@@ -678,6 +681,11 @@ function PlayerApp() {
     if (!isIOS || activeDeck === 'A') return;
     setActiveDeck('A');
   }, [activeDeck, isIOS]);
+
+  useEffect(() => {
+    if (activeDeck === 'A' || !isSingleDeck) return;
+    setActiveDeck('A');
+  }, [activeDeck, isSingleDeck]);
 
   function setInstrumentBoost(name, value) {
     setInstrumentBoosts((current) => ({ ...current, [name]: value }));
@@ -711,8 +719,14 @@ function PlayerApp() {
     loadVideo(playlist.tracks[0], 'A');
   }
 
+  function changeDeckCount(value) {
+    const nextDeckCount = Number(value);
+    setDeckCount(nextDeckCount);
+    if (nextDeckCount === 1) setActiveDeck('A');
+  }
+
   function loadVideo(nextVideo, targetDeck = activeInputDeck) {
-    const safeTargetDeck = isIOS ? 'A' : targetDeck;
+    const safeTargetDeck = isSingleDeck ? 'A' : targetDeck;
     if (safeTargetDeck === 'A') {
       setDeckA(nextVideo);
       setQueryA(`https://www.youtube.com/watch?v=${nextVideo.id}`);
@@ -724,14 +738,14 @@ function PlayerApp() {
 
   function submitVideo(event, targetDeck) {
     event.preventDefault();
-    const safeTargetDeck = isIOS ? 'A' : targetDeck;
+    const safeTargetDeck = isSingleDeck ? 'A' : targetDeck;
     const id = parseYoutubeId(safeTargetDeck === 'A' ? queryA : queryB);
     if (!id) return;
     loadVideo({ id, title: `Custom Deck ${safeTargetDeck} video`, channel: 'YouTube', duration: '--:--' }, safeTargetDeck);
   }
 
   function toggleBothDecks() {
-    if (isIOS) {
+    if (isSingleDeck) {
       playerA.toggle();
       return;
     }
@@ -757,14 +771,32 @@ function PlayerApp() {
             aria-label="Active deck YouTube URL or video ID"
             value={activeInputDeck === 'A' ? queryA : queryB}
             onChange={(event) => (activeInputDeck === 'A' ? setQueryA(event.target.value) : setQueryB(event.target.value))}
-            placeholder={isIOS ? 'Paste a YouTube link' : `Paste a YouTube link for Deck ${activeInputDeck}`}
+            placeholder={isSingleDeck ? 'Paste a YouTube link' : `Paste a YouTube link for Deck ${activeInputDeck}`}
           />
           <button type="submit">Load</button>
         </form>
+        <div className="deck-count-control" aria-label="Deck count">
+          <button
+            className={effectiveDeckCount === 1 ? 'active' : ''}
+            type="button"
+            onClick={() => changeDeckCount(1)}
+          >
+            1 Deck
+          </button>
+          <button
+            className={effectiveDeckCount === 2 ? 'active' : ''}
+            type="button"
+            onClick={() => changeDeckCount(2)}
+            disabled={isIOS}
+            title={isIOS ? 'iOS browsers only support one YouTube video stream at a time.' : 'Use two decks'}
+          >
+            2 Decks
+          </button>
+        </div>
         <div className="source-pill">
           <Link size={16} />
-          <span>{isIOS ? 'iOS' : 'Active'}</span>
-          <strong>{isIOS ? 'Single Deck' : `Deck ${activeDeck}`}</strong>
+          <span>{isIOS ? 'iOS' : effectiveDeckCount === 1 ? 'Mode' : 'Active'}</span>
+          <strong>{effectiveDeckCount === 1 ? 'Single Deck' : `Deck ${activeDeck}`}</strong>
         </div>
         <button className="icon-button" aria-label="Settings"><Settings size={18} /></button>
       </header>
@@ -864,7 +896,7 @@ function PlayerApp() {
           <canvas ref={localEq.graphRef} width="460" height="120" />
         </section>
 
-        <div className={`deck-grid ${isIOS ? 'single-deck' : ''}`}>
+        <div className={`deck-grid ${isSingleDeck ? 'single-deck' : ''}`}>
           <VideoDeck
             label="A"
             video={deckA}
@@ -877,7 +909,7 @@ function PlayerApp() {
             active={activeDeck === 'A'}
             onActivate={() => setActiveDeck('A')}
           />
-          {!isIOS && (
+          {!isSingleDeck && (
             <VideoDeck
               label="B"
               video={deckB}
@@ -895,8 +927,8 @@ function PlayerApp() {
 
         <div className="mix-status">
           <div>
-            <h2>{activePreset} {isIOS ? 'playlist mode' : 'mix is active'}</h2>
-            <p>{isIOS ? `${selectedPlaylist.name} is ready for single-deck iOS playback.` : preset.intent}</p>
+            <h2>{activePreset} {isSingleDeck ? 'single-deck mode' : 'mix is active'}</h2>
+            <p>{isSingleDeck ? `${selectedPlaylist.name} is ready for focused playback on Deck A.` : preset.intent}</p>
           </div>
           <div className="track-actions">
             <button className="icon-button" aria-label="Like"><ThumbsUp size={18} /></button>
@@ -906,16 +938,16 @@ function PlayerApp() {
         </div>
 
         <div className="queue-header">
-          <h2>{isIOS ? selectedPlaylist.name : `Load Into Deck ${activeDeck}`}</h2>
+          <h2>{isSingleDeck ? selectedPlaylist.name : `Load Into Deck ${activeDeck}`}</h2>
           <label className="toggle">
             <input type="checkbox" checked readOnly />
-            <span>{isIOS ? 'iOS single deck' : 'Use selected deck'}</span>
+            <span>{isSingleDeck ? 'Single deck' : 'Use selected deck'}</span>
           </label>
         </div>
         <div className="queue">
           {selectedPlaylist.tracks.map((item) => (
             <button
-              className={`queue-item ${item.id === deckA.id || (!isIOS && item.id === deckB.id) ? 'selected' : ''}`}
+              className={`queue-item ${item.id === deckA.id || (!isSingleDeck && item.id === deckB.id) ? 'selected' : ''}`}
               key={item.id}
               onClick={() => loadVideo(item)}
             >
@@ -957,7 +989,7 @@ function PlayerApp() {
           <div className="preset-effect">
             <strong>{activePreset}</strong>
             <span>Deck A {deckVolumes.A}%</span>
-            <span>Deck B {deckVolumes.B}%</span>
+            {!isSingleDeck && <span>Deck B {deckVolumes.B}%</span>}
             <span>EQ {eqMode}</span>
           </div>
         </section>
@@ -1073,7 +1105,7 @@ function PlayerApp() {
       <footer className="transport">
         <button className="icon-button" aria-label="Shuffle"><Shuffle size={19} /></button>
         <button className="icon-button" aria-label="Previous"><SkipBack size={21} /></button>
-        <button className="play-button" onClick={toggleBothDecks} aria-label={playerA.playing || playerB.playing ? 'Pause both decks' : 'Play both decks'}>
+        <button className="play-button" onClick={toggleBothDecks} aria-label={playerA.playing || (!isSingleDeck && playerB.playing) ? 'Pause playback' : 'Play playback'}>
           {playerA.playing || playerB.playing ? <Pause size={27} /> : <Play size={27} />}
         </button>
         <button className="icon-button" aria-label="Next"><SkipForward size={21} /></button>
@@ -1087,8 +1119,8 @@ function PlayerApp() {
         </div>
         <div className="progress">
           <span>Preset: {activePreset}</span>
-          <div><i style={{ width: `${Math.max(8, Math.min(96, isIOS ? deckVolumes.A : (deckVolumes.A + deckVolumes.B) / 2))}%` }} /></div>
-          <span>{isIOS ? `Deck A ${deckVolumes.A}%` : `A ${deckVolumes.A}% / B ${deckVolumes.B}%`}</span>
+          <div><i style={{ width: `${Math.max(8, Math.min(96, isSingleDeck ? deckVolumes.A : (deckVolumes.A + deckVolumes.B) / 2))}%` }} /></div>
+          <span>{isSingleDeck ? `Deck A ${deckVolumes.A}%` : `A ${deckVolumes.A}% / B ${deckVolumes.B}%`}</span>
         </div>
         <Volume2 size={19} />
         <input
