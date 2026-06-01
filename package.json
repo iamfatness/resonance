@@ -8,6 +8,7 @@
     "audio:devices": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/list-audio-devices.ps1",
     "native:wasapi-meter": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-wasapi-meter.ps1",
     "driver:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-sysvad.ps1",
+    "driver:install:sysvad": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-sysvad.ps1",
     "preview": "vite preview --host 127.0.0.1",
     "package:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1",
     "deploy": "npm run build && wrangler pages deploy dist --project-name resonance --branch main --commit-dirty=true",

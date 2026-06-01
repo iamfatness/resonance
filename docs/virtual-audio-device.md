@@ -74,6 +74,24 @@ After installation, rerun:
 npm run driver:build
 ```
 
+Install the built SysVAD driver package from an elevated PowerShell window only after the build succeeds:
+
+```powershell
+npm run driver:install:sysvad
+```
+
+The install script intentionally refuses to continue unless:
+
+- PowerShell is elevated.
+- Windows test signing is enabled.
+- the built `TabletAudioSample.inf` exists under the x64 build output.
+
+Enable test signing from an elevated PowerShell window, then reboot:
+
+```powershell
+bcdedit /set testsigning on
+```
+
 ## First Milestones
 
 1. Build the unmodified SysVAD sample.
