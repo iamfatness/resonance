@@ -2,9 +2,57 @@ $ErrorActionPreference = 'Stop'
 
 $root = Resolve-Path (Join-Path $PSScriptRoot '..')
 $solution = Join-Path $root 'driver\audio\sysvad\sysvad.sln'
-$msbuild = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\amd64\MSBuild.exe'
-$platforms = 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Microsoft\VC\v170\Platforms'
 $wdkRoot = 'C:\Program Files (x86)\Windows Kits\10'
+$vswhere = 'C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe'
+
+function Get-BuildToolsPath {
+  if (-not (Test-Path -LiteralPath $vswhere)) {
+    return $null
+  }
+
+  $withWdk = & $vswhere -latest -products * -requires Component.Microsoft.Windows.DriverKit -property installationPath
+  if ($withWdk) {
+    return $withWdk
+  }
+
+  $withToolsets = & $vswhere -all -products * -format json | ConvertFrom-Json |
+    Where-Object {
+      $platformsPath = Get-VcPlatformsPath $_.installationPath
+      (Get-ChildItem -Path $platformsPath -Recurse -ErrorAction SilentlyContinue | Where-Object {
+        $_.FullName -match 'WindowsKernelModeDriver10\.0'
+      } | Select-Object -First 1)
+    } |
+    Sort-Object installationVersion -Descending |
+    Select-Object -First 1
+
+  if ($withToolsets) {
+    return $withToolsets.installationPath
+  }
+
+  return (& $vswhere -latest -products * -property installationPath)
+}
+
+function Get-VcPlatformsPath($InstallPath) {
+  if (-not $InstallPath) {
+    return ''
+  }
+
+  $vcRoot = Join-Path $InstallPath 'MSBuild\Microsoft\VC'
+  $vcVersion = Get-ChildItem -Path $vcRoot -Directory -ErrorAction SilentlyContinue |
+    Where-Object { $_.Name -match '^v\d+$' } |
+    Sort-Object Name -Descending |
+    Select-Object -First 1
+
+  if (-not $vcVersion) {
+    return ''
+  }
+
+  return (Join-Path $vcVersion.FullName 'Platforms')
+}
+
+$buildTools = Get-BuildToolsPath
+$msbuild = if ($buildTools) { Join-Path $buildTools 'MSBuild\Current\Bin\amd64\MSBuild.exe' } else { '' }
+$platforms = Get-VcPlatformsPath $buildTools
 
 function Test-IsAdmin {
   $identity = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -35,8 +83,8 @@ $hasDriverAppToolset = [bool](Get-ChildItem -Path $platforms -Recurse -ErrorActi
 } | Select-Object -First 1)
 $isAdmin = Test-IsAdmin
 $testSigning = [bool](& bcdedit /enum '{current}' 2>$null | Select-String -Pattern 'testsigning\s+Yes')
-$builtInf = Get-ChildItem -Path (Join-Path $root 'driver\audio\sysvad') -Recurse -Filter 'TabletAudioSample.inf' -ErrorAction SilentlyContinue |
-  Where-Object { $_.FullName -match '\\(Debug|Release)\\' -and $_.FullName -match '\\x64\\' } |
+$packageDir = Join-Path $root 'driver\audio\sysvad\x64\Debug\package'
+$builtInf = Get-ChildItem -Path $packageDir -Filter 'ComponentizedAudioSample.inf' -ErrorAction SilentlyContinue |
   Select-Object -First 1
 
 $checks = @(
@@ -46,11 +94,12 @@ $checks = @(
   [pscustomobject]@{ check = 'WDK portcls library'; status = Get-Status $hasWdkLib; detail = 'portcls.lib' },
   [pscustomobject]@{ check = 'Inf2Cat'; status = Get-Status $hasInf2Cat; detail = 'Inf2Cat.exe' },
   [pscustomobject]@{ check = 'SignTool'; status = Get-Status $hasSignTool; detail = 'signtool.exe' },
+  [pscustomobject]@{ check = 'VS WDK component'; status = Get-Status ([bool](& $vswhere -latest -products * -requires Component.Microsoft.Windows.DriverKit -property installationPath 2>$null)); detail = 'Component.Microsoft.Windows.DriverKit' },
   [pscustomobject]@{ check = 'Kernel driver toolset'; status = Get-Status $hasKernelToolset; detail = 'WindowsKernelModeDriver10.0' },
   [pscustomobject]@{ check = 'Driver app toolset'; status = Get-Status $hasDriverAppToolset; detail = 'WindowsApplicationForDrivers10.0' },
   [pscustomobject]@{ check = 'Elevated shell'; status = Get-Status $isAdmin; detail = 'Required only for test signing and driver install' },
   [pscustomobject]@{ check = 'Test signing'; status = Get-Status $testSigning; detail = 'Required only before installing test driver' },
-  [pscustomobject]@{ check = 'Built SysVAD INF'; status = Get-Status ([bool]$builtInf); detail = if ($builtInf) { $builtInf.FullName } else { 'Run npm run driver:build after toolsets are ready' } }
+  [pscustomobject]@{ check = 'Built SysVAD package'; status = Get-Status ([bool]$builtInf); detail = if ($builtInf) { $packageDir } else { 'Run npm run driver:build after toolsets are ready' } }
 )
 
 $checks | Format-Table -AutoSize

@@ -40,26 +40,20 @@ Source:
 - Microsoft sample repo: https://github.com/microsoft/Windows-driver-samples/tree/main/audio/sysvad
 - APO architecture: https://learn.microsoft.com/en-us/windows-hardware/drivers/audio/audio-processing-object-architecture
 
-## Current Blocker
+## Current Status
 
-The machine has Visual Studio Build Tools and Windows Kit headers, but it does not currently have the WDK Visual Studio driver toolsets required by SysVAD.
+The machine can build the unmodified Microsoft SysVAD sample. The working local toolchain is:
 
-The attempted build was:
+- Visual Studio Community 2026 with the Windows Driver Kit component.
+- Windows SDK/WDK 10.0.28000.
+- Microsoft WIL populated through the `driver/wil` submodule.
 
 ```powershell
-& 'C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin\amd64\MSBuild.exe' `
-  driver\audio\sysvad\sysvad.sln `
-  /p:Configuration=Debug `
-  /p:Platform=x64 `
-  /m
+npm run driver:preflight
+npm run driver:build
 ```
 
-It failed because these platform toolsets are missing:
-
-- `WindowsKernelModeDriver10.0`
-- `WindowsApplicationForDrivers10.0`
-
-If the WDK files are installed but those Visual Studio platform toolsets are still missing, add the Visual Studio WDK Build Tools component:
+If the WDK files are installed but the Visual Studio platform toolsets are missing, add the Visual Studio WDK component:
 
 ```powershell
 npm run driver:install:wdk-buildtools
@@ -68,7 +62,7 @@ npm run driver:install:wdk-buildtools
 This wraps Visual Studio Installer with Microsoft's component ID:
 
 ```text
-Component.Microsoft.Windows.DriverKit.BuildTools
+Component.Microsoft.Windows.DriverKit
 ```
 
 Check the local driver readiness state without installing anything:
@@ -79,7 +73,7 @@ npm run driver:preflight
 
 ## Required Local Setup
 
-Install the Windows Driver Kit integration for Visual Studio 2022 Build Tools. The required pieces are:
+Install the Windows Driver Kit integration for Visual Studio. The required pieces are:
 
 - Windows Driver Kit
 - WDK Visual Studio extension / driver build tools
@@ -102,7 +96,7 @@ The install script intentionally refuses to continue unless:
 
 - PowerShell is elevated.
 - Windows test signing is enabled.
-- the built `TabletAudioSample.inf` exists under the x64 build output.
+- the built componentized SysVAD package exists under `driver/audio/sysvad/x64/Debug/package`.
 
 Enable test signing from an elevated PowerShell window, then reboot:
 

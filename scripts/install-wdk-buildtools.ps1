@@ -13,16 +13,16 @@ if (-not (Test-Path -LiteralPath $installer)) {
 
 $installPath = & $vswhere -latest -products * -property installationPath
 if (-not $installPath) {
-  throw "Visual Studio Build Tools installation path was not found."
+  throw "Visual Studio installation path was not found."
 }
 
 Write-Host "Adding Visual Studio WDK Build Tools component to:"
 Write-Host $installPath
-Write-Host "Component: Component.Microsoft.Windows.DriverKit.BuildTools"
+Write-Host "Component: Component.Microsoft.Windows.DriverKit"
 
 & $installer modify `
   --installPath $installPath `
-  --add Component.Microsoft.Windows.DriverKit.BuildTools `
+  --add Component.Microsoft.Windows.DriverKit `
   --passive `
   --norestart
 
