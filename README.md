@@ -29,6 +29,24 @@ extension/
 
 Load it locally from `chrome://extensions` with **Developer mode** and **Load unpacked**. The extension captures the active Chrome tab, routes audio through Web Audio filters, and plays the processed signal back to the default output.
 
+Package the beta extension zip:
+
+```powershell
+npm run package:extension
+```
+
+The generated beta package is served from:
+
+```text
+https://resonance.iamfatness.us/downloads/resonance-eq-0.1.0.zip
+```
+
+Tester instructions live in:
+
+```text
+docs/extension-beta.md
+```
+
 ## Development
 
 ```powershell

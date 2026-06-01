@@ -429,6 +429,20 @@ const docsColumns = [
     ],
     note: 'The driver plan is documented in the repository roadmap.',
   },
+  {
+    icon: Upload,
+    title: 'Chrome EQ beta',
+    tone: 'amber',
+    body: 'Beta testers can install the Chrome extension package and process the current YouTube tab.',
+    items: [
+      'Download hosted beta zip',
+      'Load unpacked in Chrome',
+      'Capture active YouTube tab',
+      'Apply real Web Audio EQ',
+      'Test presets and manual bands',
+    ],
+    note: 'Use the beta package below for tester installs while Chrome Web Store review is pending.',
+  },
 ];
 
 const architectureSteps = [
@@ -528,6 +542,31 @@ function LandingPage() {
               </article>
             );
           })}
+        </div>
+      </section>
+
+      <section className="extension-beta" id="extension-beta">
+        <div className="section-copy">
+          <h2>Chrome Extension Beta</h2>
+          <p>Use the beta package to test real EQ on the current YouTube tab through Chrome tab capture.</p>
+        </div>
+        <div className="beta-layout">
+          <div className="beta-actions">
+            <a className="primary-link" href="/downloads/resonance-eq-0.1.0.zip" download>
+              Download beta zip
+              <ArrowRight size={20} />
+            </a>
+            <a className="secondary-link" href="https://github.com/iamfatness/resonance/blob/main/docs/extension-beta.md">
+              Tester guide
+              <ArrowRight size={17} />
+            </a>
+          </div>
+          <ol>
+            <li>Download and extract the zip.</li>
+            <li>Open <code>chrome://extensions</code> and enable Developer mode.</li>
+            <li>Choose Load unpacked and select the extracted folder.</li>
+            <li>Open YouTube, click Resonance EQ, then press Start.</li>
+          </ol>
         </div>
       </section>
 

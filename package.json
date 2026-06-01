@@ -3,6 +3,7 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
+    "package:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1",
     "deploy": "npm run build && wrangler pages deploy dist --project-name resonance --branch main --commit-dirty=true",
     "deploy:worker": "npm run build && wrangler deploy --config wrangler.worker.jsonc"
   },
