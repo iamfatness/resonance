@@ -472,6 +472,7 @@ function DesktopEnginePanel({ engine }) {
   const meters = engine.meters || { inputPeak: 0, outputPeak: 0, inputRms: 0, outputRms: 0, clipping: false };
   const inputs = state.devices?.inputs || [];
   const outputs = state.devices?.outputs || [];
+  const diagnostics = state.diagnostics?.checks || [];
 
   return (
     <section className="desktop-engine-panel">
@@ -534,6 +535,23 @@ function DesktopEnginePanel({ engine }) {
           <span>Plugin host</span>
           <strong>{state.pluginHost.status}</strong>
           <small>{state.settings?.appEqBypassed ? 'App EQ bypassed' : `${state.settings?.pluginChain?.length || 0} plugins staged`}</small>
+        </div>
+      )}
+      {diagnostics.length > 0 && (
+        <div className="engine-diagnostics">
+          <div className="engine-diagnostics-header">
+            <span>Desktop readiness</span>
+            <small>{state.diagnostics?.updatedAt ? new Date(state.diagnostics.updatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'pending'}</small>
+          </div>
+          <div className="engine-diagnostic-list">
+            {diagnostics.map((check) => (
+              <article className={`engine-diagnostic ${check.status}`} key={check.id}>
+                <strong>{check.label}</strong>
+                <span>{check.status}</span>
+                <small>{check.detail}</small>
+              </article>
+            ))}
+          </div>
         </div>
       )}
       {state.deviceScan?.error && <p className="engine-error">{state.deviceScan.error}</p>}

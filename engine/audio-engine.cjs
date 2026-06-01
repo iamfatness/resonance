@@ -5,19 +5,39 @@ const path = require('node:path');
 const rootDir = path.resolve(__dirname, '..');
 const listAudioDevicesScript = path.join(rootDir, 'scripts', 'list-audio-devices.ps1');
 const wasapiMeterExe = path.join(rootDir, 'native', 'wasapi-meter', 'build', 'Release', 'resonance-wasapi-meter.exe');
+const sysvadSolution = path.join(rootDir, 'driver', 'audio', 'sysvad', 'sysvad.sln');
+const buildToolsPlatforms = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Microsoft\\VC\\v170\\Platforms';
+const settingsDir = path.join(process.env.APPDATA || rootDir, 'Resonance');
+const settingsPath = path.join(settingsDir, 'engine-settings.json');
+
+const defaultSettings = {
+  preset: 'Focus',
+  eqMode: 'Preset',
+  curve: [2, 3.5, 2, 0, -2, -1, 1.5, 2],
+  appEqBypassed: false,
+  pluginChain: [],
+  outputGain: 0.9,
+};
+
+function readPersistedState() {
+  try {
+    if (!fs.existsSync(settingsPath)) return {};
+    return JSON.parse(fs.readFileSync(settingsPath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+const persistedState = readPersistedState();
 
 const engineState = {
   status: 'idle',
   mode: 'windows-enumeration',
-  inputDeviceId: null,
-  outputDeviceId: 'default-output',
+  inputDeviceId: persistedState.inputDeviceId || null,
+  outputDeviceId: persistedState.outputDeviceId || 'default-output',
   settings: {
-    preset: 'Focus',
-    eqMode: 'Preset',
-    curve: [2, 3.5, 2, 0, -2, -1, 1.5, 2],
-    appEqBypassed: false,
-    pluginChain: [],
-    outputGain: 0.9,
+    ...defaultSettings,
+    ...(persistedState.settings || {}),
   },
   pluginHost: {
     status: 'planned',
@@ -56,6 +76,10 @@ const engineState = {
     error: null,
     scannedAt: null,
   },
+  diagnostics: {
+    updatedAt: null,
+    checks: [],
+  },
   lastStartedAt: null,
   meters: {
     inputPeak: 0,
@@ -70,6 +94,107 @@ const engineState = {
 let meterTimer = null;
 let nativeMeterBusy = false;
 
+function findDirectoryByName(startDir, targetName, maxDepth = 6) {
+  if (!fs.existsSync(startDir) || maxDepth < 0) return false;
+  let entries = [];
+  try {
+    entries = fs.readdirSync(startDir, { withFileTypes: true });
+  } catch {
+    return false;
+  }
+
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (entry.name === targetName) return true;
+    if (findDirectoryByName(path.join(startDir, entry.name), targetName, maxDepth - 1)) return true;
+  }
+  return false;
+}
+
+function buildDiagnostics() {
+  const hasKernelToolset = findDirectoryByName(buildToolsPlatforms, 'WindowsKernelModeDriver10.0');
+  const hasDriverAppToolset = findDirectoryByName(buildToolsPlatforms, 'WindowsApplicationForDrivers10.0');
+  const hasNativeMeterHelper = hasNativeMeter();
+  const hasSysvadSource = fs.existsSync(sysvadSolution);
+  const hasPersistedSettings = fs.existsSync(settingsPath);
+  const hasWindowsAudioScan = engineState.deviceScan.status === 'ready';
+  const hasVirtualDevice = engineState.devices.inputs.some((device) => (
+    device.id === 'resonance-virtual-input' && device.available
+  ));
+
+  engineState.diagnostics = {
+    updatedAt: new Date().toISOString(),
+    settingsPath,
+    checks: [
+      {
+        id: 'desktop-engine',
+        label: 'Desktop engine process',
+        status: 'ready',
+        detail: 'Electron can communicate with the audio engine.',
+      },
+      {
+        id: 'settings',
+        label: 'Persistent settings',
+        status: hasPersistedSettings ? 'ready' : 'pending',
+        detail: hasPersistedSettings ? settingsPath : 'Settings file will be created after the next settings or device change.',
+      },
+      {
+        id: 'audio-scan',
+        label: 'Windows audio endpoints',
+        status: hasWindowsAudioScan ? 'ready' : engineState.deviceScan.status === 'error' ? 'blocked' : 'pending',
+        detail: hasWindowsAudioScan ? 'Endpoint scan completed.' : engineState.deviceScan.error || 'Endpoint scan is pending.',
+      },
+      {
+        id: 'wasapi-meter',
+        label: 'Native WASAPI meter',
+        status: hasNativeMeterHelper ? 'ready' : 'pending',
+        detail: hasNativeMeterHelper ? wasapiMeterExe : 'Run npm run native:wasapi-meter to build the helper.',
+      },
+      {
+        id: 'sysvad-source',
+        label: 'SysVAD source',
+        status: hasSysvadSource ? 'ready' : 'pending',
+        detail: hasSysvadSource ? sysvadSolution : 'Clone the Microsoft SysVAD sample into driver/audio/sysvad.',
+      },
+      {
+        id: 'wdk-toolsets',
+        label: 'WDK driver toolsets',
+        status: hasKernelToolset && hasDriverAppToolset ? 'ready' : 'blocked',
+        detail: hasKernelToolset && hasDriverAppToolset
+          ? 'Windows driver build toolsets are installed.'
+          : 'Missing WindowsKernelModeDriver10.0 and/or WindowsApplicationForDrivers10.0.',
+      },
+      {
+        id: 'virtual-device',
+        label: 'Resonance virtual device',
+        status: hasVirtualDevice ? 'ready' : 'blocked',
+        detail: hasVirtualDevice ? 'Virtual playback endpoint is installed.' : 'Blocked until SysVAD builds and installs.',
+      },
+      {
+        id: 'plugin-host',
+        label: 'Plugin host',
+        status: 'planned',
+        detail: 'VST3/Waves hosting starts after PCM capture/render routing is active.',
+      },
+    ],
+  };
+}
+
+function persistEngineState() {
+  try {
+    fs.mkdirSync(settingsDir, { recursive: true });
+    fs.writeFileSync(settingsPath, JSON.stringify({
+      inputDeviceId: engineState.inputDeviceId,
+      outputDeviceId: engineState.outputDeviceId,
+      settings: engineState.settings,
+      savedAt: new Date().toISOString(),
+    }, null, 2));
+  } catch {
+    // Persistence failure should not take down audio control.
+  }
+  buildDiagnostics();
+}
+
 function hasNativeMeter() {
   return fs.existsSync(wasapiMeterExe);
 }
@@ -83,6 +208,7 @@ function send(message) {
 }
 
 function publishState(requestId) {
+  buildDiagnostics();
   send({ type: 'STATE', requestId, state: engineState });
 }
 
@@ -221,6 +347,7 @@ function applyEnumeratedDevices(devices) {
   const selectedOutputExists = engineState.devices.outputs.some((device) => device.id === engineState.outputDeviceId && device.available);
   if (!selectedInputExists) engineState.inputDeviceId = engineState.devices.inputs.find((device) => device.available)?.id || null;
   if (!selectedOutputExists) engineState.outputDeviceId = 'default-output';
+  persistEngineState();
 }
 
 function refreshDevices(requestId) {
@@ -303,12 +430,14 @@ function updateSettings(requestId, settings = {}) {
     nextMockMeters();
     publishMeters();
   }
+  persistEngineState();
   publishState(requestId);
 }
 
 function selectDevices(requestId, devices = {}) {
   if (devices.inputDeviceId) engineState.inputDeviceId = devices.inputDeviceId;
   if (devices.outputDeviceId) engineState.outputDeviceId = devices.outputDeviceId;
+  persistEngineState();
   publishState(requestId);
 }
 

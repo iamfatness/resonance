@@ -55,6 +55,8 @@ release/Resonance-local/Resonance.exe
 - External links open in the system browser.
 - The desktop app can enumerate Windows audio endpoints and show native WASAPI loopback meters when the helper is built.
 - The UI can stage plugin chain settings and bypass the app EQ.
+- The engine persists selected devices, EQ bypass, and plugin-chain settings under the user's app data folder.
+- The desktop panel shows readiness diagnostics for native metering, SysVAD source, WDK toolsets, virtual device status, and plugin host status.
 
 ## Next Desktop Milestones
 

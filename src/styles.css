@@ -1538,6 +1538,76 @@ button {
   text-transform: none;
 }
 
+.engine-diagnostics {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0d1112;
+}
+
+.engine-diagnostics-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.engine-diagnostics-header small {
+  color: var(--faint);
+}
+
+.engine-diagnostic-list {
+  display: grid;
+  gap: 7px;
+}
+
+.engine-diagnostic {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  padding: 8px;
+  border: 1px solid #242b2d;
+  border-radius: 6px;
+  background: #111617;
+}
+
+.engine-diagnostic strong,
+.engine-diagnostic span {
+  color: #dfe4df;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.engine-diagnostic span {
+  text-transform: uppercase;
+}
+
+.engine-diagnostic small {
+  grid-column: 1 / -1;
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.engine-diagnostic.ready span {
+  color: var(--teal);
+}
+
+.engine-diagnostic.pending span,
+.engine-diagnostic.planned span {
+  color: var(--amber);
+}
+
+.engine-diagnostic.blocked span {
+  color: var(--red);
+}
+
 .desktop-engine-panel .engine-error {
   color: #ff8a80;
 }

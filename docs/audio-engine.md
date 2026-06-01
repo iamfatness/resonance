@@ -18,9 +18,11 @@ The engine reports:
 - running/idle status
 - Windows audio endpoint enumeration
 - selected input/output device IDs
+- persisted settings file path
 - active EQ settings
 - app EQ bypass state
 - staged plugin-chain settings
+- desktop readiness diagnostics
 - live input/output peak meters
 - clipping status
 
