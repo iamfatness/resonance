@@ -78,6 +78,8 @@ The main YouTube field accepts video links, search text, or public playlist link
 
 The web app saves deck URLs, imported playlists, liked videos, queue, repeat mode, deck count, mood preset, volumes, and EQ settings in local browser storage so refreshes restore the working session.
 
+The Up next queue supports clearing, loading a queued item, play-next placement, move up/down, and removing queued videos. Search results can be loaded into the selected deck, played next, or added to the queue.
+
 Build:
 
 ```powershell

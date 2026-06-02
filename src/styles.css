@@ -635,7 +635,7 @@ button {
 
 .youtube-result {
   display: grid;
-  grid-template-columns: 86px minmax(0, 1fr);
+  grid-template-columns: 86px minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
   min-height: 64px;
@@ -651,6 +651,38 @@ button {
 .youtube-result:hover {
   border-color: rgba(56, 213, 200, 0.72);
   background: rgba(56, 213, 200, 0.08);
+}
+
+.youtube-result-actions,
+.queue-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.youtube-result-actions button,
+.queue-actions button,
+.queue-clear {
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #151a1b;
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.youtube-result-actions button:hover,
+.queue-actions button:hover,
+.queue-clear:hover {
+  border-color: rgba(56, 213, 200, 0.68);
+  color: var(--teal);
+}
+
+.queue-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.38;
 }
 
 .youtube-result img {
@@ -1180,6 +1212,40 @@ button {
   background: transparent;
   text-align: left;
   cursor: pointer;
+}
+
+.queue-item.managed {
+  grid-template-columns: minmax(0, 1fr) auto;
+  cursor: default;
+}
+
+.queue-load {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 56px;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+  text-align: left;
+}
+
+.queue-actions button {
+  width: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.rotate-up {
+  transform: rotate(-90deg);
+}
+
+.rotate-down {
+  transform: rotate(90deg);
 }
 
 .queue-item.selected {
@@ -2232,8 +2298,36 @@ canvas {
     grid-template-columns: 84px minmax(0, 1fr) 44px;
   }
 
-  .queue-item svg {
+  .queue-item:not(.managed) svg {
     display: none;
+  }
+
+  .queue-item.managed,
+  .queue-load {
+    grid-template-columns: 84px minmax(0, 1fr);
+  }
+
+  .queue-load small {
+    display: none;
+  }
+
+  .queue-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
+  }
+
+  .youtube-result {
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .youtube-result img {
+    width: 72px;
+  }
+
+  .youtube-result-actions {
+    grid-column: 1 / -1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
   }
 
   .transport {
