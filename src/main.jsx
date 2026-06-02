@@ -922,6 +922,7 @@ function PlayerApp() {
   }), [activePreset, appEqBypassed, deckVolumes.A, eqMode, pluginChain, processedCurve]);
   const desktopEngine = useDesktopEngine(desktopEngineSettings);
   const localEq = useLocalEq(activePreset, processedCurve, directUrl);
+  const eqPanelRef = useRef(null);
 
   useEffect(() => {
     writeSavedAppState({
@@ -1033,6 +1034,19 @@ function PlayerApp() {
     loadVideo(playlist.tracks[0], 'A');
   }
 
+  function selectReferenceTracks() {
+    const referencePlaylist = {
+      name: 'Reference Tracks',
+      mood: 'Focus',
+      tracks: queueSeed,
+    };
+    setImportedPlaylist(referencePlaylist);
+    setSelectedPlaylistName(referencePlaylist.name);
+    setActiveSidePanel('playlists');
+    applyMoodPreset(referencePlaylist.mood);
+    loadVideo(referencePlaylist.tracks[0], 'A');
+  }
+
   function changeDeckCount(value) {
     const nextDeckCount = Number(value);
     setDeckCount(nextDeckCount);
@@ -1133,6 +1147,10 @@ function PlayerApp() {
 
   function clearQueue() {
     setPlaybackQueue([]);
+  }
+
+  function openSettingsPanel() {
+    eqPanelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
 
   function sidebarLoad(video) {
@@ -1298,7 +1316,7 @@ function PlayerApp() {
           <span>{isIOS ? 'iOS' : effectiveDeckCount === 1 ? 'Mode' : 'Active'}</span>
           <strong>{effectiveDeckCount === 1 ? 'Single Deck' : `Deck ${activeDeck}`}</strong>
         </div>
-        <button className="icon-button" aria-label="Settings"><Settings size={18} /></button>
+        <button className="icon-button" aria-label="Open EQ and plugin settings" onClick={openSettingsPanel} type="button"><Settings size={18} /></button>
       </header>
 
       <aside className="sidebar">
@@ -1374,7 +1392,7 @@ function PlayerApp() {
                 <span>{playlist.tracks.length || [24, 31, 18, 27][index]}</span>
               </button>
             ))}
-            <button className="playlist-row" type="button" onClick={() => setActivePreset('Focus')}>
+            <button className="playlist-row" type="button" onClick={selectReferenceTracks}>
               <span>Reference Tracks</span>
               <span>{queueSeed.length}</span>
             </button>
@@ -1616,7 +1634,7 @@ function PlayerApp() {
         </div>
       </section>
 
-      <aside className="eq-panel">
+      <aside className="eq-panel" ref={eqPanelRef}>
         <section>
           <div className="panel-heading">
             <h2>Mood Presets</h2>
@@ -1826,7 +1844,7 @@ function PlayerApp() {
           onChange={(event) => setDeckVolume(activeInputDeck, Number(event.target.value))}
           aria-label={`Deck ${activeInputDeck} volume`}
         />
-        <FastForward size={18} />
+        <button className="icon-button" aria-label="Skip forward" onClick={() => loadNextVideo(1)} type="button"><FastForward size={18} /></button>
       </footer>
     </main>
   );

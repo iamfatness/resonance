@@ -2340,6 +2340,7 @@ canvas {
   .transport > .icon-button:first-child,
   .transport > .icon-button:nth-child(2),
   .transport > .icon-button:nth-child(5),
+  .transport > .icon-button:last-child,
   .mini-track,
   .volume,
   .transport > svg:last-child {
