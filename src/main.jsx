@@ -646,8 +646,33 @@ function DesktopEnginePanel({ engine }) {
           <strong>{Math.round((meters.outputPeak || 0) * 100)}%</strong>
         </div>
       </div>
+      <div className="deck-bus-grid">
+        {['A', 'B'].map((deck) => {
+          const deckMeter = meters.decks?.[deck] || { inputPeak: 0, outputPeak: 0, leftPeak: 0, rightPeak: 0, pan: 0, pluginCount: 0, eqActivity: 0 };
+          return (
+            <div className="deck-bus-meter" key={deck}>
+              <div>
+                <strong>Deck {deck} Bus</strong>
+                <span>Pan {deckMeter.pan === 0 ? 'C' : deckMeter.pan < 0 ? `L${Math.abs(deckMeter.pan)}` : `R${deckMeter.pan}`} · EQ {Math.round((deckMeter.eqActivity || 0) * 100)}% · {deckMeter.pluginCount || 0} plugins</span>
+              </div>
+              <label>
+                <span>In</span>
+                <i><b style={{ width: `${Math.round((deckMeter.inputPeak || 0) * 100)}%` }} /></i>
+              </label>
+              <label>
+                <span>L</span>
+                <i><b style={{ width: `${Math.round((deckMeter.leftPeak || 0) * 100)}%` }} /></i>
+              </label>
+              <label>
+                <span>R</span>
+                <i><b style={{ width: `${Math.round((deckMeter.rightPeak || 0) * 100)}%` }} /></i>
+              </label>
+            </div>
+          );
+        })}
+      </div>
       <p>
-        The engine is running in {state.mode || 'mock'} mode. Build the native helper to show real WASAPI loopback meters; routing remains the next backend step.
+        The engine is running in {state.mode || 'mock'} mode. Deck buses are simulated until the desktop router can feed real per-source PCM into the engine.
       </p>
       {state.pluginHost && (
         <div className="plugin-host-status">
@@ -952,8 +977,9 @@ function PlayerApp() {
     curve: processedCurve,
     appEqBypassed,
     deckProcessing,
+    deckVolumes,
     outputGain: deckVolumes.A / 100,
-  }), [activePreset, appEqBypassed, deckProcessing, deckVolumes.A, eqMode, processedCurve]);
+  }), [activePreset, appEqBypassed, deckProcessing, deckVolumes, eqMode, processedCurve]);
   const desktopEngine = useDesktopEngine(desktopEngineSettings);
   const localEq = useLocalEq(activePreset, processedCurve, directUrl);
   const eqPanelRef = useRef(null);

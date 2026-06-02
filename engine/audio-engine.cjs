@@ -20,6 +20,7 @@ const defaultSettings = {
     A: { pan: -12, eqBypassed: false, curve: [0, 0, 0, 0, 0, 0, 0, 0], pluginChain: [] },
     B: { pan: 12, eqBypassed: false, curve: [0, 0, 0, 0, 0, 0, 0, 0], pluginChain: [] },
   },
+  deckVolumes: { A: 72, B: 38 },
   outputGain: 0.9,
 };
 
@@ -91,6 +92,10 @@ const engineState = {
     inputRms: 0,
     outputRms: 0,
     clipping: false,
+    decks: {
+      A: { inputPeak: 0, outputPeak: 0, leftPeak: 0, rightPeak: 0, pan: -12, pluginCount: 0, eqActivity: 0 },
+      B: { inputPeak: 0, outputPeak: 0, leftPeak: 0, rightPeak: 0, pan: 12, pluginCount: 0, eqActivity: 0 },
+    },
     updatedAt: null,
   },
 };
@@ -255,20 +260,50 @@ function normalizeMeterPayload(payload) {
     inputRms: outputRms,
     outputRms,
     clipping: Boolean(payload.clipping) || outputPeak >= 0.98,
+    decks: engineState.meters.decks,
     updatedAt: new Date().toISOString(),
+  };
+}
+
+function deckBusMeter(deck, seconds, phaseOffset = 0) {
+  const processing = engineState.settings.deckProcessing?.[deck] || defaultSettings.deckProcessing[deck];
+  const volumes = engineState.settings.deckVolumes || defaultSettings.deckVolumes;
+  const deckGain = Math.max(0, Math.min(1.2, (Number(volumes[deck]) || 0) / 100));
+  const pluginCount = processing.pluginChain?.filter((plugin) => !plugin.bypassed).length || 0;
+  const eqActivity = processing.eqBypassed
+    ? 0
+    : Math.min(1, (processing.curve || []).reduce((total, gain) => total + Math.abs(Number(gain) || 0), 0) / 48);
+  const movement = (Math.sin((seconds + phaseOffset) * 2.1) + 1) / 2;
+  const transient = (Math.sin((seconds + phaseOffset) * 8.7) + 1) / 2;
+  const inputPeak = Math.min(0.98, 0.14 + movement * 0.58 + transient * 0.18);
+  const processingLift = 1 + (eqActivity * 0.18) + (pluginCount * 0.04);
+  const outputPeak = Math.min(1, inputPeak * deckGain * processingLift);
+  const pan = Math.max(-50, Math.min(50, Number(processing.pan) || 0));
+  const panNormalized = pan / 50;
+  const leftScale = panNormalized <= 0 ? 1 : 1 - panNormalized;
+  const rightScale = panNormalized >= 0 ? 1 : 1 + panNormalized;
+
+  return {
+    inputPeak: Number(inputPeak.toFixed(3)),
+    outputPeak: Number(outputPeak.toFixed(3)),
+    leftPeak: Number((outputPeak * leftScale).toFixed(3)),
+    rightPeak: Number((outputPeak * rightScale).toFixed(3)),
+    pan,
+    pluginCount,
+    eqActivity: Number(eqActivity.toFixed(3)),
   };
 }
 
 function nextMockMeters() {
   const now = Date.now();
   const seconds = now / 1000;
-  const movement = (Math.sin(seconds * 2.1) + 1) / 2;
-  const transient = (Math.sin(seconds * 8.7) + 1) / 2;
   const gain = Math.max(0, Math.min(1.2, engineState.settings.outputGain ?? 0.9));
-  const inputPeak = Math.min(0.98, 0.18 + movement * 0.58 + transient * 0.16);
-  const inputRms = Math.min(0.86, inputPeak * (0.48 + movement * 0.16));
-  const outputPeak = Math.min(1, inputPeak * gain);
-  const outputRms = Math.min(1, inputRms * gain);
+  const deckA = deckBusMeter('A', seconds, 0);
+  const deckB = deckBusMeter('B', seconds, 0.41);
+  const inputPeak = Math.min(1, Math.max(deckA.inputPeak, deckB.inputPeak));
+  const outputPeak = Math.min(1, (deckA.leftPeak + deckA.rightPeak + deckB.leftPeak + deckB.rightPeak) * 0.5 * gain);
+  const inputRms = Math.min(0.86, inputPeak * 0.58);
+  const outputRms = Math.min(1, outputPeak * 0.62);
 
   engineState.meters = {
     inputPeak: Number(inputPeak.toFixed(3)),
@@ -276,6 +311,7 @@ function nextMockMeters() {
     inputRms: Number(inputRms.toFixed(3)),
     outputRms: Number(outputRms.toFixed(3)),
     clipping: outputPeak >= 0.98,
+    decks: { A: deckA, B: deckB },
     updatedAt: new Date(now).toISOString(),
   };
 }
@@ -443,6 +479,10 @@ function stop(requestId) {
     inputRms: 0,
     outputRms: 0,
     clipping: false,
+    decks: {
+      A: { inputPeak: 0, outputPeak: 0, leftPeak: 0, rightPeak: 0, pan: engineState.settings.deckProcessing?.A?.pan ?? -12, pluginCount: 0, eqActivity: 0 },
+      B: { inputPeak: 0, outputPeak: 0, leftPeak: 0, rightPeak: 0, pan: engineState.settings.deckProcessing?.B?.pan ?? 12, pluginCount: 0, eqActivity: 0 },
+    },
     updatedAt: new Date().toISOString(),
   };
   publishState(requestId);
@@ -456,6 +496,7 @@ function updateSettings(requestId, settings = {}) {
     ...settings,
     appEqBypassed: Boolean(settings.appEqBypassed ?? engineState.settings.appEqBypassed),
     deckProcessing: settings.deckProcessing || currentDeckProcessing,
+    deckVolumes: settings.deckVolumes || engineState.settings.deckVolumes || defaultSettings.deckVolumes,
   };
   if (engineState.status === 'running' && !hasNativeMeter()) {
     nextMockMeters();

@@ -1857,6 +1857,58 @@ button {
   text-align: right;
 }
 
+.deck-bus-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.deck-bus-meter {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #111617;
+}
+
+.deck-bus-meter > div {
+  display: grid;
+  gap: 3px;
+}
+
+.deck-bus-meter strong {
+  color: var(--teal);
+  font-size: 13px;
+}
+
+.deck-bus-meter span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.deck-bus-meter label {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr);
+  gap: 7px;
+  align-items: center;
+}
+
+.deck-bus-meter i {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #2f3638;
+}
+
+.deck-bus-meter b {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--teal), var(--amber));
+}
+
 .desktop-engine-panel p {
   margin: 0;
   color: var(--muted);
@@ -2436,6 +2488,10 @@ canvas {
   }
 
   .engine-meter-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .deck-bus-grid {
     grid-template-columns: 1fr;
   }
 }

@@ -84,6 +84,8 @@ Search results and imported playlists are enriched with YouTube video metadata, 
 
 Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ bypass, and per-deck plugin-chain state. These settings are sent to the Electron audio engine and persisted, but actual VST/Waves DSP for YouTube sources still requires the desktop audio router/virtual device path to deliver PCM audio into the engine.
 
+The desktop engine has a mock two-bus routing prototype for Deck A and Deck B. The desktop panel shows simulated per-deck input, left, and right meters that react to deck volume, pan, EQ activity, and active staged plugins before real PCM routing is connected.
+
 Build:
 
 ```powershell
