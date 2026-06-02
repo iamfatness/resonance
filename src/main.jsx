@@ -44,18 +44,18 @@ import {
 import './styles.css';
 
 const demoVideoA = {
-  id: 'JD-kMIpDfnY',
-  title: 'lofi hip hop radio - beats to sleep/chill to',
-  channel: 'Lofi Girl',
-  duration: '--:--',
-};
-
-const demoVideoB = {
   id: 'wH2Nd8oHixo',
   title: 'Joe Rogan Experience #2493 - Protect Our Parks 16',
   channel: 'PowerfulJRE',
   duration: '--:--',
   startSeconds: 7284,
+};
+
+const demoVideoB = {
+  id: 'JD-kMIpDfnY',
+  title: 'lofi hip hop radio - beats to sleep/chill to',
+  channel: 'Lofi Girl',
+  duration: '--:--',
 };
 
 const queueSeed = [
@@ -814,8 +814,8 @@ function PlayerApp() {
   const isIOS = useMemo(() => isIOSDevice(), []);
   const [deckA, setDeckA] = useState(demoVideoA);
   const [deckB, setDeckB] = useState(demoVideoB);
-  const [queryA, setQueryA] = useState('https://www.youtube.com/watch?v=JD-kMIpDfnY');
-  const [queryB, setQueryB] = useState('https://www.youtube.com/watch?v=wH2Nd8oHixo&t=7284s');
+  const [queryA, setQueryA] = useState('https://www.youtube.com/watch?v=wH2Nd8oHixo&t=7284s');
+  const [queryB, setQueryB] = useState('https://www.youtube.com/watch?v=JD-kMIpDfnY');
   const [youtubeResults, setYoutubeResults] = useState([]);
   const [youtubeSearchDeck, setYoutubeSearchDeck] = useState('A');
   const [youtubeSearchState, setYoutubeSearchState] = useState({ status: 'idle', message: '' });
