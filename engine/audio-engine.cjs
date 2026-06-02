@@ -105,7 +105,14 @@ const engineState = {
 
 let meterTimer = null;
 let nativeMeterBusy = false;
-const audioRouter = new DesktopAudioRouter({ settings: engineState.settings, hasNativeMeter, hasNativeRouter });
+let nativeRouterBusy = false;
+let lastRouterStatePublish = 0;
+const audioRouter = new DesktopAudioRouter({
+  settings: engineState.settings,
+  hasNativeMeter,
+  hasNativeRouter,
+  nativeRouterPath: audioRouterExe,
+});
 engineState.router = audioRouter.getState();
 
 function findDirectoryByName(startDir, targetName, maxDepth = 6) {
@@ -291,6 +298,25 @@ function startMetering() {
   if (meterTimer) return;
   meterTimer = setInterval(() => {
     if (engineState.status !== 'running') return;
+    if (hasNativeRouter()) {
+      syncEngineMode();
+      nextMockMeters();
+      if (!nativeRouterBusy) {
+        nativeRouterBusy = true;
+        audioRouter.sampleNativeRouter(() => {
+          nativeRouterBusy = false;
+          engineState.router = audioRouter.getState();
+          const now = Date.now();
+          if (now - lastRouterStatePublish > 1500) {
+            lastRouterStatePublish = now;
+            publishState();
+          }
+        });
+      }
+      publishMeters();
+      return;
+    }
+
     if (!hasNativeMeter()) {
       syncEngineMode();
       nextMockMeters();
@@ -331,6 +357,8 @@ function stopMetering() {
   clearInterval(meterTimer);
   meterTimer = null;
   nativeMeterBusy = false;
+  nativeRouterBusy = false;
+  lastRouterStatePublish = 0;
 }
 
 function normalizeDevice(device, fallbackRole) {

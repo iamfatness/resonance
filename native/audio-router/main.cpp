@@ -5,6 +5,7 @@
 #include <Mmdeviceapi.h>
 #include <Propvarutil.h>
 #include <algorithm>
+#include <cstdint>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -66,7 +67,7 @@ void PrintDescribe() {
     << "\"version\":\"0.1.0\","
     << "\"backend\":\"wasapi-skeleton\","
     << "\"deckCount\":2,"
-    << "\"commands\":[\"--describe\",\"--probe\"],"
+    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\"],"
     << "\"capabilities\":{"
     << "\"perDeckCapture\":false,"
     << "\"perDeckPan\":true,"
@@ -127,6 +128,74 @@ int PrintProbe() {
   return hasRender ? 0 : 2;
 }
 
+int RunOnce() {
+  ComPtr<IMMDevice> renderDevice;
+  if (!GetDefaultEndpoint(eRender, renderDevice)) {
+    std::cerr << "{\"error\":\"Default render endpoint unavailable\"}\n";
+    return 2;
+  }
+
+  WAVEFORMATEX* mixFormat = nullptr;
+  if (!GetMixFormat(renderDevice.Get(), &mixFormat)) {
+    std::cerr << "{\"error\":\"Render mix format unavailable\"}\n";
+    return 3;
+  }
+
+  ComPtr<IAudioClient> audioClient;
+  HRESULT hr = renderDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &audioClient);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient activation failed\"}\n";
+    return 4;
+  }
+
+  const REFERENCE_TIME requestedDuration = 1000000; // 100 ms
+  hr = audioClient->Initialize(
+    AUDCLNT_SHAREMODE_SHARED,
+    0,
+    requestedDuration,
+    0,
+    mixFormat,
+    nullptr);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient Initialize render failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 5;
+  }
+
+  UINT32 bufferFrames = 0;
+  audioClient->GetBufferSize(&bufferFrames);
+  REFERENCE_TIME defaultPeriod = 0;
+  REFERENCE_TIME minimumPeriod = 0;
+  audioClient->GetDevicePeriod(&defaultPeriod, &minimumPeriod);
+
+  std::cout
+    << "{"
+    << "\"status\":\"ready\","
+    << "\"backend\":\"wasapi-skeleton\","
+    << "\"deviceName\":\"" << EscapeJson(GetDeviceName(renderDevice.Get())) << "\","
+    << "\"format\":{"
+    << "\"sampleRate\":" << mixFormat->nSamplesPerSec << ","
+    << "\"channels\":" << mixFormat->nChannels << ","
+    << "\"bitsPerSample\":" << mixFormat->wBitsPerSample << ","
+    << "\"blockAlign\":" << mixFormat->nBlockAlign
+    << "},"
+    << "\"buffer\":{"
+    << "\"frames\":" << bufferFrames << ","
+    << "\"durationMs\":" << (bufferFrames * 1000.0 / std::max<DWORD>(1, mixFormat->nSamplesPerSec)) << ","
+    << "\"defaultPeriodMs\":" << (defaultPeriod / 10000.0) << ","
+    << "\"minimumPeriodMs\":" << (minimumPeriod / 10000.0)
+    << "},"
+    << "\"routes\":["
+    << "{\"deck\":\"A\",\"status\":\"stubbed\",\"bufferFrames\":" << bufferFrames << "},"
+    << "{\"deck\":\"B\",\"status\":\"stubbed\",\"bufferFrames\":" << bufferFrames << "}"
+    << "]"
+    << "}\n";
+
+  CoTaskMemFree(mixFormat);
+  return 0;
+}
+
 int wmain(int argc, wchar_t** argv) {
   ComInit com;
   if (FAILED(com.hr)) {
@@ -141,6 +210,9 @@ int wmain(int argc, wchar_t** argv) {
   }
   if (command == L"--probe") {
     return PrintProbe();
+  }
+  if (command == L"--run-once") {
+    return RunOnce();
   }
 
   std::cerr << "{\"error\":\"Unknown command\"}\n";

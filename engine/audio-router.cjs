@@ -1,3 +1,5 @@
+const { execFile } = require('node:child_process');
+
 const DEFAULT_DECKS = ['A', 'B'];
 
 function clamp(value, min, max) {
@@ -14,12 +16,13 @@ function defaultRoute(deck) {
   };
 }
 
-function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_DECKS.map(defaultRoute) } = {}) {
+function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_DECKS.map(defaultRoute), nativeSnapshot = null } = {}) {
   const isNativeSkeleton = backend === 'native-router';
   return {
     backend,
     status,
     routes,
+    nativeSnapshot,
     capabilities: {
       perDeckCapture: false,
       perDeckPan: true,
@@ -36,10 +39,12 @@ function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_
 }
 
 class DesktopAudioRouter {
-  constructor({ settings, hasNativeMeter, hasNativeRouter }) {
+  constructor({ settings, hasNativeMeter, hasNativeRouter, nativeRouterPath }) {
     this.settings = settings;
     this.hasNativeMeter = hasNativeMeter;
     this.hasNativeRouter = hasNativeRouter;
+    this.nativeRouterPath = nativeRouterPath;
+    this.nativeSnapshot = null;
     this.startedAt = null;
     this.state = this.buildState();
   }
@@ -88,7 +93,52 @@ class DesktopAudioRouter {
       };
     });
 
-    return buildRouterState({ backend, status, routes });
+    return buildRouterState({ backend, status, routes, nativeSnapshot: this.nativeSnapshot });
+  }
+
+  sampleNativeRouter(callback) {
+    if (!this.hasNativeRouter?.() || !this.nativeRouterPath) {
+      callback?.(null, null);
+      return;
+    }
+
+    execFile(
+      this.nativeRouterPath,
+      ['--run-once'],
+      { windowsHide: true, timeout: 2000 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const snapshot = {
+            status: 'error',
+            error: stderr?.trim() || error.message,
+            updatedAt: new Date().toISOString(),
+          };
+          this.nativeSnapshot = snapshot;
+          this.state = this.buildState(this.state.status);
+          callback?.(error, snapshot);
+          return;
+        }
+
+        try {
+          this.nativeSnapshot = {
+            ...JSON.parse(stdout.trim()),
+            updatedAt: new Date().toISOString(),
+          };
+        } catch (parseError) {
+          this.nativeSnapshot = {
+            status: 'error',
+            error: parseError.message,
+            updatedAt: new Date().toISOString(),
+          };
+          this.state = this.buildState(this.state.status);
+          callback?.(parseError, this.nativeSnapshot);
+          return;
+        }
+
+        this.state = this.buildState(this.state.status);
+        callback?.(null, this.nativeSnapshot);
+      },
+    );
   }
 
   zeroDeckMeters() {

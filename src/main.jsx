@@ -681,6 +681,11 @@ function DesktopEnginePanel({ engine }) {
             <strong>{state.router.backend}</strong>
           </div>
           <small>{state.router.note}</small>
+          {state.router.nativeSnapshot?.buffer && (
+            <small>
+              Native buffer: {state.router.nativeSnapshot.buffer.frames} frames, {Math.round(state.router.nativeSnapshot.buffer.durationMs)} ms at {state.router.nativeSnapshot.format?.sampleRate || 'unknown'} Hz
+            </small>
+          )}
         </div>
       )}
       <p>
