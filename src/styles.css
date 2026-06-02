@@ -556,6 +556,11 @@ button {
   background: #0d1112;
 }
 
+.search-shell {
+  position: relative;
+  min-width: 0;
+}
+
 .searchbar input,
 .direct-controls input {
   min-width: 0;
@@ -579,6 +584,102 @@ button {
   cursor: pointer;
   font-size: 13px;
   font-weight: 700;
+}
+
+.youtube-search-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  z-index: 20;
+  display: grid;
+  gap: 8px;
+  max-height: min(520px, calc(100vh - 118px));
+  overflow: auto;
+  padding: 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 7px;
+  background: #0b0f10;
+  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.48);
+}
+
+.youtube-search-panel.error {
+  border-color: rgba(255, 107, 107, 0.55);
+}
+
+.youtube-search-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.youtube-search-status button {
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #151a1b;
+  color: var(--teal);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.youtube-result-list {
+  display: grid;
+  gap: 7px;
+}
+
+.youtube-result {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 64px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #101516;
+  color: var(--text);
+  cursor: pointer;
+  padding: 7px;
+  text-align: left;
+}
+
+.youtube-result:hover {
+  border-color: rgba(56, 213, 200, 0.72);
+  background: rgba(56, 213, 200, 0.08);
+}
+
+.youtube-result img {
+  width: 86px;
+  aspect-ratio: 16 / 9;
+  border-radius: 5px;
+  object-fit: cover;
+}
+
+.youtube-result span {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.youtube-result strong {
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.youtube-result small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .source-pill,
@@ -2007,6 +2108,16 @@ canvas {
   .searchbar {
     grid-column: 1 / -1;
     grid-template-columns: 22px 1fr 58px;
+  }
+
+  .search-shell {
+    grid-column: 1 / -1;
+  }
+
+  .youtube-search-panel {
+    position: static;
+    max-height: none;
+    margin-top: 8px;
   }
 
   .deck-count-control {

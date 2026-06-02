@@ -61,6 +61,19 @@ Local app:
 http://127.0.0.1:5173
 ```
 
+YouTube keyword search uses the official YouTube Data API through the local Vite middleware or deployed Cloudflare Worker. Set a local API key before `npm run dev` if you want search results locally:
+
+```powershell
+$env:YOUTUBE_API_KEY='your-youtube-data-api-key'
+npm run dev
+```
+
+Set the production Worker secret before deploying:
+
+```powershell
+npx wrangler secret put YOUTUBE_API_KEY --config wrangler.worker.jsonc
+```
+
 Build:
 
 ```powershell

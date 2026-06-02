@@ -185,6 +185,19 @@ function parseYoutubeId(value) {
   return null;
 }
 
+function isYoutubeLoadInput(value) {
+  return Boolean(parseYoutubeId(value));
+}
+
+async function searchYoutubeVideos(query) {
+  const response = await fetch(`/api/youtube/search?q=${encodeURIComponent(query)}&limit=8`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'YouTube search failed.');
+  }
+  return data.items || [];
+}
+
 function isIOSDevice() {
   if (typeof navigator === 'undefined') return false;
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -372,6 +385,8 @@ function useLocalEq(activePreset, curve, sourceUrl) {
 }
 
 function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, setVolume, active, onActivate }) {
+  const actionLabel = isYoutubeLoadInput(query) ? 'Load' : 'Search';
+
   return (
     <article className={`deck ${active ? 'active' : ''}`}>
       <div className="deck-topline">
@@ -389,7 +404,7 @@ function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, se
           onChange={(event) => setQuery(event.target.value)}
           placeholder={`Load Deck ${label}`}
         />
-        <button type="submit">Load</button>
+        <button type="submit">{actionLabel}</button>
       </form>
       <div className="video-frame">
         <div ref={player.containerRef} className="youtube-target" />
@@ -780,6 +795,9 @@ function PlayerApp() {
   const [deckB, setDeckB] = useState(demoVideoB);
   const [queryA, setQueryA] = useState('https://www.youtube.com/watch?v=TW9d8vYrVFQ');
   const [queryB, setQueryB] = useState('https://www.youtube.com/watch?v=M7lc1UVf-VE');
+  const [youtubeResults, setYoutubeResults] = useState([]);
+  const [youtubeSearchDeck, setYoutubeSearchDeck] = useState('A');
+  const [youtubeSearchState, setYoutubeSearchState] = useState({ status: 'idle', message: '' });
   const [activeDeck, setActiveDeck] = useState('A');
   const [deckCount, setDeckCount] = useState(isIOS ? 1 : 2);
   const [selectedPlaylistName, setSelectedPlaylistName] = useState(playlistCatalog[0].name);
@@ -911,6 +929,8 @@ function PlayerApp() {
       setDeckB(nextVideo);
       setQueryB(`https://www.youtube.com/watch?v=${nextVideo.id}`);
     }
+    setYoutubeResults([]);
+    setYoutubeSearchState({ status: 'idle', message: '' });
     setPlayHistory((current) => [nextVideo, ...current.filter((item) => item.id !== nextVideo.id)].slice(0, 12));
   }
 
@@ -931,12 +951,32 @@ function PlayerApp() {
     loadVideo(video, activeInputDeck);
   }
 
-  function submitVideo(event, targetDeck) {
+  async function submitVideo(event, targetDeck) {
     event.preventDefault();
     const safeTargetDeck = isSingleDeck ? 'A' : targetDeck;
-    const id = parseYoutubeId(safeTargetDeck === 'A' ? queryA : queryB);
-    if (!id) return;
-    loadVideo({ id, title: `Custom Deck ${safeTargetDeck} video`, channel: 'YouTube', duration: '--:--' }, safeTargetDeck);
+    const query = (safeTargetDeck === 'A' ? queryA : queryB).trim();
+    const id = parseYoutubeId(query);
+    if (id) {
+      loadVideo({ id, title: `Custom Deck ${safeTargetDeck} video`, channel: 'YouTube', duration: '--:--' }, safeTargetDeck);
+      return;
+    }
+
+    if (!query) return;
+
+    setYoutubeSearchDeck(safeTargetDeck);
+    setYoutubeSearchState({ status: 'loading', message: `Searching YouTube for "${query}"` });
+    setYoutubeResults([]);
+
+    try {
+      const items = await searchYoutubeVideos(query);
+      setYoutubeResults(items);
+      setYoutubeSearchState({
+        status: items.length ? 'ready' : 'empty',
+        message: items.length ? `Select a result to load Deck ${safeTargetDeck}.` : 'No YouTube videos matched that search.',
+      });
+    } catch (error) {
+      setYoutubeSearchState({ status: 'error', message: error.message });
+    }
   }
 
   function toggleBothDecks() {
@@ -960,16 +1000,57 @@ function PlayerApp() {
           <AudioLines aria-hidden="true" />
           <span>Resonance</span>
         </div>
-        <form className="searchbar" onSubmit={(event) => submitVideo(event, activeInputDeck)}>
-          <Search size={18} />
-          <input
-            aria-label="Active deck YouTube URL or video ID"
-            value={activeInputDeck === 'A' ? queryA : queryB}
-            onChange={(event) => (activeInputDeck === 'A' ? setQueryA(event.target.value) : setQueryB(event.target.value))}
-            placeholder={isSingleDeck ? 'Paste a YouTube link' : `Paste a YouTube link for Deck ${activeInputDeck}`}
-          />
-          <button type="submit">Load</button>
-        </form>
+        <div className="search-shell">
+          <form className="searchbar" onSubmit={(event) => submitVideo(event, activeInputDeck)}>
+            <Search size={18} />
+            <input
+              aria-label="Search YouTube or paste a YouTube URL"
+              value={activeInputDeck === 'A' ? queryA : queryB}
+              onChange={(event) => (activeInputDeck === 'A' ? setQueryA(event.target.value) : setQueryB(event.target.value))}
+              placeholder={isSingleDeck ? 'Search YouTube or paste a link' : `Search YouTube or paste a link for Deck ${activeInputDeck}`}
+            />
+            <button type="submit">
+              {isYoutubeLoadInput(activeInputDeck === 'A' ? queryA : queryB) ? 'Load' : 'Search'}
+            </button>
+          </form>
+          {youtubeSearchState.status !== 'idle' && (
+            <section className={`youtube-search-panel ${youtubeSearchState.status}`} aria-live="polite">
+              <div className="youtube-search-status">
+                <span>{youtubeSearchState.message}</span>
+                {youtubeSearchState.status !== 'loading' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setYoutubeResults([]);
+                      setYoutubeSearchState({ status: 'idle', message: '' });
+                    }}
+                    aria-label="Clear YouTube search results"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {youtubeResults.length > 0 && (
+                <div className="youtube-result-list">
+                  {youtubeResults.map((video) => (
+                    <button
+                      className="youtube-result"
+                      key={video.id}
+                      onClick={() => loadVideo(video, youtubeSearchDeck)}
+                      type="button"
+                    >
+                      <img alt="" src={video.thumbnail || `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`} />
+                      <span>
+                        <strong>{video.title}</strong>
+                        <small>{video.channel}</small>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
+        </div>
         <div className="deck-count-control" aria-label="Deck count">
           <button
             className={effectiveDeckCount === 1 ? 'active' : ''}
