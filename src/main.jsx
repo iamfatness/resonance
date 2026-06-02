@@ -205,6 +205,19 @@ function parseYoutubeTimestamp(value) {
   }
 }
 
+function parseYoutubePlaylistId(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+
+  try {
+    const url = new URL(trimmed);
+    if (!url.hostname.includes('youtube.com') && !url.hostname.includes('youtu.be')) return null;
+    return url.searchParams.get('list');
+  } catch {
+    return null;
+  }
+}
+
 function youtubeUrlForVideo(video) {
   const url = `https://www.youtube.com/watch?v=${video.id}`;
   return video.startSeconds ? `${url}&t=${video.startSeconds}s` : url;
@@ -221,6 +234,18 @@ async function searchYoutubeVideos(query) {
     throw new Error(data.error || 'YouTube search failed.');
   }
   return data.items || [];
+}
+
+async function importYoutubePlaylist(playlistId) {
+  const response = await fetch(`/api/youtube/playlist?list=${encodeURIComponent(playlistId)}&limit=25`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || 'YouTube playlist import failed.');
+  }
+  return {
+    title: data.title || 'Imported Playlist',
+    items: data.items || [],
+  };
 }
 
 function isIOSDevice() {
@@ -411,7 +436,7 @@ function useLocalEq(activePreset, curve, sourceUrl) {
 }
 
 function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, setVolume, active, onActivate }) {
-  const actionLabel = isYoutubeLoadInput(query) ? 'Load' : 'Search';
+  const actionLabel = parseYoutubePlaylistId(query) ? 'Import' : (isYoutubeLoadInput(query) ? 'Load' : 'Search');
 
   return (
     <article className={`deck ${active ? 'active' : ''}`}>
@@ -827,6 +852,7 @@ function PlayerApp() {
   const [activeDeck, setActiveDeck] = useState('A');
   const [deckCount, setDeckCount] = useState(isIOS ? 1 : 2);
   const [selectedPlaylistName, setSelectedPlaylistName] = useState(playlistCatalog[0].name);
+  const [importedPlaylist, setImportedPlaylist] = useState(null);
   const [activeSidePanel, setActiveSidePanel] = useState('playlists');
   const [activePreset, setActivePreset] = useState('Focus');
   const [deckVolumes, setDeckVolumes] = useState(moodPresets.Focus.mix);
@@ -843,7 +869,10 @@ function PlayerApp() {
   const [instrumentBoosts, setInstrumentBoosts] = useState(preset.instruments);
   const playerA = useYouTubePlayer(deckA.id, deckVolumes.A, deckA.startSeconds);
   const playerB = useYouTubePlayer(deckB.id, deckVolumes.B, deckB.startSeconds);
-  const selectedPlaylist = playlistCatalog.find((playlist) => playlist.name === selectedPlaylistName) || playlistCatalog[0];
+  const availablePlaylists = useMemo(() => (
+    importedPlaylist ? [importedPlaylist, ...playlistCatalog] : playlistCatalog
+  ), [importedPlaylist]);
+  const selectedPlaylist = availablePlaylists.find((playlist) => playlist.name === selectedPlaylistName) || availablePlaylists[0];
   const effectiveDeckCount = isIOS ? 1 : deckCount;
   const isSingleDeck = effectiveDeckCount === 1;
   const activeInputDeck = isSingleDeck ? 'A' : activeDeck;
@@ -971,7 +1000,7 @@ function PlayerApp() {
   }
 
   function startRadio() {
-    const pool = playlistCatalog.flatMap((playlist) => playlist.tracks);
+    const pool = availablePlaylists.flatMap((playlist) => playlist.tracks);
     const nextVideo = pool[Math.floor(Math.random() * pool.length)] || demoVideoA;
     setActiveSidePanel('radio');
     loadVideo(nextVideo, activeInputDeck);
@@ -1022,6 +1051,36 @@ function PlayerApp() {
     event.preventDefault();
     const safeTargetDeck = isSingleDeck ? 'A' : targetDeck;
     const query = (safeTargetDeck === 'A' ? queryA : queryB).trim();
+    const playlistId = parseYoutubePlaylistId(query);
+    if (playlistId) {
+      setYoutubeSearchDeck(safeTargetDeck);
+      setYoutubeSearchState({ status: 'loading', message: 'Importing YouTube playlist...' });
+      setYoutubeResults([]);
+
+      try {
+        const imported = await importYoutubePlaylist(playlistId);
+        if (!imported.items.length) {
+          setYoutubeSearchState({ status: 'empty', message: 'No public videos were found in that playlist.' });
+          return;
+        }
+
+        const nextPlaylist = {
+          name: 'Imported Playlist',
+          mood: activePreset,
+          tracks: imported.items,
+        };
+        setImportedPlaylist(nextPlaylist);
+        setSelectedPlaylistName(nextPlaylist.name);
+        setActiveSidePanel('playlists');
+        setPlaybackQueue(imported.items.slice(1));
+        loadVideo(imported.items[0], safeTargetDeck);
+        setYoutubeSearchState({ status: 'ready', message: `Imported ${imported.items.length} videos. The first video is loaded and the rest are queued.` });
+      } catch (error) {
+        setYoutubeSearchState({ status: 'error', message: error.message });
+      }
+      return;
+    }
+
     const id = parseYoutubeId(query);
     if (id) {
       loadVideo({ id, title: `Custom Deck ${safeTargetDeck} video`, channel: 'YouTube', duration: '--:--', startSeconds: parseYoutubeTimestamp(query) }, safeTargetDeck);
@@ -1077,7 +1136,7 @@ function PlayerApp() {
               placeholder={isSingleDeck ? 'Paste YouTube link or search for video' : `Paste YouTube link or search Deck ${activeInputDeck}`}
             />
             <button type="submit">
-              {isYoutubeLoadInput(activeInputDeck === 'A' ? queryA : queryB) ? 'Load' : 'Search'}
+              {parseYoutubePlaylistId(activeInputDeck === 'A' ? queryA : queryB) ? 'Import' : (isYoutubeLoadInput(activeInputDeck === 'A' ? queryA : queryB) ? 'Load' : 'Search')}
             </button>
           </form>
           {youtubeSearchState.status !== 'idle' && (
@@ -1195,8 +1254,8 @@ function PlayerApp() {
               <span>Library</span>
               <Library size={16} />
             </div>
-            <div className="library-stat"><strong>{playlistCatalog.length}</strong><span>Playlists</span></div>
-            <div className="library-stat"><strong>{new Set(playlistCatalog.flatMap((playlist) => playlist.tracks.map((track) => track.id))).size}</strong><span>Tracks</span></div>
+            <div className="library-stat"><strong>{availablePlaylists.length}</strong><span>Playlists</span></div>
+            <div className="library-stat"><strong>{new Set(availablePlaylists.flatMap((playlist) => playlist.tracks.map((track) => track.id))).size}</strong><span>Tracks</span></div>
             <div className="library-stat"><strong>{likedVideos.length}</strong><span>Liked</span></div>
           </section>
         )}
@@ -1206,7 +1265,7 @@ function PlayerApp() {
               <span>Playlists</span>
               <Plus size={16} />
             </div>
-            {playlistCatalog.map((playlist, index) => (
+            {availablePlaylists.map((playlist, index) => (
               <button
                 className={`playlist-row ${selectedPlaylistName === playlist.name ? 'active' : ''}`}
                 key={playlist.name}
@@ -1281,7 +1340,7 @@ function PlayerApp() {
             <span>{selectedPlaylist.tracks.length} tracks</span>
           </div>
           <div className="mobile-playlist-strip">
-            {playlistCatalog.map((playlist) => (
+            {availablePlaylists.map((playlist) => (
               <button
                 className={`mobile-playlist-card ${selectedPlaylistName === playlist.name ? 'active' : ''}`}
                 key={playlist.name}
