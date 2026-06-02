@@ -205,6 +205,11 @@ function parseYoutubeTimestamp(value) {
   }
 }
 
+function youtubeUrlForVideo(video) {
+  const url = `https://www.youtube.com/watch?v=${video.id}`;
+  return video.startSeconds ? `${url}&t=${video.startSeconds}s` : url;
+}
+
 function isYoutubeLoadInput(value) {
   return Boolean(parseYoutubeId(value));
 }
@@ -831,6 +836,8 @@ function PlayerApp() {
   const [pluginChain, setPluginChain] = useState([]);
   const [likedVideos, setLikedVideos] = useState([demoVideoA.id]);
   const [playHistory, setPlayHistory] = useState([demoVideoA]);
+  const [playbackQueue, setPlaybackQueue] = useState([]);
+  const [repeatMode, setRepeatMode] = useState(false);
   const [manualCurve, setManualCurve] = useState(flatCurve);
   const preset = moodPresets[activePreset];
   const [instrumentBoosts, setInstrumentBoosts] = useState(preset.instruments);
@@ -840,6 +847,8 @@ function PlayerApp() {
   const effectiveDeckCount = isIOS ? 1 : deckCount;
   const isSingleDeck = effectiveDeckCount === 1;
   const activeInputDeck = isSingleDeck ? 'A' : activeDeck;
+  const activeVideo = activeDeck === 'A' ? deckA : deckB;
+  const activeVideoLiked = likedVideos.includes(activeVideo.id);
   const baseCurve = eqMode === 'Manual' ? manualCurve : preset.curve;
   const effectiveCurve = useMemo(
     () => applyInstrumentBoosts(baseCurve, instrumentBoosts),
@@ -945,10 +954,10 @@ function PlayerApp() {
     const safeTargetDeck = isSingleDeck ? 'A' : targetDeck;
     if (safeTargetDeck === 'A') {
       setDeckA(nextVideo);
-      setQueryA(`https://www.youtube.com/watch?v=${nextVideo.id}`);
+      setQueryA(youtubeUrlForVideo(nextVideo));
     } else {
       setDeckB(nextVideo);
-      setQueryB(`https://www.youtube.com/watch?v=${nextVideo.id}`);
+      setQueryB(youtubeUrlForVideo(nextVideo));
     }
     setYoutubeResults([]);
     setYoutubeSearchState({ status: 'idle', message: '' });
@@ -965,6 +974,43 @@ function PlayerApp() {
     const pool = playlistCatalog.flatMap((playlist) => playlist.tracks);
     const nextVideo = pool[Math.floor(Math.random() * pool.length)] || demoVideoA;
     setActiveSidePanel('radio');
+    loadVideo(nextVideo, activeInputDeck);
+  }
+
+  function queueActiveVideo() {
+    setPlaybackQueue((current) => (
+      current.some((video) => video.id === activeVideo.id) ? current : [...current, activeVideo]
+    ));
+  }
+
+  function removeQueuedVideo(videoId) {
+    setPlaybackQueue((current) => current.filter((video) => video.id !== videoId));
+  }
+
+  function loadNextVideo(direction = 1) {
+    if (repeatMode) {
+      loadVideo(activeVideo, activeInputDeck);
+      return;
+    }
+
+    if (direction > 0 && playbackQueue.length > 0) {
+      const [nextVideo, ...remainingQueue] = playbackQueue;
+      setPlaybackQueue(remainingQueue);
+      loadVideo(nextVideo, activeInputDeck);
+      return;
+    }
+
+    const tracks = selectedPlaylist.tracks;
+    const activeIndex = tracks.findIndex((track) => track.id === activeVideo.id);
+    const currentIndex = activeIndex >= 0 ? activeIndex : 0;
+    const nextIndex = (currentIndex + direction + tracks.length) % tracks.length;
+    loadVideo(tracks[nextIndex], activeInputDeck);
+  }
+
+  function shuffleFromPlaylist() {
+    const tracks = selectedPlaylist.tracks.filter((track) => track.id !== activeVideo.id);
+    const pool = tracks.length ? tracks : selectedPlaylist.tracks;
+    const nextVideo = pool[Math.floor(Math.random() * pool.length)] || activeVideo;
     loadVideo(nextVideo, activeInputDeck);
   }
 
@@ -1124,7 +1170,7 @@ function PlayerApp() {
             <div className="section-title">
               <span>Now Playing</span>
               <button type="button" onClick={() => toggleLikedVideo()}>
-                {likedVideos.includes((activeDeck === 'A' ? deckA : deckB).id) ? <ThumbsUp size={15} /> : <Heart size={15} />}
+                {activeVideoLiked ? <ThumbsUp size={15} /> : <Heart size={15} />}
               </button>
             </div>
             {[['A', deckA], ...(isSingleDeck ? [] : [['B', deckB]])].map(([label, video]) => (
@@ -1201,8 +1247,8 @@ function PlayerApp() {
               <span>Liked Videos</span>
               <Heart size={16} />
             </div>
-            {queueSeed.filter((video) => likedVideos.includes(video.id)).length === 0 && <p className="side-empty">Like a deck to pin it here.</p>}
-            {queueSeed.filter((video) => likedVideos.includes(video.id)).map((video) => (
+            {[...queueSeed, ...playHistory].filter((video, index, list) => likedVideos.includes(video.id) && list.findIndex((item) => item.id === video.id) === index).length === 0 && <p className="side-empty">Like a deck to pin it here.</p>}
+            {[...queueSeed, ...playHistory].filter((video, index, list) => likedVideos.includes(video.id) && list.findIndex((item) => item.id === video.id) === index).map((video) => (
               <button className="side-track" key={video.id} type="button" onClick={() => sidebarLoad(video)}>
                 <img alt="" src={`https://i.ytimg.com/vi/${video.id}/default.jpg`} />
                 <span>
@@ -1327,19 +1373,53 @@ function PlayerApp() {
             <p>{isSingleDeck ? `${selectedPlaylist.name} is ready for focused playback on Deck A.` : preset.intent}</p>
           </div>
           <div className="track-actions">
-            <button className="icon-button" aria-label="Like"><ThumbsUp size={18} /></button>
-            <button className="icon-button" aria-label="Dislike"><ThumbsDown size={18} /></button>
-            <button className="icon-button" aria-label="Queue"><ListMusic size={18} /></button>
+            <button className={`icon-button ${activeVideoLiked ? 'active' : ''}`} aria-label={activeVideoLiked ? 'Unlike active video' : 'Like active video'} onClick={() => toggleLikedVideo(activeVideo)} type="button">
+              <ThumbsUp size={18} />
+            </button>
+            <button className="icon-button" aria-label="Dislike and skip active video" onClick={() => {
+              setLikedVideos((current) => current.filter((id) => id !== activeVideo.id));
+              loadNextVideo(1);
+            }} type="button">
+              <ThumbsDown size={18} />
+            </button>
+            <button className="icon-button" aria-label="Queue active video" onClick={queueActiveVideo} type="button">
+              <ListMusic size={18} />
+            </button>
           </div>
         </div>
 
         <div className="queue-header">
-          <h2>{isSingleDeck ? selectedPlaylist.name : `Load Into Deck ${activeDeck}`}</h2>
+          <h2>{playbackQueue.length ? 'Up next' : (isSingleDeck ? selectedPlaylist.name : `Load Into Deck ${activeDeck}`)}</h2>
           <label className="toggle">
             <input type="checkbox" checked readOnly />
-            <span>{isSingleDeck ? 'Single deck' : 'Use selected deck'}</span>
+            <span>{playbackQueue.length ? `${playbackQueue.length} queued` : (isSingleDeck ? 'Single deck' : 'Use selected deck')}</span>
           </label>
         </div>
+        {playbackQueue.length > 0 && (
+          <div className="queue user-queue" aria-label="Queued videos">
+            {playbackQueue.map((item) => (
+              <button
+                className="queue-item"
+                key={item.id}
+                onClick={() => {
+                  removeQueuedVideo(item.id);
+                  loadVideo(item);
+                }}
+                type="button"
+              >
+                <div className="thumb">
+                  <img alt="" src={`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`} />
+                </div>
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>{item.channel}</span>
+                </div>
+                <small>{item.duration}</small>
+                <ListMusic size={16} />
+              </button>
+            ))}
+          </div>
+        )}
         <div className="queue">
           {selectedPlaylist.tracks.map((item) => (
             <button
@@ -1542,17 +1622,17 @@ function PlayerApp() {
       </aside>
 
       <footer className="transport">
-        <button className="icon-button" aria-label="Shuffle"><Shuffle size={19} /></button>
-        <button className="icon-button" aria-label="Previous"><SkipBack size={21} /></button>
+        <button className="icon-button" aria-label="Shuffle playlist" onClick={shuffleFromPlaylist} type="button"><Shuffle size={19} /></button>
+        <button className="icon-button" aria-label="Previous playlist video" onClick={() => loadNextVideo(-1)} type="button"><SkipBack size={21} /></button>
         <button className="play-button" onClick={toggleBothDecks} aria-label={playerA.playing || (!isSingleDeck && playerB.playing) ? 'Pause playback' : 'Play playback'}>
           {playerA.playing || playerB.playing ? <Pause size={27} /> : <Play size={27} />}
         </button>
-        <button className="icon-button" aria-label="Next"><SkipForward size={21} /></button>
-        <button className="icon-button" aria-label="Repeat"><Repeat2 size={19} /></button>
+        <button className="icon-button" aria-label="Next playlist video" onClick={() => loadNextVideo(1)} type="button"><SkipForward size={21} /></button>
+        <button className={`icon-button ${repeatMode ? 'active' : ''}`} aria-label={repeatMode ? 'Turn repeat off' : 'Repeat active video'} onClick={() => setRepeatMode((current) => !current)} type="button"><Repeat2 size={19} /></button>
         <div className="mini-track">
-          <img alt="" src={`https://i.ytimg.com/vi/${activeDeck === 'A' ? deckA.id : deckB.id}/mqdefault.jpg`} />
+          <img alt="" src={`https://i.ytimg.com/vi/${activeVideo.id}/mqdefault.jpg`} />
           <div>
-            <strong>{activeDeck === 'A' ? deckA.title : deckB.title}</strong>
+            <strong>{activeVideo.title}</strong>
             <span>Deck {activeDeck} selected</span>
           </div>
         </div>

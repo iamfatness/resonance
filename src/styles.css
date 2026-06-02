@@ -750,6 +750,12 @@ button {
   border-color: rgba(56, 213, 200, 0.7);
 }
 
+.icon-button.active {
+  border-color: rgba(56, 213, 200, 0.75);
+  background: rgba(56, 213, 200, 0.12);
+  color: var(--teal);
+}
+
 .sidebar {
   grid-row: 2;
   padding: 10px 12px 14px;
@@ -1156,6 +1162,10 @@ button {
 .queue {
   display: grid;
   gap: 8px;
+}
+
+.user-queue {
+  margin-bottom: 14px;
 }
 
 .queue-item {
