@@ -88,6 +88,27 @@ const playlistCatalog = [
   },
 ];
 
+const APP_STATE_STORAGE_KEY = 'resonance.appState.v1';
+
+function readSavedAppState() {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(APP_STATE_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeSavedAppState(state) {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Ignore storage failures so playback controls remain usable in private or restricted contexts.
+  }
+}
+
 const moodPresets = {
   Focus: {
     icon: Gauge,
@@ -842,31 +863,38 @@ function LandingPage() {
 
 function PlayerApp() {
   const isIOS = useMemo(() => isIOSDevice(), []);
-  const [deckA, setDeckA] = useState(demoVideoA);
-  const [deckB, setDeckB] = useState(demoVideoB);
-  const [queryA, setQueryA] = useState('https://www.youtube.com/watch?v=wH2Nd8oHixo&t=7284s');
-  const [queryB, setQueryB] = useState('https://www.youtube.com/watch?v=JD-kMIpDfnY');
+  const savedAppState = useMemo(() => readSavedAppState(), []);
+  const savedPresetName = moodPresets[savedAppState?.activePreset] ? savedAppState.activePreset : 'Focus';
+  const savedDeckA = savedAppState?.deckA?.id ? savedAppState.deckA : demoVideoA;
+  const savedDeckB = savedAppState?.deckB?.id ? savedAppState.deckB : demoVideoB;
+  const savedDeckVolumes = Number.isFinite(savedAppState?.deckVolumes?.A) && Number.isFinite(savedAppState?.deckVolumes?.B)
+    ? savedAppState.deckVolumes
+    : moodPresets[savedPresetName].mix;
+  const [deckA, setDeckA] = useState(savedDeckA);
+  const [deckB, setDeckB] = useState(savedDeckB);
+  const [queryA, setQueryA] = useState(savedAppState?.queryA || youtubeUrlForVideo(savedDeckA));
+  const [queryB, setQueryB] = useState(savedAppState?.queryB || youtubeUrlForVideo(savedDeckB));
   const [youtubeResults, setYoutubeResults] = useState([]);
   const [youtubeSearchDeck, setYoutubeSearchDeck] = useState('A');
   const [youtubeSearchState, setYoutubeSearchState] = useState({ status: 'idle', message: '' });
-  const [activeDeck, setActiveDeck] = useState('A');
-  const [deckCount, setDeckCount] = useState(isIOS ? 1 : 2);
-  const [selectedPlaylistName, setSelectedPlaylistName] = useState(playlistCatalog[0].name);
-  const [importedPlaylist, setImportedPlaylist] = useState(null);
-  const [activeSidePanel, setActiveSidePanel] = useState('playlists');
-  const [activePreset, setActivePreset] = useState('Focus');
-  const [deckVolumes, setDeckVolumes] = useState(moodPresets.Focus.mix);
-  const [directUrl, setDirectUrl] = useState('');
-  const [eqMode, setEqMode] = useState('Preset');
-  const [appEqBypassed, setAppEqBypassed] = useState(false);
-  const [pluginChain, setPluginChain] = useState([]);
-  const [likedVideos, setLikedVideos] = useState([demoVideoA.id]);
-  const [playHistory, setPlayHistory] = useState([demoVideoA]);
-  const [playbackQueue, setPlaybackQueue] = useState([]);
-  const [repeatMode, setRepeatMode] = useState(false);
-  const [manualCurve, setManualCurve] = useState(flatCurve);
-  const preset = moodPresets[activePreset];
-  const [instrumentBoosts, setInstrumentBoosts] = useState(preset.instruments);
+  const [activeDeck, setActiveDeck] = useState(savedAppState?.activeDeck === 'B' ? 'B' : 'A');
+  const [deckCount, setDeckCount] = useState(isIOS ? 1 : (savedAppState?.deckCount === 1 ? 1 : 2));
+  const [selectedPlaylistName, setSelectedPlaylistName] = useState(savedAppState?.selectedPlaylistName || playlistCatalog[0].name);
+  const [importedPlaylist, setImportedPlaylist] = useState(savedAppState?.importedPlaylist?.tracks?.length ? savedAppState.importedPlaylist : null);
+  const [activeSidePanel, setActiveSidePanel] = useState(savedAppState?.activeSidePanel || 'playlists');
+  const [activePreset, setActivePreset] = useState(savedPresetName);
+  const [deckVolumes, setDeckVolumes] = useState(savedDeckVolumes);
+  const [directUrl, setDirectUrl] = useState(savedAppState?.directUrl || '');
+  const [eqMode, setEqMode] = useState(savedAppState?.eqMode === 'Manual' ? 'Manual' : 'Preset');
+  const [appEqBypassed, setAppEqBypassed] = useState(Boolean(savedAppState?.appEqBypassed));
+  const [pluginChain, setPluginChain] = useState(Array.isArray(savedAppState?.pluginChain) ? savedAppState.pluginChain : []);
+  const [likedVideos, setLikedVideos] = useState(Array.isArray(savedAppState?.likedVideos) ? savedAppState.likedVideos : [demoVideoA.id]);
+  const [playHistory, setPlayHistory] = useState(Array.isArray(savedAppState?.playHistory) && savedAppState.playHistory.length ? savedAppState.playHistory : [demoVideoA]);
+  const [playbackQueue, setPlaybackQueue] = useState(Array.isArray(savedAppState?.playbackQueue) ? savedAppState.playbackQueue : []);
+  const [repeatMode, setRepeatMode] = useState(Boolean(savedAppState?.repeatMode));
+  const [manualCurve, setManualCurve] = useState(Array.isArray(savedAppState?.manualCurve) ? savedAppState.manualCurve : flatCurve);
+  const preset = moodPresets[activePreset] || moodPresets.Focus;
+  const [instrumentBoosts, setInstrumentBoosts] = useState(savedAppState?.instrumentBoosts || preset.instruments);
   const playerA = useYouTubePlayer(deckA.id, deckVolumes.A, deckA.startSeconds);
   const playerB = useYouTubePlayer(deckB.id, deckVolumes.B, deckB.startSeconds);
   const availablePlaylists = useMemo(() => (
@@ -894,6 +922,54 @@ function PlayerApp() {
   }), [activePreset, appEqBypassed, deckVolumes.A, eqMode, pluginChain, processedCurve]);
   const desktopEngine = useDesktopEngine(desktopEngineSettings);
   const localEq = useLocalEq(activePreset, processedCurve, directUrl);
+
+  useEffect(() => {
+    writeSavedAppState({
+      deckA,
+      deckB,
+      queryA,
+      queryB,
+      activeDeck,
+      deckCount,
+      selectedPlaylistName,
+      importedPlaylist,
+      activeSidePanel,
+      activePreset,
+      deckVolumes,
+      directUrl,
+      eqMode,
+      appEqBypassed,
+      pluginChain,
+      likedVideos,
+      playHistory,
+      playbackQueue,
+      repeatMode,
+      manualCurve,
+      instrumentBoosts,
+    });
+  }, [
+    activeDeck,
+    activePreset,
+    activeSidePanel,
+    appEqBypassed,
+    deckA,
+    deckB,
+    deckCount,
+    deckVolumes,
+    directUrl,
+    eqMode,
+    importedPlaylist,
+    instrumentBoosts,
+    likedVideos,
+    manualCurve,
+    playbackQueue,
+    playHistory,
+    pluginChain,
+    queryA,
+    queryB,
+    repeatMode,
+    selectedPlaylistName,
+  ]);
 
   const eqPath = useMemo(() => {
     const max = Math.max(...processedCurve.map((point) => Math.abs(point)), 12);

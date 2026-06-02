@@ -76,6 +76,8 @@ npx wrangler secret put YOUTUBE_API_KEY --config wrangler.worker.jsonc
 
 The main YouTube field accepts video links, search text, or public playlist links. Playlist links import up to 25 public videos, load the first video into the selected deck, and place the rest in the Up next queue.
 
+The web app saves deck URLs, imported playlists, liked videos, queue, repeat mode, deck count, mood preset, volumes, and EQ settings in local browser storage so refreshes restore the working session.
+
 Build:
 
 ```powershell
