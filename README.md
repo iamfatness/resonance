@@ -80,6 +80,8 @@ The web app saves deck URLs, imported playlists, liked videos, queue, repeat mod
 
 The Up next queue supports clearing, loading a queued item, play-next placement, move up/down, and removing queued videos. Search results can be loaded into the selected deck, played next, or added to the queue.
 
+Search results and imported playlists are enriched with YouTube video metadata, including real durations and live/upcoming status when the YouTube Data API returns it.
+
 Build:
 
 ```powershell

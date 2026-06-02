@@ -1273,7 +1273,7 @@ function PlayerApp() {
                       <img alt="" src={video.thumbnail || `https://i.ytimg.com/vi/${video.id}/mqdefault.jpg`} />
                       <span>
                         <strong>{video.title}</strong>
-                        <small>{video.channel}</small>
+                        <small>{video.channel} · {video.duration || '--:--'}</small>
                       </span>
                       <div className="youtube-result-actions">
                         <button type="button" onClick={() => loadVideo(video, youtubeSearchDeck)}>
