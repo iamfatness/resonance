@@ -7,6 +7,7 @@
     "desktop:package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-desktop-local.ps1",
     "audio:devices": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/list-audio-devices.ps1",
     "native:wasapi-meter": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-wasapi-meter.ps1",
+    "native:audio-router": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-audio-router.ps1",
     "driver:install:wdk-buildtools": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-wdk-buildtools.ps1",
     "driver:preflight": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/driver-preflight.ps1",
     "driver:customize:resonance": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/customize-sysvad-resonance.ps1",

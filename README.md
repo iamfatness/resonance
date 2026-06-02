@@ -114,6 +114,13 @@ Build and run the desktop shell from `dist`:
 npm run desktop:run
 ```
 
+Build native desktop helpers:
+
+```powershell
+npm run native:wasapi-meter
+npm run native:audio-router
+```
+
 Create a local Windows desktop package:
 
 ```powershell

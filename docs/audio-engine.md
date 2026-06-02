@@ -39,6 +39,12 @@ Build the native WASAPI meter helper:
 npm run native:wasapi-meter
 ```
 
+Build the native audio router skeleton:
+
+```powershell
+npm run native:audio-router
+```
+
 ## Why This Boundary Exists
 
 Real audio routing should not run inside the renderer UI. Keeping the engine in a separate process lets Resonance restart audio processing, report failures, and later swap the mock backend for a native WASAPI backend without restructuring the app.
@@ -46,6 +52,11 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 ## Desktop Router
 
 `engine/audio-router.cjs` is the stable router boundary for Deck A and Deck B. Today it runs in mock mode and produces simulated per-deck bus meters that react to deck volume, pan, EQ activity, and staged plugins. It also publishes route records so the UI can show where each deck is expected to flow.
+
+`native/audio-router` is the native helper skeleton for the future WASAPI router backend. Its first commands are intentionally narrow:
+
+- `--describe` reports the helper name, version, command list, and capability flags.
+- `--probe` initializes COM, probes default Windows audio endpoints, and reports the default render mix format.
 
 ```text
 Deck A playback -> app EQ/plugin chain -> master output

@@ -15,6 +15,7 @@ function defaultRoute(deck) {
 }
 
 function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_DECKS.map(defaultRoute) } = {}) {
+  const isNativeSkeleton = backend === 'native-router';
   return {
     backend,
     status,
@@ -26,18 +27,21 @@ function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_
       perDeckPlugins: false,
       nativePcmRouting: false,
     },
-    note: backend === 'mock'
-      ? 'Deck routing is simulated until native per-source PCM capture is connected.'
-      : 'Native desktop routing is active.',
+    note: isNativeSkeleton
+      ? 'Native router helper is built, but PCM capture/render is still stubbed.'
+      : backend === 'mock'
+        ? 'Deck routing is simulated until native per-source PCM capture is connected.'
+        : 'WASAPI metering is active; per-deck PCM routing is still simulated.',
   };
 }
 
 class DesktopAudioRouter {
-  constructor({ settings, hasNativeMeter }) {
+  constructor({ settings, hasNativeMeter, hasNativeRouter }) {
     this.settings = settings;
     this.hasNativeMeter = hasNativeMeter;
+    this.hasNativeRouter = hasNativeRouter;
     this.startedAt = null;
-    this.state = buildRouterState();
+    this.state = this.buildState();
   }
 
   getState() {
@@ -65,13 +69,17 @@ class DesktopAudioRouter {
   }
 
   buildState(status = 'idle') {
-    const backend = this.hasNativeMeter?.() ? 'wasapi-meter' : 'mock';
+    const backend = this.hasNativeRouter?.()
+      ? 'native-router'
+      : this.hasNativeMeter?.()
+        ? 'wasapi-meter'
+        : 'mock';
     const routes = DEFAULT_DECKS.map((deck) => {
       const processing = this.settings?.deckProcessing?.[deck] || {};
       const pluginCount = processing.pluginChain?.filter((plugin) => !plugin.bypassed).length || 0;
       return {
         ...defaultRoute(deck),
-        status: backend === 'mock' ? 'simulated' : 'metered',
+        status: backend === 'native-router' ? 'stubbed' : backend === 'mock' ? 'simulated' : 'metered',
         source: this.inputDeviceId || `deck-${deck.toLowerCase()}-playback`,
         destination: this.outputDeviceId || 'default-output',
         pan: clamp(processing.pan, -50, 50),

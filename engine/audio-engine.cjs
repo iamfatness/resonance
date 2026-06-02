@@ -6,6 +6,7 @@ const { DesktopAudioRouter } = require('./audio-router.cjs');
 const rootDir = path.resolve(__dirname, '..');
 const listAudioDevicesScript = path.join(rootDir, 'scripts', 'list-audio-devices.ps1');
 const wasapiMeterExe = path.join(rootDir, 'native', 'wasapi-meter', 'build', 'Release', 'resonance-wasapi-meter.exe');
+const audioRouterExe = path.join(rootDir, 'native', 'audio-router', 'build', 'Release', 'resonance-audio-router.exe');
 const sysvadSolution = path.join(rootDir, 'driver', 'audio', 'sysvad', 'sysvad.sln');
 const buildToolsPlatforms = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Microsoft\\VC\\v170\\Platforms';
 const windowsKitsRoot = 'C:\\Program Files (x86)\\Windows Kits\\10';
@@ -104,7 +105,7 @@ const engineState = {
 
 let meterTimer = null;
 let nativeMeterBusy = false;
-const audioRouter = new DesktopAudioRouter({ settings: engineState.settings, hasNativeMeter });
+const audioRouter = new DesktopAudioRouter({ settings: engineState.settings, hasNativeMeter, hasNativeRouter });
 engineState.router = audioRouter.getState();
 
 function findDirectoryByName(startDir, targetName, maxDepth = 6) {
@@ -148,6 +149,7 @@ function buildDiagnostics() {
   const hasWdkPortClsLib = findFileByName(path.join(windowsKitsRoot, 'Lib'), 'portcls.lib');
   const hasWdkFiles = hasWdkKernelHeader && hasWdkPortClsLib;
   const hasNativeMeterHelper = hasNativeMeter();
+  const hasNativeRouterHelper = hasNativeRouter();
   const hasSysvadSource = fs.existsSync(sysvadSolution);
   const hasPersistedSettings = fs.existsSync(settingsPath);
   const hasWindowsAudioScan = engineState.deviceScan.status === 'ready';
@@ -180,8 +182,8 @@ function buildDiagnostics() {
       {
         id: 'audio-router',
         label: 'Deck audio router',
-        status: engineState.router?.status === 'running' ? 'ready' : 'pending',
-        detail: engineState.router?.note || 'Router state is pending.',
+        status: hasNativeRouterHelper ? 'ready' : engineState.router?.status === 'running' ? 'pending' : 'planned',
+        detail: hasNativeRouterHelper ? audioRouterExe : 'Run npm run native:audio-router to build the native router skeleton.',
       },
       {
         id: 'wasapi-meter',
@@ -244,8 +246,12 @@ function hasNativeMeter() {
   return fs.existsSync(wasapiMeterExe);
 }
 
+function hasNativeRouter() {
+  return fs.existsSync(audioRouterExe);
+}
+
 function syncEngineMode() {
-  engineState.mode = hasNativeMeter() ? 'wasapi-loopback-meter' : 'windows-enumeration';
+  engineState.mode = hasNativeRouter() ? 'native-router-skeleton' : hasNativeMeter() ? 'wasapi-loopback-meter' : 'windows-enumeration';
   engineState.router = audioRouter.getState();
 }
 

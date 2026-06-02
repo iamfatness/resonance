@@ -5,4 +5,5 @@ release/
 .wrangler/
 driver/
 native/wasapi-meter/build/
+native/audio-router/build/
 *.local
