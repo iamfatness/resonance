@@ -150,6 +150,26 @@ const moodPresets = {
 const bands = [31, 62, 125, 250, 500, '1k', '2k', '4k'];
 const bandFreqs = [31, 62, 125, 250, 500, 1000, 2000, 4000];
 const flatCurve = Array(bands.length).fill(0);
+const defaultDeckProcessing = {
+  A: { pan: -12, eqBypassed: false, curve: [...flatCurve], pluginChain: [] },
+  B: { pan: 12, eqBypassed: false, curve: [...flatCurve], pluginChain: [] },
+};
+
+function normalizeDeckProcessing(savedDeckProcessing) {
+  const normalizeDeck = (deck, fallback) => ({
+    pan: Number.isFinite(savedDeckProcessing?.[deck]?.pan) ? savedDeckProcessing[deck].pan : fallback.pan,
+    eqBypassed: Boolean(savedDeckProcessing?.[deck]?.eqBypassed),
+    curve: Array.isArray(savedDeckProcessing?.[deck]?.curve) && savedDeckProcessing[deck].curve.length === bands.length
+      ? savedDeckProcessing[deck].curve
+      : fallback.curve,
+    pluginChain: Array.isArray(savedDeckProcessing?.[deck]?.pluginChain) ? savedDeckProcessing[deck].pluginChain : [],
+  });
+
+  return {
+    A: normalizeDeck('A', defaultDeckProcessing.A),
+    B: normalizeDeck('B', defaultDeckProcessing.B),
+  };
+}
 
 const pluginCatalog = [
   { id: 'waves-vst3', name: 'Waves VST3', vendor: 'Waves', status: 'Planned' },
@@ -456,7 +476,7 @@ function useLocalEq(activePreset, curve, sourceUrl) {
   };
 }
 
-function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, setVolume, active, onActivate }) {
+function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, setVolume, pan, setPan, active, onActivate }) {
   const actionLabel = parseYoutubePlaylistId(query) ? 'Import' : (isYoutubeLoadInput(query) ? 'Load' : 'Search');
 
   return (
@@ -501,6 +521,18 @@ function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, se
           aria-label={`Deck ${label} volume`}
         />
         <strong>{volume}%</strong>
+      </label>
+      <label className="deck-volume deck-pan">
+        <span><SlidersHorizontal size={16} />Pan</span>
+        <input
+          type="range"
+          min="-50"
+          max="50"
+          value={pan}
+          onChange={(event) => setPan(Number(event.target.value))}
+          aria-label={`Deck ${label} pan`}
+        />
+        <strong>{pan === 0 ? 'C' : pan < 0 ? `L${Math.abs(pan)}` : `R${pan}`}</strong>
       </label>
     </article>
   );
@@ -621,7 +653,7 @@ function DesktopEnginePanel({ engine }) {
         <div className="plugin-host-status">
           <span>Plugin host</span>
           <strong>{state.pluginHost.status}</strong>
-          <small>{state.settings?.appEqBypassed ? 'App EQ bypassed' : `${state.settings?.pluginChain?.length || 0} plugins staged`}</small>
+          <small>{state.settings?.appEqBypassed ? 'App EQ bypassed' : `${Object.values(state.settings?.deckProcessing || {}).reduce((count, deck) => count + (deck.pluginChain?.length || 0), 0)} deck plugins staged`}</small>
         </div>
       )}
       {diagnostics.length > 0 && (
@@ -867,6 +899,7 @@ function PlayerApp() {
   const savedPresetName = moodPresets[savedAppState?.activePreset] ? savedAppState.activePreset : 'Focus';
   const savedDeckA = savedAppState?.deckA?.id ? savedAppState.deckA : demoVideoA;
   const savedDeckB = savedAppState?.deckB?.id ? savedAppState.deckB : demoVideoB;
+  const savedDeckProcessing = normalizeDeckProcessing(savedAppState?.deckProcessing);
   const savedDeckVolumes = Number.isFinite(savedAppState?.deckVolumes?.A) && Number.isFinite(savedAppState?.deckVolumes?.B)
     ? savedAppState.deckVolumes
     : moodPresets[savedPresetName].mix;
@@ -887,7 +920,7 @@ function PlayerApp() {
   const [directUrl, setDirectUrl] = useState(savedAppState?.directUrl || '');
   const [eqMode, setEqMode] = useState(savedAppState?.eqMode === 'Manual' ? 'Manual' : 'Preset');
   const [appEqBypassed, setAppEqBypassed] = useState(Boolean(savedAppState?.appEqBypassed));
-  const [pluginChain, setPluginChain] = useState(Array.isArray(savedAppState?.pluginChain) ? savedAppState.pluginChain : []);
+  const [deckProcessing, setDeckProcessing] = useState(savedDeckProcessing);
   const [likedVideos, setLikedVideos] = useState(Array.isArray(savedAppState?.likedVideos) ? savedAppState.likedVideos : [demoVideoA.id]);
   const [playHistory, setPlayHistory] = useState(Array.isArray(savedAppState?.playHistory) && savedAppState.playHistory.length ? savedAppState.playHistory : [demoVideoA]);
   const [playbackQueue, setPlaybackQueue] = useState(Array.isArray(savedAppState?.playbackQueue) ? savedAppState.playbackQueue : []);
@@ -906,6 +939,7 @@ function PlayerApp() {
   const activeInputDeck = isSingleDeck ? 'A' : activeDeck;
   const activeVideo = activeDeck === 'A' ? deckA : deckB;
   const activeVideoLiked = likedVideos.includes(activeVideo.id);
+  const activeDeckProcessing = deckProcessing[activeInputDeck] || defaultDeckProcessing[activeInputDeck];
   const baseCurve = eqMode === 'Manual' ? manualCurve : preset.curve;
   const effectiveCurve = useMemo(
     () => applyInstrumentBoosts(baseCurve, instrumentBoosts),
@@ -917,9 +951,9 @@ function PlayerApp() {
     eqMode,
     curve: processedCurve,
     appEqBypassed,
-    pluginChain,
+    deckProcessing,
     outputGain: deckVolumes.A / 100,
-  }), [activePreset, appEqBypassed, deckVolumes.A, eqMode, pluginChain, processedCurve]);
+  }), [activePreset, appEqBypassed, deckProcessing, deckVolumes.A, eqMode, processedCurve]);
   const desktopEngine = useDesktopEngine(desktopEngineSettings);
   const localEq = useLocalEq(activePreset, processedCurve, directUrl);
   const eqPanelRef = useRef(null);
@@ -940,7 +974,7 @@ function PlayerApp() {
       directUrl,
       eqMode,
       appEqBypassed,
-      pluginChain,
+      deckProcessing,
       likedVideos,
       playHistory,
       playbackQueue,
@@ -957,6 +991,7 @@ function PlayerApp() {
     deckB,
     deckCount,
     deckVolumes,
+    deckProcessing,
     directUrl,
     eqMode,
     importedPlaylist,
@@ -965,7 +1000,6 @@ function PlayerApp() {
     manualCurve,
     playbackQueue,
     playHistory,
-    pluginChain,
     queryA,
     queryB,
     repeatMode,
@@ -1053,20 +1087,49 @@ function PlayerApp() {
     if (nextDeckCount === 1) setActiveDeck('A');
   }
 
-  function togglePlugin(pluginId) {
-    setPluginChain((current) => {
-      if (current.some((plugin) => plugin.id === pluginId)) {
-        return current.filter((plugin) => plugin.id !== pluginId);
+  function updateDeckProcessing(deck, updater) {
+    setDeckProcessing((current) => ({
+      ...current,
+      [deck]: updater(current[deck] || defaultDeckProcessing[deck]),
+    }));
+  }
+
+  function setDeckPan(deck, value) {
+    updateDeckProcessing(deck, (settings) => ({ ...settings, pan: value }));
+  }
+
+  function setDeckEqBand(deck, index, value) {
+    updateDeckProcessing(deck, (settings) => ({
+      ...settings,
+      curve: settings.curve.map((gain, bandIndex) => (bandIndex === index ? value : gain)),
+    }));
+  }
+
+  function resetDeckEq(deck, curve = flatCurve) {
+    updateDeckProcessing(deck, (settings) => ({ ...settings, curve: [...curve], eqBypassed: false }));
+  }
+
+  function toggleDeckEqBypass(deck) {
+    updateDeckProcessing(deck, (settings) => ({ ...settings, eqBypassed: !settings.eqBypassed }));
+  }
+
+  function toggleDeckPlugin(deck, pluginId) {
+    updateDeckProcessing(deck, (settings) => {
+      if (settings.pluginChain.some((plugin) => plugin.id === pluginId)) {
+        return { ...settings, pluginChain: settings.pluginChain.filter((plugin) => plugin.id !== pluginId) };
       }
       const plugin = pluginCatalog.find((item) => item.id === pluginId);
-      return plugin ? [...current, { ...plugin, bypassed: false }] : current;
+      return plugin ? { ...settings, pluginChain: [...settings.pluginChain, { ...plugin, bypassed: false }] } : settings;
     });
   }
 
-  function togglePluginBypass(pluginId) {
-    setPluginChain((current) => current.map((plugin) => (
-      plugin.id === pluginId ? { ...plugin, bypassed: !plugin.bypassed } : plugin
-    )));
+  function toggleDeckPluginBypass(deck, pluginId) {
+    updateDeckProcessing(deck, (settings) => ({
+      ...settings,
+      pluginChain: settings.pluginChain.map((plugin) => (
+        plugin.id === pluginId ? { ...plugin, bypassed: !plugin.bypassed } : plugin
+      )),
+    }));
   }
 
   function loadVideo(nextVideo, targetDeck = activeInputDeck) {
@@ -1523,6 +1586,8 @@ function PlayerApp() {
             player={playerA}
             volume={deckVolumes.A}
             setVolume={(value) => setDeckVolume('A', value)}
+            pan={deckProcessing.A.pan}
+            setPan={(value) => setDeckPan('A', value)}
             active={activeDeck === 'A'}
             onActivate={() => setActiveDeck('A')}
           />
@@ -1536,6 +1601,8 @@ function PlayerApp() {
               player={playerB}
               volume={deckVolumes.B}
               setVolume={(value) => setDeckVolume('B', value)}
+              pan={deckProcessing.B.pan}
+              setPan={(value) => setDeckPan('B', value)}
               active={activeDeck === 'B'}
               onActivate={() => setActiveDeck('B')}
             />
@@ -1665,7 +1732,7 @@ function PlayerApp() {
 
         <section>
           <div className="panel-heading">
-            <h2>Plugin Rack</h2>
+            <h2>Deck {activeInputDeck} Processing</h2>
             <SlidersHorizontal size={16} />
           </div>
           <label className="eq-bypass-toggle">
@@ -1674,19 +1741,55 @@ function PlayerApp() {
               checked={appEqBypassed}
               onChange={(event) => setAppEqBypassed(event.target.checked)}
             />
-            <span>Bypass app EQ</span>
+            <span>Bypass all app EQ</span>
             <strong>{appEqBypassed ? 'On' : 'Off'}</strong>
           </label>
+          <div className="deck-processing-summary">
+            <span>Pan {activeDeckProcessing.pan === 0 ? 'Center' : activeDeckProcessing.pan < 0 ? `L${Math.abs(activeDeckProcessing.pan)}` : `R${activeDeckProcessing.pan}`}</span>
+            <span>EQ {activeDeckProcessing.eqBypassed ? 'Bypassed' : 'Active'}</span>
+            <span>{activeDeckProcessing.pluginChain.length} plugins</span>
+          </div>
+          <div className="deck-eq-actions">
+            <button type="button" onClick={() => resetDeckEq(activeInputDeck, preset.curve)}>Use preset EQ</button>
+            <button type="button" onClick={() => resetDeckEq(activeInputDeck)}>Flat deck EQ</button>
+            <button type="button" onClick={() => toggleDeckEqBypass(activeInputDeck)}>
+              {activeDeckProcessing.eqBypassed ? 'Enable deck EQ' : 'Bypass deck EQ'}
+            </button>
+          </div>
+          <div className="deck-eq-grid">
+            {bands.map((band, index) => (
+              <label className="deck-eq-band" key={band}>
+                <span>{band} Hz</span>
+                <input
+                  type="range"
+                  min="-12"
+                  max="12"
+                  step="0.5"
+                  value={activeDeckProcessing.curve[index]}
+                  onChange={(event) => setDeckEqBand(activeInputDeck, index, Number(event.target.value))}
+                  aria-label={`Deck ${activeInputDeck} ${band} Hz EQ`}
+                />
+                <strong>{activeDeckProcessing.curve[index] > 0 ? '+' : ''}{activeDeckProcessing.curve[index].toFixed(1)}</strong>
+              </label>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <div className="panel-heading">
+            <h2>Deck {activeInputDeck} Plugins</h2>
+            <SlidersHorizontal size={16} />
+          </div>
           <div className="plugin-list">
             {pluginCatalog.map((plugin) => {
-              const selectedPlugin = pluginChain.find((item) => item.id === plugin.id);
+              const selectedPlugin = activeDeckProcessing.pluginChain.find((item) => item.id === plugin.id);
               return (
                 <article className={`plugin-item ${selectedPlugin ? 'active' : ''}`} key={plugin.id}>
                   <label>
                     <input
                       type="checkbox"
                       checked={Boolean(selectedPlugin)}
-                      onChange={() => togglePlugin(plugin.id)}
+                      onChange={() => toggleDeckPlugin(activeInputDeck, plugin.id)}
                     />
                     <span>
                       <strong>{plugin.name}</strong>
@@ -1696,9 +1799,9 @@ function PlayerApp() {
                   <button
                     type="button"
                     disabled={!selectedPlugin}
-                    onClick={() => togglePluginBypass(plugin.id)}
+                    onClick={() => toggleDeckPluginBypass(activeInputDeck, plugin.id)}
                   >
-                    {selectedPlugin?.bypassed ? 'Bypassed' : plugin.status}
+                    {selectedPlugin?.bypassed ? 'Bypassed' : selectedPlugin ? 'Active' : plugin.status}
                   </button>
                 </article>
               );

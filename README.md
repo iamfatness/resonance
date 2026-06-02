@@ -82,6 +82,8 @@ The Up next queue supports clearing, loading a queued item, play-next placement,
 
 Search results and imported playlists are enriched with YouTube video metadata, including real durations and live/upcoming status when the YouTube Data API returns it.
 
+Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ bypass, and per-deck plugin-chain state. These settings are sent to the Electron audio engine and persisted, but actual VST/Waves DSP for YouTube sources still requires the desktop audio router/virtual device path to deliver PCM audio into the engine.
+
 Build:
 
 ```powershell

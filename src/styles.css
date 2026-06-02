@@ -1143,6 +1143,10 @@ button {
   font-size: 13px;
 }
 
+.deck-pan {
+  margin-top: -4px;
+}
+
 .deck-volume span {
   min-width: 68px;
   display: inline-flex;
@@ -1384,6 +1388,74 @@ button {
 .plugin-list {
   display: grid;
   gap: 8px;
+}
+
+.deck-processing-summary,
+.deck-eq-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.deck-processing-summary span,
+.deck-eq-actions button {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #14191a;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: center;
+}
+
+.deck-processing-summary span {
+  padding: 8px 6px;
+}
+
+.deck-eq-actions button {
+  height: 32px;
+  cursor: pointer;
+}
+
+.deck-eq-actions button:hover {
+  border-color: rgba(56, 213, 200, 0.68);
+  color: var(--teal);
+}
+
+.deck-eq-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.deck-eq-band {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #111617;
+}
+
+.deck-eq-band span {
+  color: #dfe4df;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.deck-eq-band input {
+  width: 100%;
+  accent-color: var(--teal);
+}
+
+.deck-eq-band strong {
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
 }
 
 .plugin-item {
@@ -2284,6 +2356,9 @@ canvas {
   }
 
   .preset-effect,
+  .deck-processing-summary,
+  .deck-eq-actions,
+  .deck-eq-grid,
   .manual-band-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

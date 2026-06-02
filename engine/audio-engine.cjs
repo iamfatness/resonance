@@ -16,7 +16,10 @@ const defaultSettings = {
   eqMode: 'Preset',
   curve: [2, 3.5, 2, 0, -2, -1, 1.5, 2],
   appEqBypassed: false,
-  pluginChain: [],
+  deckProcessing: {
+    A: { pan: -12, eqBypassed: false, curve: [0, 0, 0, 0, 0, 0, 0, 0], pluginChain: [] },
+    B: { pan: 12, eqBypassed: false, curve: [0, 0, 0, 0, 0, 0, 0, 0], pluginChain: [] },
+  },
   outputGain: 0.9,
 };
 
@@ -447,11 +450,12 @@ function stop(requestId) {
 }
 
 function updateSettings(requestId, settings = {}) {
+  const currentDeckProcessing = engineState.settings.deckProcessing || defaultSettings.deckProcessing;
   engineState.settings = {
     ...engineState.settings,
     ...settings,
     appEqBypassed: Boolean(settings.appEqBypassed ?? engineState.settings.appEqBypassed),
-    pluginChain: Array.isArray(settings.pluginChain) ? settings.pluginChain : engineState.settings.pluginChain,
+    deckProcessing: settings.deckProcessing || currentDeckProcessing,
   };
   if (engineState.status === 'running' && !hasNativeMeter()) {
     nextMockMeters();
