@@ -141,6 +141,51 @@ class DesktopAudioRouter {
     );
   }
 
+  renderSilence(durationMs = 250, callback) {
+    if (!this.hasNativeRouter?.() || !this.nativeRouterPath) {
+      callback?.(null, null);
+      return;
+    }
+
+    execFile(
+      this.nativeRouterPath,
+      ['--render-silence', '--duration-ms', String(durationMs)],
+      { windowsHide: true, timeout: Math.max(2000, durationMs + 1500) },
+      (error, stdout, stderr) => {
+        if (error) {
+          const snapshot = {
+            status: 'error',
+            error: stderr?.trim() || error.message,
+            updatedAt: new Date().toISOString(),
+          };
+          this.nativeSnapshot = snapshot;
+          this.state = this.buildState(this.state.status);
+          callback?.(error, snapshot);
+          return;
+        }
+
+        try {
+          this.nativeSnapshot = {
+            ...JSON.parse(stdout.trim()),
+            updatedAt: new Date().toISOString(),
+          };
+        } catch (parseError) {
+          this.nativeSnapshot = {
+            status: 'error',
+            error: parseError.message,
+            updatedAt: new Date().toISOString(),
+          };
+          this.state = this.buildState(this.state.status);
+          callback?.(parseError, this.nativeSnapshot);
+          return;
+        }
+
+        this.state = this.buildState(this.state.status);
+        callback?.(null, this.nativeSnapshot);
+      },
+    );
+  }
+
   zeroDeckMeters() {
     return Object.fromEntries(DEFAULT_DECKS.map((deck) => {
       const route = this.state.routes.find((candidate) => candidate.deck === deck) || defaultRoute(deck);

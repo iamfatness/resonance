@@ -579,6 +579,7 @@ function useDesktopEngine(settings) {
     meters: meters || engineState?.meters || null,
     start: () => desktopApi?.engine?.start?.(),
     stop: () => desktopApi?.engine?.stop?.(),
+    renderSilence: (durationMs) => desktopApi?.engine?.renderSilence?.(durationMs),
     refreshDevices: () => desktopApi?.engine?.refreshDevices?.(),
     selectDevices: (devices) => desktopApi?.engine?.selectDevices?.(devices),
   };
@@ -634,6 +635,7 @@ function DesktopEnginePanel({ engine }) {
       <div className="engine-actions">
         <button type="button" onClick={engine.start} disabled={state.status === 'running'}>Start Engine</button>
         <button type="button" onClick={engine.stop} disabled={state.status !== 'running'}>Stop</button>
+        <button type="button" onClick={() => engine.renderSilence?.(250)}>Render Silence</button>
       </div>
       <div className="engine-meter-grid">
         <div className="engine-meter">
@@ -684,6 +686,11 @@ function DesktopEnginePanel({ engine }) {
           {state.router.nativeSnapshot?.buffer && (
             <small>
               Native buffer: {state.router.nativeSnapshot.buffer.frames} frames, {Math.round(state.router.nativeSnapshot.buffer.durationMs)} ms at {state.router.nativeSnapshot.format?.sampleRate || 'unknown'} Hz
+            </small>
+          )}
+          {state.router.nativeSnapshot?.render && (
+            <small>
+              Silence render: {state.router.nativeSnapshot.render.framesWritten} frames in {state.router.nativeSnapshot.render.elapsedMs} ms, {state.router.nativeSnapshot.render.underruns} underruns
             </small>
           )}
         </div>

@@ -6,6 +6,7 @@
 #include <Propvarutil.h>
 #include <algorithm>
 #include <cstdint>
+#include <cstring>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -67,7 +68,7 @@ void PrintDescribe() {
     << "\"version\":\"0.1.0\","
     << "\"backend\":\"wasapi-skeleton\","
     << "\"deckCount\":2,"
-    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\"],"
+    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\",\"--render-silence\"],"
     << "\"capabilities\":{"
     << "\"perDeckCapture\":false,"
     << "\"perDeckPan\":true,"
@@ -196,6 +197,139 @@ int RunOnce() {
   return 0;
 }
 
+int RenderSilence(int durationMs) {
+  ComPtr<IMMDevice> renderDevice;
+  if (!GetDefaultEndpoint(eRender, renderDevice)) {
+    std::cerr << "{\"error\":\"Default render endpoint unavailable\"}\n";
+    return 2;
+  }
+
+  WAVEFORMATEX* mixFormat = nullptr;
+  if (!GetMixFormat(renderDevice.Get(), &mixFormat)) {
+    std::cerr << "{\"error\":\"Render mix format unavailable\"}\n";
+    return 3;
+  }
+
+  ComPtr<IAudioClient> audioClient;
+  HRESULT hr = renderDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &audioClient);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient activation failed\"}\n";
+    return 4;
+  }
+
+  const REFERENCE_TIME requestedDuration = 1000000; // 100 ms
+  hr = audioClient->Initialize(
+    AUDCLNT_SHAREMODE_SHARED,
+    0,
+    requestedDuration,
+    0,
+    mixFormat,
+    nullptr);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient Initialize render failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 5;
+  }
+
+  ComPtr<IAudioRenderClient> renderClient;
+  hr = audioClient->GetService(IID_PPV_ARGS(&renderClient));
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"GetService IAudioRenderClient failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 6;
+  }
+
+  UINT32 bufferFrames = 0;
+  audioClient->GetBufferSize(&bufferFrames);
+  REFERENCE_TIME defaultPeriod = 0;
+  REFERENCE_TIME minimumPeriod = 0;
+  audioClient->GetDevicePeriod(&defaultPeriod, &minimumPeriod);
+
+  const DWORD startTick = GetTickCount();
+  uint64_t framesWritten = 0;
+  uint32_t renderPasses = 0;
+  uint32_t underruns = 0;
+
+  hr = audioClient->Start();
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient Start failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 7;
+  }
+
+  const DWORD targetMs = static_cast<DWORD>(std::max(50, std::min(5000, durationMs)));
+  while (GetTickCount() - startTick < targetMs) {
+    UINT32 paddingFrames = 0;
+    hr = audioClient->GetCurrentPadding(&paddingFrames);
+    if (FAILED(hr)) {
+      underruns += 1;
+      Sleep(1);
+      continue;
+    }
+
+    const UINT32 availableFrames = bufferFrames > paddingFrames ? bufferFrames - paddingFrames : 0;
+    if (availableFrames == 0) {
+      Sleep(static_cast<DWORD>(std::max<REFERENCE_TIME>(1, defaultPeriod / 20000)));
+      continue;
+    }
+
+    BYTE* buffer = nullptr;
+    hr = renderClient->GetBuffer(availableFrames, &buffer);
+    if (FAILED(hr) || buffer == nullptr) {
+      underruns += 1;
+      Sleep(1);
+      continue;
+    }
+
+    std::memset(buffer, 0, availableFrames * mixFormat->nBlockAlign);
+    hr = renderClient->ReleaseBuffer(availableFrames, AUDCLNT_BUFFERFLAGS_SILENT);
+    if (FAILED(hr)) {
+      underruns += 1;
+      continue;
+    }
+
+    framesWritten += availableFrames;
+    renderPasses += 1;
+  }
+
+  audioClient->Stop();
+  const DWORD elapsedMs = std::max<DWORD>(1, GetTickCount() - startTick);
+
+  std::cout
+    << "{"
+    << "\"status\":\"ready\","
+    << "\"backend\":\"wasapi-silence-render\","
+    << "\"deviceName\":\"" << EscapeJson(GetDeviceName(renderDevice.Get())) << "\","
+    << "\"format\":{"
+    << "\"sampleRate\":" << mixFormat->nSamplesPerSec << ","
+    << "\"channels\":" << mixFormat->nChannels << ","
+    << "\"bitsPerSample\":" << mixFormat->wBitsPerSample << ","
+    << "\"blockAlign\":" << mixFormat->nBlockAlign
+    << "},"
+    << "\"buffer\":{"
+    << "\"frames\":" << bufferFrames << ","
+    << "\"durationMs\":" << (bufferFrames * 1000.0 / std::max<DWORD>(1, mixFormat->nSamplesPerSec)) << ","
+    << "\"defaultPeriodMs\":" << (defaultPeriod / 10000.0) << ","
+    << "\"minimumPeriodMs\":" << (minimumPeriod / 10000.0)
+    << "},"
+    << "\"render\":{"
+    << "\"requestedMs\":" << targetMs << ","
+    << "\"elapsedMs\":" << elapsedMs << ","
+    << "\"framesWritten\":" << framesWritten << ","
+    << "\"passes\":" << renderPasses << ","
+    << "\"underruns\":" << underruns
+    << "},"
+    << "\"routes\":["
+    << "{\"deck\":\"A\",\"status\":\"silent\",\"framesWritten\":" << framesWritten / 2 << "},"
+    << "{\"deck\":\"B\",\"status\":\"silent\",\"framesWritten\":" << framesWritten / 2 << "}"
+    << "]"
+    << "}\n";
+
+  CoTaskMemFree(mixFormat);
+  return 0;
+}
+
 int wmain(int argc, wchar_t** argv) {
   ComInit com;
   if (FAILED(com.hr)) {
@@ -213,6 +347,15 @@ int wmain(int argc, wchar_t** argv) {
   }
   if (command == L"--run-once") {
     return RunOnce();
+  }
+  if (command == L"--render-silence") {
+    int durationMs = 500;
+    for (int i = 2; i < argc - 1; ++i) {
+      if (std::wstring(argv[i]) == L"--duration-ms") {
+        durationMs = _wtoi(argv[i + 1]);
+      }
+    }
+    return RenderSilence(durationMs);
   }
 
   std::cerr << "{\"error\":\"Unknown command\"}\n";

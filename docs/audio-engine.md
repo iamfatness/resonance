@@ -58,6 +58,7 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 - `--describe` reports the helper name, version, command list, and capability flags.
 - `--probe` initializes COM, probes default Windows audio endpoints, and reports the default render mix format.
 - `--run-once` initializes the default render client and reports real WASAPI buffer size, device period, and route health without streaming audio yet.
+- `--render-silence --duration-ms 250` starts the render client, writes silent buffers, and reports frames written, passes, underruns, and elapsed time.
 
 ```text
 Deck A playback -> app EQ/plugin chain -> master output
