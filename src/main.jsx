@@ -44,17 +44,18 @@ import {
 import './styles.css';
 
 const demoVideoA = {
-  id: 'TW9d8vYrVFQ',
-  title: 'Elektronomia - Sky High [NCS Release]',
-  channel: 'NoCopyrightSounds',
-  duration: '4:01',
+  id: 'JD-kMIpDfnY',
+  title: 'lofi hip hop radio - beats to sleep/chill to',
+  channel: 'Lofi Girl',
+  duration: '--:--',
 };
 
 const demoVideoB = {
-  id: 'M7lc1UVf-VE',
-  title: 'YouTube embedded playback demo',
-  channel: 'YouTube Developers',
-  duration: '0:30',
+  id: 'wH2Nd8oHixo',
+  title: 'Joe Rogan Experience #2493 - Protect Our Parks 16',
+  channel: 'PowerfulJRE',
+  duration: '--:--',
+  startSeconds: 7284,
 };
 
 const queueSeed = [
@@ -185,6 +186,25 @@ function parseYoutubeId(value) {
   return null;
 }
 
+function parseYoutubeTimestamp(value) {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+
+  try {
+    const url = new URL(trimmed);
+    const timestamp = url.searchParams.get('t') || url.searchParams.get('start');
+    if (!timestamp) return 0;
+
+    if (/^\d+$/.test(timestamp)) return Number(timestamp);
+    const hours = Number(timestamp.match(/(\d+)h/)?.[1] || 0);
+    const minutes = Number(timestamp.match(/(\d+)m/)?.[1] || 0);
+    const seconds = Number(timestamp.match(/(\d+)s/)?.[1] || 0);
+    return (hours * 3600) + (minutes * 60) + seconds;
+  } catch {
+    return 0;
+  }
+}
+
 function isYoutubeLoadInput(value) {
   return Boolean(parseYoutubeId(value));
 }
@@ -203,7 +223,7 @@ function isIOSDevice() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
-function useYouTubePlayer(videoId, volume) {
+function useYouTubePlayer(videoId, volume, startSeconds = 0) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
   const [ready, setReady] = useState(false);
@@ -222,6 +242,7 @@ function useYouTubePlayer(videoId, volume) {
           modestbranding: 1,
           rel: 0,
           playsinline: 1,
+          start: startSeconds || 0,
         },
         events: {
           onReady: () => {
@@ -256,9 +277,9 @@ function useYouTubePlayer(videoId, volume) {
 
   useEffect(() => {
     if (!ready) return;
-    playerRef.current?.loadVideoById?.(videoId);
+    playerRef.current?.loadVideoById?.({ videoId, startSeconds: startSeconds || 0 });
     playerRef.current?.setVolume?.(volume);
-  }, [ready, videoId]);
+  }, [ready, videoId, startSeconds]);
 
   useEffect(() => {
     if (!ready) return;
@@ -793,8 +814,8 @@ function PlayerApp() {
   const isIOS = useMemo(() => isIOSDevice(), []);
   const [deckA, setDeckA] = useState(demoVideoA);
   const [deckB, setDeckB] = useState(demoVideoB);
-  const [queryA, setQueryA] = useState('https://www.youtube.com/watch?v=TW9d8vYrVFQ');
-  const [queryB, setQueryB] = useState('https://www.youtube.com/watch?v=M7lc1UVf-VE');
+  const [queryA, setQueryA] = useState('https://www.youtube.com/watch?v=JD-kMIpDfnY');
+  const [queryB, setQueryB] = useState('https://www.youtube.com/watch?v=wH2Nd8oHixo&t=7284s');
   const [youtubeResults, setYoutubeResults] = useState([]);
   const [youtubeSearchDeck, setYoutubeSearchDeck] = useState('A');
   const [youtubeSearchState, setYoutubeSearchState] = useState({ status: 'idle', message: '' });
@@ -813,8 +834,8 @@ function PlayerApp() {
   const [manualCurve, setManualCurve] = useState(flatCurve);
   const preset = moodPresets[activePreset];
   const [instrumentBoosts, setInstrumentBoosts] = useState(preset.instruments);
-  const playerA = useYouTubePlayer(deckA.id, deckVolumes.A);
-  const playerB = useYouTubePlayer(deckB.id, deckVolumes.B);
+  const playerA = useYouTubePlayer(deckA.id, deckVolumes.A, deckA.startSeconds);
+  const playerB = useYouTubePlayer(deckB.id, deckVolumes.B, deckB.startSeconds);
   const selectedPlaylist = playlistCatalog.find((playlist) => playlist.name === selectedPlaylistName) || playlistCatalog[0];
   const effectiveDeckCount = isIOS ? 1 : deckCount;
   const isSingleDeck = effectiveDeckCount === 1;
@@ -957,7 +978,7 @@ function PlayerApp() {
     const query = (safeTargetDeck === 'A' ? queryA : queryB).trim();
     const id = parseYoutubeId(query);
     if (id) {
-      loadVideo({ id, title: `Custom Deck ${safeTargetDeck} video`, channel: 'YouTube', duration: '--:--' }, safeTargetDeck);
+      loadVideo({ id, title: `Custom Deck ${safeTargetDeck} video`, channel: 'YouTube', duration: '--:--', startSeconds: parseYoutubeTimestamp(query) }, safeTargetDeck);
       return;
     }
 
