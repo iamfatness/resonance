@@ -399,10 +399,10 @@ function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, se
       <form className="deck-search" onSubmit={onSubmit}>
         <Search size={16} />
         <input
-          aria-label={`Deck ${label} YouTube URL or video ID`}
+          aria-label={`Deck ${label} paste YouTube link or search for video`}
           value={query}
           onChange={(event) => setQuery(event.target.value)}
-          placeholder={`Load Deck ${label}`}
+          placeholder={`Paste YouTube link or search Deck ${label}`}
         />
         <button type="submit">{actionLabel}</button>
       </form>
@@ -1004,10 +1004,10 @@ function PlayerApp() {
           <form className="searchbar" onSubmit={(event) => submitVideo(event, activeInputDeck)}>
             <Search size={18} />
             <input
-              aria-label="Search YouTube or paste a YouTube URL"
+              aria-label="Paste YouTube link or search for video"
               value={activeInputDeck === 'A' ? queryA : queryB}
               onChange={(event) => (activeInputDeck === 'A' ? setQueryA(event.target.value) : setQueryB(event.target.value))}
-              placeholder={isSingleDeck ? 'Search YouTube or paste a link' : `Search YouTube or paste a link for Deck ${activeInputDeck}`}
+              placeholder={isSingleDeck ? 'Paste YouTube link or search for video' : `Paste YouTube link or search Deck ${activeInputDeck}`}
             />
             <button type="submit">
               {isYoutubeLoadInput(activeInputDeck === 'A' ? queryA : queryB) ? 'Load' : 'Search'}
