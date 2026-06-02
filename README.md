@@ -86,6 +86,8 @@ Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ b
 
 The desktop engine has a mock two-bus routing prototype for Deck A and Deck B. The desktop panel shows simulated per-deck input, left, and right meters that react to deck volume, pan, EQ activity, and active staged plugins before real PCM routing is connected.
 
+The mock routing logic now lives behind `engine/audio-router.cjs`, which is the boundary for the future native backend. The renderer reads router state from the existing desktop engine IPC API, so native per-deck PCM routing can replace mock meters without changing the app UI contract.
+
 Build:
 
 ```powershell

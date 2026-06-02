@@ -592,6 +592,7 @@ function DesktopEnginePanel({ engine }) {
   const inputs = state.devices?.inputs || [];
   const outputs = state.devices?.outputs || [];
   const diagnostics = state.diagnostics?.checks || [];
+  const routes = state.router?.routes || [];
 
   return (
     <section className="desktop-engine-panel">
@@ -649,11 +650,13 @@ function DesktopEnginePanel({ engine }) {
       <div className="deck-bus-grid">
         {['A', 'B'].map((deck) => {
           const deckMeter = meters.decks?.[deck] || { inputPeak: 0, outputPeak: 0, leftPeak: 0, rightPeak: 0, pan: 0, pluginCount: 0, eqActivity: 0 };
+          const route = routes.find((candidate) => candidate.deck === deck);
           return (
             <div className="deck-bus-meter" key={deck}>
               <div>
                 <strong>Deck {deck} Bus</strong>
-                <span>Pan {deckMeter.pan === 0 ? 'C' : deckMeter.pan < 0 ? `L${Math.abs(deckMeter.pan)}` : `R${deckMeter.pan}`} · EQ {Math.round((deckMeter.eqActivity || 0) * 100)}% · {deckMeter.pluginCount || 0} plugins</span>
+                <span>Pan {deckMeter.pan === 0 ? 'C' : deckMeter.pan < 0 ? `L${Math.abs(deckMeter.pan)}` : `R${deckMeter.pan}`} | EQ {Math.round((deckMeter.eqActivity || 0) * 100)}% | {deckMeter.pluginCount || 0} plugins</span>
+                {route && <small>{route.status} route: {route.source} to {route.destination}</small>}
               </div>
               <label>
                 <span>In</span>
@@ -671,8 +674,17 @@ function DesktopEnginePanel({ engine }) {
           );
         })}
       </div>
+      {state.router && (
+        <div className="router-status">
+          <div>
+            <span>Router</span>
+            <strong>{state.router.backend}</strong>
+          </div>
+          <small>{state.router.note}</small>
+        </div>
+      )}
       <p>
-        The engine is running in {state.mode || 'mock'} mode. Deck buses are simulated until the desktop router can feed real per-source PCM into the engine.
+        The engine is running in {state.mode || 'mock'} mode. Native per-source PCM routing will replace the simulated deck buses when the desktop router backend is connected.
       </p>
       {state.pluginHost && (
         <div className="plugin-host-status">

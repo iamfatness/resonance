@@ -4,7 +4,7 @@ The desktop audio engine is a user-mode process started by Electron.
 
 ## Current Backend
 
-The current engine is a process boundary, control protocol, Windows endpoint enumerator, and live metering backend. When the native helper is built, Resonance reads default-output WASAPI loopback levels for real peak/RMS meters; otherwise it falls back to generated development meters. Real processed PCM routing is not wired yet.
+The current engine is a process boundary, control protocol, Windows endpoint enumerator, deck router contract, and live metering backend. When the native helper is built, Resonance reads default-output WASAPI loopback levels for real peak/RMS meters; otherwise it falls back to generated development meters. Real processed PCM routing is not wired yet.
 
 ```text
 Electron main process
@@ -19,6 +19,7 @@ The engine reports:
 - Windows audio endpoint enumeration
 - selected input/output device IDs
 - persisted settings file path
+- desktop audio router backend and Deck A/B route state
 - active EQ settings
 - app EQ bypass state
 - staged plugin-chain settings
@@ -42,11 +43,23 @@ npm run native:wasapi-meter
 
 Real audio routing should not run inside the renderer UI. Keeping the engine in a separate process lets Resonance restart audio processing, report failures, and later swap the mock backend for a native WASAPI backend without restructuring the app.
 
+## Desktop Router
+
+`engine/audio-router.cjs` is the stable router boundary for Deck A and Deck B. Today it runs in mock mode and produces simulated per-deck bus meters that react to deck volume, pan, EQ activity, and staged plugins. It also publishes route records so the UI can show where each deck is expected to flow.
+
+```text
+Deck A playback -> app EQ/plugin chain -> master output
+Deck B playback -> app EQ/plugin chain -> master output
+```
+
+The native backend should replace the mock meter source without changing the renderer API. Its job is to capture or receive per-deck PCM, apply the configured processing chain, then render the summed output to the selected Windows output device.
+
 ## Next Milestones
 
 1. Replace PowerShell endpoint enumeration with a native WASAPI helper.
 2. Select specific WASAPI loopback/output endpoints instead of only the system default meter.
-3. Capture from a loopback/virtual playback endpoint.
-4. Render processed PCM to the selected output endpoint.
-5. Move the Web Audio EQ model into a shared DSP config shape.
-6. Add native VST3 plugin hosting for staged plugin chains.
+3. Add a native router backend that can accept Deck A/B PCM independently.
+4. Capture from a loopback/virtual playback endpoint.
+5. Render processed PCM to the selected output endpoint.
+6. Move the Web Audio EQ model into a shared DSP config shape.
+7. Add native VST3 plugin hosting for staged plugin chains.

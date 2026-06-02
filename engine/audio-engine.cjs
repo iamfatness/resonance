@@ -1,6 +1,7 @@
 const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
+const { DesktopAudioRouter } = require('./audio-router.cjs');
 
 const rootDir = path.resolve(__dirname, '..');
 const listAudioDevicesScript = path.join(rootDir, 'scripts', 'list-audio-devices.ps1');
@@ -50,6 +51,7 @@ const engineState = {
     vendors: ['Waves'],
     note: 'Native plugin hosting is not active until the desktop audio router can process PCM.',
   },
+  router: null,
   devices: {
     inputs: [
       {
@@ -102,6 +104,8 @@ const engineState = {
 
 let meterTimer = null;
 let nativeMeterBusy = false;
+const audioRouter = new DesktopAudioRouter({ settings: engineState.settings, hasNativeMeter });
+engineState.router = audioRouter.getState();
 
 function findDirectoryByName(startDir, targetName, maxDepth = 6) {
   if (!fs.existsSync(startDir) || maxDepth < 0) return false;
@@ -174,6 +178,12 @@ function buildDiagnostics() {
         detail: hasWindowsAudioScan ? 'Endpoint scan completed.' : engineState.deviceScan.error || 'Endpoint scan is pending.',
       },
       {
+        id: 'audio-router',
+        label: 'Deck audio router',
+        status: engineState.router?.status === 'running' ? 'ready' : 'pending',
+        detail: engineState.router?.note || 'Router state is pending.',
+      },
+      {
         id: 'wasapi-meter',
         label: 'Native WASAPI meter',
         status: hasNativeMeterHelper ? 'ready' : 'pending',
@@ -236,6 +246,7 @@ function hasNativeMeter() {
 
 function syncEngineMode() {
   engineState.mode = hasNativeMeter() ? 'wasapi-loopback-meter' : 'windows-enumeration';
+  engineState.router = audioRouter.getState();
 }
 
 function send(message) {
@@ -265,55 +276,9 @@ function normalizeMeterPayload(payload) {
   };
 }
 
-function deckBusMeter(deck, seconds, phaseOffset = 0) {
-  const processing = engineState.settings.deckProcessing?.[deck] || defaultSettings.deckProcessing[deck];
-  const volumes = engineState.settings.deckVolumes || defaultSettings.deckVolumes;
-  const deckGain = Math.max(0, Math.min(1.2, (Number(volumes[deck]) || 0) / 100));
-  const pluginCount = processing.pluginChain?.filter((plugin) => !plugin.bypassed).length || 0;
-  const eqActivity = processing.eqBypassed
-    ? 0
-    : Math.min(1, (processing.curve || []).reduce((total, gain) => total + Math.abs(Number(gain) || 0), 0) / 48);
-  const movement = (Math.sin((seconds + phaseOffset) * 2.1) + 1) / 2;
-  const transient = (Math.sin((seconds + phaseOffset) * 8.7) + 1) / 2;
-  const inputPeak = Math.min(0.98, 0.14 + movement * 0.58 + transient * 0.18);
-  const processingLift = 1 + (eqActivity * 0.18) + (pluginCount * 0.04);
-  const outputPeak = Math.min(1, inputPeak * deckGain * processingLift);
-  const pan = Math.max(-50, Math.min(50, Number(processing.pan) || 0));
-  const panNormalized = pan / 50;
-  const leftScale = panNormalized <= 0 ? 1 : 1 - panNormalized;
-  const rightScale = panNormalized >= 0 ? 1 : 1 + panNormalized;
-
-  return {
-    inputPeak: Number(inputPeak.toFixed(3)),
-    outputPeak: Number(outputPeak.toFixed(3)),
-    leftPeak: Number((outputPeak * leftScale).toFixed(3)),
-    rightPeak: Number((outputPeak * rightScale).toFixed(3)),
-    pan,
-    pluginCount,
-    eqActivity: Number(eqActivity.toFixed(3)),
-  };
-}
-
 function nextMockMeters() {
-  const now = Date.now();
-  const seconds = now / 1000;
-  const gain = Math.max(0, Math.min(1.2, engineState.settings.outputGain ?? 0.9));
-  const deckA = deckBusMeter('A', seconds, 0);
-  const deckB = deckBusMeter('B', seconds, 0.41);
-  const inputPeak = Math.min(1, Math.max(deckA.inputPeak, deckB.inputPeak));
-  const outputPeak = Math.min(1, (deckA.leftPeak + deckA.rightPeak + deckB.leftPeak + deckB.rightPeak) * 0.5 * gain);
-  const inputRms = Math.min(0.86, inputPeak * 0.58);
-  const outputRms = Math.min(1, outputPeak * 0.62);
-
-  engineState.meters = {
-    inputPeak: Number(inputPeak.toFixed(3)),
-    outputPeak: Number(outputPeak.toFixed(3)),
-    inputRms: Number(inputRms.toFixed(3)),
-    outputRms: Number(outputRms.toFixed(3)),
-    clipping: outputPeak >= 0.98,
-    decks: { A: deckA, B: deckB },
-    updatedAt: new Date(now).toISOString(),
-  };
+  engineState.router = audioRouter.getState();
+  engineState.meters = audioRouter.nextMockMeters(engineState.settings.outputGain ?? 0.9);
 }
 
 function startMetering() {
@@ -464,6 +429,8 @@ function start(requestId) {
   syncEngineMode();
   engineState.status = 'running';
   engineState.lastStartedAt = new Date().toISOString();
+  audioRouter.start();
+  engineState.router = audioRouter.getState();
   if (!hasNativeMeter()) nextMockMeters();
   startMetering();
   publishState(requestId);
@@ -473,16 +440,15 @@ function start(requestId) {
 function stop(requestId) {
   engineState.status = 'idle';
   stopMetering();
+  audioRouter.stop();
+  engineState.router = audioRouter.getState();
   engineState.meters = {
     inputPeak: 0,
     outputPeak: 0,
     inputRms: 0,
     outputRms: 0,
     clipping: false,
-    decks: {
-      A: { inputPeak: 0, outputPeak: 0, leftPeak: 0, rightPeak: 0, pan: engineState.settings.deckProcessing?.A?.pan ?? -12, pluginCount: 0, eqActivity: 0 },
-      B: { inputPeak: 0, outputPeak: 0, leftPeak: 0, rightPeak: 0, pan: engineState.settings.deckProcessing?.B?.pan ?? 12, pluginCount: 0, eqActivity: 0 },
-    },
+    decks: audioRouter.zeroDeckMeters(),
     updatedAt: new Date().toISOString(),
   };
   publishState(requestId);
@@ -498,6 +464,8 @@ function updateSettings(requestId, settings = {}) {
     deckProcessing: settings.deckProcessing || currentDeckProcessing,
     deckVolumes: settings.deckVolumes || engineState.settings.deckVolumes || defaultSettings.deckVolumes,
   };
+  audioRouter.updateSettings(engineState.settings);
+  engineState.router = audioRouter.getState();
   if (engineState.status === 'running' && !hasNativeMeter()) {
     nextMockMeters();
     publishMeters();
@@ -509,6 +477,11 @@ function updateSettings(requestId, settings = {}) {
 function selectDevices(requestId, devices = {}) {
   if (devices.inputDeviceId) engineState.inputDeviceId = devices.inputDeviceId;
   if (devices.outputDeviceId) engineState.outputDeviceId = devices.outputDeviceId;
+  audioRouter.selectDevices({
+    inputDeviceId: engineState.inputDeviceId,
+    outputDeviceId: engineState.outputDeviceId,
+  });
+  engineState.router = audioRouter.getState();
   persistEngineState();
   publishState(requestId);
 }

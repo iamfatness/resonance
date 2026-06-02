@@ -1887,6 +1887,12 @@ button {
   font-size: 12px;
 }
 
+.deck-bus-meter small {
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
 .deck-bus-meter label {
   display: grid;
   grid-template-columns: 26px minmax(0, 1fr);
@@ -1907,6 +1913,42 @@ button {
   max-width: 100%;
   border-radius: inherit;
   background: linear-gradient(90deg, var(--teal), var(--amber));
+}
+
+.router-status {
+  display: grid;
+  gap: 5px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0d1112;
+}
+
+.router-status > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.router-status span,
+.router-status strong {
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.router-status span {
+  color: var(--muted);
+}
+
+.router-status strong {
+  color: var(--teal);
+}
+
+.router-status small {
+  color: var(--faint);
+  line-height: 1.35;
 }
 
 .desktop-engine-panel p {
