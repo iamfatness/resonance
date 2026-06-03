@@ -126,6 +126,7 @@ const audioRouter = new DesktopAudioRouter({
   hasNativeMeter,
   hasNativeRouter,
   nativeRouterPath: audioRouterExe,
+  onSnapshot: handleNativeRouterSnapshot,
 });
 engineState.router = audioRouter.getState();
 
@@ -338,7 +339,7 @@ function hasPlayingDeck() {
 }
 
 function syncEngineMode() {
-  engineState.mode = hasNativeRouter() ? 'native-router-skeleton' : hasNativeMeter() ? 'wasapi-loopback-meter' : 'windows-enumeration';
+  engineState.mode = hasNativeRouter() ? 'native-router-persistent' : hasNativeMeter() ? 'wasapi-loopback-meter' : 'windows-enumeration';
   engineState.router = audioRouter.getState();
 }
 
@@ -408,6 +409,28 @@ function updateMetersFromNativeRoutes(snapshot) {
   };
 }
 
+function handleNativeRouterSnapshot(snapshot) {
+  if (!snapshot) return;
+  audioRouter.nativeSnapshot = snapshot;
+  engineState.router = audioRouter.getState();
+  if (Array.isArray(snapshot.sources)) {
+    for (const source of snapshot.sources) {
+      const deckId = source.deck === 'B' ? 'B' : 'A';
+      const deckState = engineState.playbackDecks[deckId];
+      if (!deckState) continue;
+      if (source.loaded) {
+        deckState.positionMs = Math.max(0, Number(source.positionMs) || 0);
+        deckState.durationMs = Math.max(deckState.durationMs || 0, Number(source.durationMs) || 0);
+        deckState.status = source.playing ? 'playing' : deckState.path ? deckState.status === 'empty' ? 'loaded' : deckState.status : 'loaded';
+        deckState.lastStartedAt = source.playing ? new Date().toISOString() : null;
+      }
+    }
+  }
+  updateMetersFromNativeRoutes(snapshot);
+  publishMeters();
+  publishState();
+}
+
 function renderLivePlaybackChunk() {
   if (!hasNativeRouter() || livePlaybackBusy || !hasPlayingDeck()) return false;
 
@@ -442,6 +465,7 @@ function startMetering() {
   if (meterTimer) return;
   meterTimer = setInterval(() => {
     if (engineState.status !== 'running') return;
+    if (audioRouter.isPersistentServerRunning?.()) return;
     if (renderLivePlaybackChunk()) return;
     if (hasNativeRouter()) {
       syncEngineMode();
@@ -610,6 +634,9 @@ function start(requestId) {
   engineState.status = 'running';
   engineState.lastStartedAt = new Date().toISOString();
   audioRouter.start();
+  if (hasNativeRouter()) {
+    audioRouter.startPersistentServer({ onSnapshot: handleNativeRouterSnapshot });
+  }
   engineState.router = audioRouter.getState();
   if (!hasNativeMeter()) nextMockMeters();
   startMetering();
@@ -660,6 +687,10 @@ function loadDeckWav(requestId, { deck, filePath, name } = {}) {
       lastStartedAt: null,
       format: info,
     };
+    if (hasNativeRouter()) {
+      audioRouter.startPersistentServer({ onSnapshot: handleNativeRouterSnapshot });
+      audioRouter.loadDeckWav({ deck: deckId, filePath, name: name || path.basename(filePath) });
+    }
   } catch (error) {
     engineState.playbackDecks[deckId] = {
       ...defaultPlaybackDeck,
@@ -684,6 +715,9 @@ function playDeck(requestId, { deck } = {}) {
   deckState.status = 'playing';
   deckState.lastStartedAt = new Date().toISOString();
   if (engineState.status !== 'running') start();
+  if (hasNativeRouter()) {
+    audioRouter.playDeck(deckId);
+  }
   publishState(requestId);
 }
 
@@ -693,6 +727,9 @@ function pauseDeck(requestId, { deck } = {}) {
   deckState.positionMs = currentDeckPosition(deckState);
   deckState.status = deckState.path ? 'paused' : 'empty';
   deckState.lastStartedAt = null;
+  if (hasNativeRouter()) {
+    audioRouter.pauseDeck(deckId);
+  }
   publishState(requestId);
 }
 
@@ -702,6 +739,9 @@ function stopDeck(requestId, { deck } = {}) {
   deckState.positionMs = 0;
   deckState.status = deckState.path ? 'stopped' : 'empty';
   deckState.lastStartedAt = null;
+  if (hasNativeRouter()) {
+    audioRouter.stopDeck(deckId);
+  }
   publishState(requestId);
 }
 
@@ -711,6 +751,9 @@ function seekDeck(requestId, { deck, positionMs } = {}) {
   deckState.positionMs = Math.max(0, Math.min(deckState.durationMs || 0, Number(positionMs) || 0));
   if (deckState.status === 'playing') {
     deckState.lastStartedAt = new Date().toISOString();
+  }
+  if (hasNativeRouter()) {
+    audioRouter.seekDeck(deckId, deckState.positionMs);
   }
   publishState(requestId);
 }

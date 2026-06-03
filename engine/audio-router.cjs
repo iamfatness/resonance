@@ -1,4 +1,5 @@
-const { execFile } = require('node:child_process');
+const { execFile, spawn } = require('node:child_process');
+const readline = require('node:readline');
 
 const DEFAULT_DECKS = ['A', 'B'];
 
@@ -47,7 +48,7 @@ function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_
       nativePcmRouting: false,
     },
     note: isNativeSkeleton
-      ? 'Native router helper is built, but PCM capture/render is still stubbed.'
+      ? 'Native router helper is built. Local WAV decks can use the persistent WASAPI mixer; browser capture and plugins are still pending.'
       : backend === 'mock'
         ? 'Deck routing is simulated until native per-source PCM capture is connected.'
         : 'WASAPI metering is active; per-deck PCM routing is still simulated.',
@@ -55,12 +56,15 @@ function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_
 }
 
 class DesktopAudioRouter {
-  constructor({ settings, hasNativeMeter, hasNativeRouter, nativeRouterPath }) {
+  constructor({ settings, hasNativeMeter, hasNativeRouter, nativeRouterPath, onSnapshot }) {
     this.settings = settings;
     this.hasNativeMeter = hasNativeMeter;
     this.hasNativeRouter = hasNativeRouter;
     this.nativeRouterPath = nativeRouterPath;
     this.nativeSnapshot = null;
+    this.serverProcess = null;
+    this.serverReady = false;
+    this.onServerSnapshot = onSnapshot || null;
     this.startedAt = null;
     this.state = this.buildState();
   }
@@ -71,6 +75,7 @@ class DesktopAudioRouter {
 
   updateSettings(settings = {}) {
     this.settings = settings;
+    this.updatePersistentSettings();
     this.state = this.buildState(this.state.status);
   }
 
@@ -86,6 +91,7 @@ class DesktopAudioRouter {
   }
 
   stop() {
+    this.stopPersistentServer();
     this.state = this.buildState('idle');
   }
 
@@ -100,7 +106,7 @@ class DesktopAudioRouter {
       const pluginCount = processing.pluginChain?.filter((plugin) => !plugin.bypassed).length || 0;
       return {
         ...defaultRoute(deck),
-        status: backend === 'native-router' ? 'stubbed' : backend === 'mock' ? 'simulated' : 'metered',
+        status: backend === 'native-router' ? (this.serverReady ? 'persistent' : 'ready') : backend === 'mock' ? 'simulated' : 'metered',
         source: this.inputDeviceId || `deck-${deck.toLowerCase()}-playback`,
         destination: this.outputDeviceId || 'default-output',
         pan: clamp(processing.pan, -50, 50),
@@ -110,6 +116,136 @@ class DesktopAudioRouter {
     });
 
     return buildRouterState({ backend, status, routes, nativeSnapshot: this.nativeSnapshot });
+  }
+
+  startPersistentServer({ onSnapshot } = {}) {
+    if (!this.hasNativeRouter?.() || !this.nativeRouterPath) return false;
+    this.onServerSnapshot = onSnapshot || this.onServerSnapshot;
+    if (this.serverProcess) return true;
+
+    this.serverProcess = spawn(this.nativeRouterPath, ['--server'], {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    this.serverReady = false;
+
+    const stdout = readline.createInterface({ input: this.serverProcess.stdout });
+    stdout.on('line', (line) => {
+      if (!line.trim()) return;
+      try {
+        this.nativeSnapshot = {
+          ...JSON.parse(line),
+          updatedAt: new Date().toISOString(),
+        };
+        this.serverReady = this.nativeSnapshot.backend === 'wasapi-persistent-router';
+        this.state = this.buildState(this.state.status);
+        this.onServerSnapshot?.(this.nativeSnapshot);
+      } catch (error) {
+        this.nativeSnapshot = {
+          status: 'error',
+          error: error.message,
+          raw: line,
+          updatedAt: new Date().toISOString(),
+        };
+        this.state = this.buildState(this.state.status);
+        this.onServerSnapshot?.(this.nativeSnapshot);
+      }
+    });
+
+    let stderr = '';
+    this.serverProcess.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    this.serverProcess.on('exit', () => {
+      this.serverProcess = null;
+      this.serverReady = false;
+      if (stderr.trim()) {
+        this.nativeSnapshot = {
+          status: 'error',
+          error: stderr.trim(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      this.state = this.buildState(this.state.status === 'running' ? 'degraded' : this.state.status);
+      this.onServerSnapshot?.(this.nativeSnapshot);
+    });
+
+    this.updatePersistentSettings();
+    return true;
+  }
+
+  stopPersistentServer() {
+    if (!this.serverProcess) return;
+    this.sendServerCommand({ type: 'exit' });
+    const processToStop = this.serverProcess;
+    this.serverProcess = null;
+    this.serverReady = false;
+    setTimeout(() => {
+      if (!processToStop.killed) processToStop.kill();
+    }, 1000).unref?.();
+  }
+
+  isPersistentServerRunning() {
+    return Boolean(this.serverProcess);
+  }
+
+  sendServerCommand(command) {
+    if (!this.serverProcess?.stdin?.writable) return false;
+    this.serverProcess.stdin.write(`${JSON.stringify(command)}\n`);
+    return true;
+  }
+
+  deckCommandSettings(deck) {
+    const processing = this.settings?.deckProcessing?.[deck] || {};
+    const volumes = this.settings?.deckVolumes || {};
+    const eq = eqBands(processing);
+    return {
+      type: 'settings',
+      deck,
+      gain: clamp((volumes[deck] || 0) / 100 * 0.2, 0, 0.35),
+      pan: clamp(processing.pan, -50, 50),
+      eqLowDb: eq.low,
+      eqMidDb: eq.mid,
+      eqHighDb: eq.high,
+    };
+  }
+
+  updatePersistentSettings() {
+    if (!this.serverProcess) return;
+    for (const deck of DEFAULT_DECKS) {
+      this.sendServerCommand(this.deckCommandSettings(deck));
+    }
+  }
+
+  loadDeckWav({ deck = 'A', filePath, name } = {}) {
+    if (!filePath || !this.startPersistentServer()) return false;
+    const deckId = deck === 'B' ? 'B' : 'A';
+    this.sendServerCommand({ type: 'load', deck: deckId, path: filePath, name });
+    this.sendServerCommand(this.deckCommandSettings(deckId));
+    return true;
+  }
+
+  playDeck(deck = 'A') {
+    if (!this.startPersistentServer()) return false;
+    this.sendServerCommand({ type: 'play', deck: deck === 'B' ? 'B' : 'A' });
+    return true;
+  }
+
+  pauseDeck(deck = 'A') {
+    return this.sendServerCommand({ type: 'pause', deck: deck === 'B' ? 'B' : 'A' });
+  }
+
+  stopDeck(deck = 'A') {
+    return this.sendServerCommand({ type: 'stop', deck: deck === 'B' ? 'B' : 'A' });
+  }
+
+  seekDeck(deck = 'A', positionMs = 0) {
+    return this.sendServerCommand({
+      type: 'seek',
+      deck: deck === 'B' ? 'B' : 'A',
+      positionMs: Math.max(0, Number(positionMs) || 0),
+    });
   }
 
   sampleNativeRouter(callback) {

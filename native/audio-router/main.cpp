@@ -11,8 +11,10 @@
 #include <cmath>
 #include <fstream>
 #include <iostream>
+#include <mutex>
 #include <sstream>
 #include <string>
+#include <thread>
 #include <vector>
 #include <wrl/client.h>
 
@@ -313,6 +315,394 @@ double WavDurationMs(const WavData& wav) {
   return frames * 1000.0 / static_cast<double>(wav.sampleRate);
 }
 
+void MixDeckStereoFrame(const DeckState& deck, DeckStats& stats, double sourceLeft, double sourceRight, double& left, double& right);
+
+std::wstring Utf8ToWide(const std::string& value) {
+  if (value.empty()) return L"";
+  const int size = MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, nullptr, 0);
+  if (size <= 0) return L"";
+  std::wstring wide(size - 1, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, wide.data(), size);
+  return wide;
+}
+
+std::string JsonStringValue(const std::string& line, const std::string& key) {
+  const std::string marker = "\"" + key + "\"";
+  size_t pos = line.find(marker);
+  if (pos == std::string::npos) return "";
+  pos = line.find(':', pos + marker.size());
+  if (pos == std::string::npos) return "";
+  pos = line.find('"', pos + 1);
+  if (pos == std::string::npos) return "";
+  std::string value;
+  bool escaped = false;
+  for (size_t index = pos + 1; index < line.size(); ++index) {
+    const char ch = line[index];
+    if (escaped) {
+      if (ch == 'n') value.push_back('\n');
+      else if (ch == 'r') value.push_back('\r');
+      else if (ch == 't') value.push_back('\t');
+      else value.push_back(ch);
+      escaped = false;
+      continue;
+    }
+    if (ch == '\\') {
+      escaped = true;
+      continue;
+    }
+    if (ch == '"') break;
+    value.push_back(ch);
+  }
+  return value;
+}
+
+double JsonNumberValue(const std::string& line, const std::string& key, double fallback = 0.0) {
+  const std::string marker = "\"" + key + "\"";
+  size_t pos = line.find(marker);
+  if (pos == std::string::npos) return fallback;
+  pos = line.find(':', pos + marker.size());
+  if (pos == std::string::npos) return fallback;
+  const size_t start = line.find_first_of("-0123456789.", pos + 1);
+  if (start == std::string::npos) return fallback;
+  char* end = nullptr;
+  const double value = std::strtod(line.c_str() + start, &end);
+  return end == line.c_str() + start ? fallback : value;
+}
+
+struct ServerDeck {
+  char id = 'A';
+  WavData wav;
+  bool loaded = false;
+  bool playing = false;
+  uint64_t positionFrames = 0;
+  DeckState processing = MakeDeck("A", 1000.0, 0.12, 0.0, 0.0, 0.0, 0.0);
+  DeckStats stats;
+  std::wstring name;
+  std::string error;
+};
+
+struct ServerState {
+  ServerDeck deckA;
+  ServerDeck deckB;
+  bool running = true;
+  uint64_t framesWritten = 0;
+  uint32_t passes = 0;
+  uint32_t underruns = 0;
+  double masterPeakLeft = 0.0;
+  double masterPeakRight = 0.0;
+  std::mutex mutex;
+};
+
+ServerDeck& SelectServerDeck(ServerState& state, const std::string& deck) {
+  return deck == "B" ? state.deckB : state.deckA;
+}
+
+double ServerDeckPositionMs(const ServerDeck& deck) {
+  if (!deck.loaded || deck.wav.sampleRate == 0) return 0.0;
+  return static_cast<double>(deck.positionFrames) * 1000.0 / static_cast<double>(deck.wav.sampleRate);
+}
+
+void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, const std::wstring& deviceName, const char* eventType) {
+  std::lock_guard<std::mutex> lock(state.mutex);
+  const double sampleRate = mixFormat ? std::max<DWORD>(1, mixFormat->nSamplesPerSec) : 48000.0;
+  auto printDeckSource = [](const ServerDeck& deck) {
+    std::cout
+      << "{\"deck\":\"" << deck.id << "\","
+      << "\"loaded\":" << (deck.loaded ? "true" : "false") << ","
+      << "\"playing\":" << (deck.playing ? "true" : "false") << ","
+      << "\"positionMs\":" << ServerDeckPositionMs(deck) << ","
+      << "\"durationMs\":" << WavDurationMs(deck.wav) << ","
+      << "\"sampleRate\":" << deck.wav.sampleRate << ","
+      << "\"channels\":" << deck.wav.channels << ","
+      << "\"bitsPerSample\":" << deck.wav.bitsPerSample << "}";
+  };
+  auto printDeckRoute = [](const ServerDeck& deck) {
+    std::cout
+      << "{\"deck\":\"" << deck.id << "\","
+      << "\"status\":\"" << (deck.playing ? "playing" : deck.loaded ? "loaded" : "empty") << "\","
+      << "\"gain\":" << deck.processing.gain << ","
+      << "\"pan\":" << deck.processing.pan << ","
+      << "\"eqLowDb\":" << deck.processing.eqLowDb << ","
+      << "\"eqMidDb\":" << deck.processing.eqMidDb << ","
+      << "\"eqHighDb\":" << deck.processing.eqHighDb << ","
+      << "\"eqLinear\":" << EqGainForFrequency(deck.processing) << ","
+      << "\"framesWritten\":" << deck.stats.framesWritten << ","
+      << "\"leftPeak\":" << deck.stats.leftPeak << ","
+      << "\"rightPeak\":" << deck.stats.rightPeak << "}";
+  };
+
+  std::cout
+    << "{"
+    << "\"status\":\"ready\","
+    << "\"event\":\"" << eventType << "\","
+    << "\"backend\":\"wasapi-persistent-router\","
+    << "\"deviceName\":\"" << EscapeJson(deviceName) << "\","
+    << "\"format\":{"
+    << "\"sampleRate\":" << static_cast<uint32_t>(sampleRate) << ","
+    << "\"channels\":" << (mixFormat ? mixFormat->nChannels : 0) << ","
+    << "\"bitsPerSample\":" << (mixFormat ? mixFormat->wBitsPerSample : 0) << ","
+    << "\"blockAlign\":" << (mixFormat ? mixFormat->nBlockAlign : 0)
+    << "},"
+    << "\"render\":{"
+    << "\"type\":\"persistent-wav\","
+    << "\"framesWritten\":" << state.framesWritten << ","
+    << "\"passes\":" << state.passes << ","
+    << "\"underruns\":" << state.underruns << ","
+    << "\"masterPeakLeft\":" << state.masterPeakLeft << ","
+    << "\"masterPeakRight\":" << state.masterPeakRight
+    << "},"
+    << "\"sources\":[";
+  printDeckSource(state.deckA);
+  std::cout << ",";
+  printDeckSource(state.deckB);
+  std::cout << "],\"routes\":[";
+  printDeckRoute(state.deckA);
+  std::cout << ",";
+  printDeckRoute(state.deckB);
+  std::cout << "]}\n";
+  std::cout.flush();
+}
+
+void ApplyServerSettings(ServerDeck& deck, const std::string& line) {
+  deck.processing = MakeDeck(
+    deck.id == 'B' ? "B" : "A",
+    1000.0,
+    JsonNumberValue(line, "gain", deck.processing.gain),
+    JsonNumberValue(line, "pan", deck.processing.pan),
+    JsonNumberValue(line, "eqLowDb", deck.processing.eqLowDb),
+    JsonNumberValue(line, "eqMidDb", deck.processing.eqMidDb),
+    JsonNumberValue(line, "eqHighDb", deck.processing.eqHighDb));
+}
+
+void RunServerCommand(ServerState& state, const std::string& line) {
+  const std::string type = JsonStringValue(line, "type");
+  const std::string deckId = JsonStringValue(line, "deck");
+  std::lock_guard<std::mutex> lock(state.mutex);
+
+  if (type == "exit") {
+    state.running = false;
+    return;
+  }
+
+  ServerDeck& deck = SelectServerDeck(state, deckId);
+  if (type == "load") {
+    WavData wav;
+    std::string error;
+    const std::string path = JsonStringValue(line, "path");
+    if (LoadWavFile(Utf8ToWide(path), wav, error)) {
+      deck.wav = std::move(wav);
+      deck.loaded = true;
+      deck.playing = false;
+      deck.positionFrames = 0;
+      deck.stats = {};
+      deck.error.clear();
+      deck.name = Utf8ToWide(JsonStringValue(line, "name"));
+    } else {
+      deck.loaded = false;
+      deck.playing = false;
+      deck.positionFrames = 0;
+      deck.error = error;
+    }
+    return;
+  }
+
+  if (type == "settings") {
+    ApplyServerSettings(deck, line);
+    return;
+  }
+
+  if (type == "play" && deck.loaded) {
+    const uint64_t frameCount = deck.wav.channels == 0 ? 0 : deck.wav.samples.size() / deck.wav.channels;
+    if (deck.positionFrames >= frameCount) deck.positionFrames = 0;
+    deck.playing = true;
+    return;
+  }
+
+  if (type == "pause") {
+    deck.playing = false;
+    return;
+  }
+
+  if (type == "stop") {
+    deck.playing = false;
+    deck.positionFrames = 0;
+    deck.stats = {};
+    return;
+  }
+
+  if (type == "seek" && deck.loaded) {
+    const double positionMs = std::max(0.0, JsonNumberValue(line, "positionMs", 0.0));
+    const uint64_t targetFrame = static_cast<uint64_t>(positionMs * deck.wav.sampleRate / 1000.0);
+    const uint64_t frameCount = deck.wav.channels == 0 ? 0 : deck.wav.samples.size() / deck.wav.channels;
+    deck.positionFrames = std::min<uint64_t>(targetFrame, frameCount);
+    return;
+  }
+}
+
+int RunPersistentServer() {
+  ServerState state;
+  state.deckA.id = 'A';
+  state.deckA.processing = MakeDeck("A", 1000.0, 0.12, -12.0, 0.0, 0.0, 0.0);
+  state.deckB.id = 'B';
+  state.deckB.processing = MakeDeck("B", 1000.0, 0.08, 12.0, 0.0, 0.0, 0.0);
+
+  ComPtr<IMMDevice> renderDevice;
+  if (!GetDefaultEndpoint(eRender, renderDevice)) {
+    std::cerr << "{\"error\":\"Default render endpoint unavailable\"}\n";
+    return 2;
+  }
+
+  WAVEFORMATEX* mixFormat = nullptr;
+  if (!GetMixFormat(renderDevice.Get(), &mixFormat)) {
+    std::cerr << "{\"error\":\"Render mix format unavailable\"}\n";
+    return 3;
+  }
+
+  ComPtr<IAudioClient> audioClient;
+  HRESULT hr = renderDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &audioClient);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient activation failed\"}\n";
+    return 4;
+  }
+
+  const REFERENCE_TIME requestedDuration = 1000000;
+  hr = audioClient->Initialize(AUDCLNT_SHAREMODE_SHARED, 0, requestedDuration, 0, mixFormat, nullptr);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient Initialize render failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 5;
+  }
+
+  ComPtr<IAudioRenderClient> renderClient;
+  hr = audioClient->GetService(IID_PPV_ARGS(&renderClient));
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"GetService IAudioRenderClient failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 6;
+  }
+
+  UINT32 bufferFrames = 0;
+  audioClient->GetBufferSize(&bufferFrames);
+  REFERENCE_TIME defaultPeriod = 0;
+  REFERENCE_TIME minimumPeriod = 0;
+  audioClient->GetDevicePeriod(&defaultPeriod, &minimumPeriod);
+  const std::wstring deviceName = GetDeviceName(renderDevice.Get());
+  const double sampleRate = std::max<DWORD>(1, mixFormat->nSamplesPerSec);
+
+  std::thread commandThread([&state]() {
+    std::string line;
+    while (std::getline(std::cin, line)) {
+      if (!line.empty()) RunServerCommand(state, line);
+      std::lock_guard<std::mutex> lock(state.mutex);
+      if (!state.running) break;
+    }
+    std::lock_guard<std::mutex> lock(state.mutex);
+    state.running = false;
+  });
+
+  hr = audioClient->Start();
+  if (FAILED(hr)) {
+    {
+      std::lock_guard<std::mutex> lock(state.mutex);
+      state.running = false;
+    }
+    commandThread.join();
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient Start failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 7;
+  }
+
+  PrintServerSnapshot(state, mixFormat, deviceName, "ready");
+  DWORD lastSnapshotTick = GetTickCount();
+  while (true) {
+    {
+      std::lock_guard<std::mutex> lock(state.mutex);
+      if (!state.running) break;
+    }
+
+    UINT32 paddingFrames = 0;
+    hr = audioClient->GetCurrentPadding(&paddingFrames);
+    if (FAILED(hr)) {
+      std::lock_guard<std::mutex> lock(state.mutex);
+      state.underruns += 1;
+      Sleep(1);
+      continue;
+    }
+
+    const UINT32 availableFrames = bufferFrames > paddingFrames ? bufferFrames - paddingFrames : 0;
+    if (availableFrames == 0) {
+      Sleep(static_cast<DWORD>(std::max<REFERENCE_TIME>(1, defaultPeriod / 20000)));
+      continue;
+    }
+
+    BYTE* buffer = nullptr;
+    hr = renderClient->GetBuffer(availableFrames, &buffer);
+    if (FAILED(hr) || buffer == nullptr) {
+      std::lock_guard<std::mutex> lock(state.mutex);
+      state.underruns += 1;
+      Sleep(1);
+      continue;
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(state.mutex);
+      for (UINT32 frame = 0; frame < availableFrames; ++frame) {
+        double left = 0.0;
+        double right = 0.0;
+        auto mixDeck = [&](ServerDeck& deck) {
+          if (!deck.loaded || !deck.playing || deck.wav.channels == 0) return;
+          const uint64_t frameCount = deck.wav.samples.size() / deck.wav.channels;
+          if (deck.positionFrames + frame >= frameCount) {
+            deck.playing = false;
+            deck.positionFrames = frameCount;
+            return;
+          }
+          const double renderFrame = static_cast<double>(deck.positionFrames + frame);
+          const double sourceLeft = WavSample(deck.wav, renderFrame, sampleRate, 0);
+          const double sourceRight = WavSample(deck.wav, renderFrame, sampleRate, 1);
+          MixDeckStereoFrame(deck.processing, deck.stats, sourceLeft, sourceRight, left, right);
+        };
+        mixDeck(state.deckA);
+        mixDeck(state.deckB);
+        left = ClampDouble(left, -0.95, 0.95);
+        right = ClampDouble(right, -0.95, 0.95);
+        state.masterPeakLeft = std::max(state.masterPeakLeft * 0.995, std::abs(left));
+        state.masterPeakRight = std::max(state.masterPeakRight * 0.995, std::abs(right));
+        WriteInterleavedFrame(buffer, mixFormat, frame, left, right);
+      }
+      if (state.deckA.loaded && state.deckA.playing) {
+        state.deckA.positionFrames += availableFrames;
+        state.deckA.stats.framesWritten += availableFrames;
+      }
+      if (state.deckB.loaded && state.deckB.playing) {
+        state.deckB.positionFrames += availableFrames;
+        state.deckB.stats.framesWritten += availableFrames;
+      }
+      state.framesWritten += availableFrames;
+      state.passes += 1;
+    }
+
+    hr = renderClient->ReleaseBuffer(availableFrames, 0);
+    if (FAILED(hr)) {
+      std::lock_guard<std::mutex> lock(state.mutex);
+      state.underruns += 1;
+    }
+
+    const DWORD now = GetTickCount();
+    if (now - lastSnapshotTick >= 250) {
+      lastSnapshotTick = now;
+      PrintServerSnapshot(state, mixFormat, deviceName, "meters");
+    }
+  }
+
+  audioClient->Stop();
+  if (commandThread.joinable()) commandThread.join();
+  PrintServerSnapshot(state, mixFormat, deviceName, "stopped");
+  CoTaskMemFree(mixFormat);
+  return 0;
+}
+
 void MixDeckFrame(const DeckState& deck, DeckStats& stats, double sample, double& left, double& right) {
   const double deckLeft = sample * deck.leftScale;
   const double deckRight = sample * deck.rightScale;
@@ -339,7 +729,7 @@ void PrintDescribe() {
     << "\"version\":\"0.1.0\","
     << "\"backend\":\"wasapi-skeleton\","
     << "\"deckCount\":2,"
-    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\",\"--render-silence\",\"--render-tone\",\"--render-wav\"],"
+    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\",\"--render-silence\",\"--render-tone\",\"--render-wav\",\"--server\"],"
     << "\"capabilities\":{"
     << "\"perDeckCapture\":false,"
     << "\"perDeckPan\":true,"
@@ -1017,6 +1407,9 @@ int wmain(int argc, wchar_t** argv) {
   }
   if (command == L"--run-once") {
     return RunOnce();
+  }
+  if (command == L"--server") {
+    return RunPersistentServer();
   }
   if (command == L"--render-silence") {
     int durationMs = 500;
