@@ -9,9 +9,11 @@
 #include <cstdint>
 #include <cstring>
 #include <cmath>
+#include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 #include <wrl/client.h>
 
 using Microsoft::WRL::ComPtr;
@@ -144,6 +146,126 @@ struct RenderStats {
   double masterPeakRight = 0.0;
 };
 
+struct WavData {
+  uint16_t formatTag = 0;
+  uint16_t channels = 0;
+  uint32_t sampleRate = 0;
+  uint16_t bitsPerSample = 0;
+  std::vector<double> samples;
+};
+
+uint16_t ReadU16(std::ifstream& file) {
+  uint8_t bytes[2] = {};
+  file.read(reinterpret_cast<char*>(bytes), 2);
+  return static_cast<uint16_t>(bytes[0] | (bytes[1] << 8));
+}
+
+uint32_t ReadU32(std::ifstream& file) {
+  uint8_t bytes[4] = {};
+  file.read(reinterpret_cast<char*>(bytes), 4);
+  return static_cast<uint32_t>(bytes[0] | (bytes[1] << 8) | (bytes[2] << 16) | (bytes[3] << 24));
+}
+
+std::string ReadTag(std::ifstream& file) {
+  char tag[4] = {};
+  file.read(tag, 4);
+  return std::string(tag, 4);
+}
+
+bool LoadWavFile(const std::wstring& path, WavData& wav, std::string& error) {
+  std::ifstream file(path, std::ios::binary);
+  if (!file) {
+    error = "WAV file could not be opened";
+    return false;
+  }
+
+  if (ReadTag(file) != "RIFF") {
+    error = "WAV file is missing RIFF header";
+    return false;
+  }
+  ReadU32(file);
+  if (ReadTag(file) != "WAVE") {
+    error = "WAV file is missing WAVE header";
+    return false;
+  }
+
+  std::vector<uint8_t> dataBytes;
+  bool hasFormat = false;
+  bool hasData = false;
+
+  while (file && (!hasFormat || !hasData)) {
+    const std::string tag = ReadTag(file);
+    if (!file) break;
+    const uint32_t chunkSize = ReadU32(file);
+    const std::streampos chunkStart = file.tellg();
+
+    if (tag == "fmt ") {
+      wav.formatTag = ReadU16(file);
+      wav.channels = ReadU16(file);
+      wav.sampleRate = ReadU32(file);
+      ReadU32(file);
+      ReadU16(file);
+      wav.bitsPerSample = ReadU16(file);
+      hasFormat = true;
+    } else if (tag == "data") {
+      dataBytes.resize(chunkSize);
+      file.read(reinterpret_cast<char*>(dataBytes.data()), chunkSize);
+      hasData = true;
+    }
+
+    file.seekg(chunkStart + static_cast<std::streamoff>(chunkSize + (chunkSize % 2)));
+  }
+
+  if (!hasFormat || !hasData) {
+    error = "WAV file is missing fmt or data chunk";
+    return false;
+  }
+  if (wav.channels == 0 || wav.sampleRate == 0) {
+    error = "WAV file format is invalid";
+    return false;
+  }
+  if (wav.formatTag != WAVE_FORMAT_PCM && wav.formatTag != WAVE_FORMAT_IEEE_FLOAT) {
+    error = "Only PCM and IEEE float WAV files are supported";
+    return false;
+  }
+
+  const uint16_t bytesPerSample = wav.bitsPerSample / 8;
+  if (bytesPerSample == 0) {
+    error = "Unsupported WAV sample width";
+    return false;
+  }
+
+  const size_t sampleCount = dataBytes.size() / bytesPerSample;
+  wav.samples.reserve(sampleCount);
+  for (size_t index = 0; index < sampleCount; ++index) {
+    const uint8_t* sample = dataBytes.data() + (index * bytesPerSample);
+    double value = 0.0;
+    if (wav.formatTag == WAVE_FORMAT_IEEE_FLOAT && wav.bitsPerSample == 32) {
+      float floatValue = 0.0f;
+      std::memcpy(&floatValue, sample, sizeof(float));
+      value = floatValue;
+    } else if (wav.bitsPerSample == 16) {
+      int16_t packed = 0;
+      std::memcpy(&packed, sample, sizeof(int16_t));
+      value = static_cast<double>(packed) / 32768.0;
+    } else if (wav.bitsPerSample == 24) {
+      int32_t packed = sample[0] | (sample[1] << 8) | (sample[2] << 16);
+      if (packed & 0x800000) packed |= ~0xffffff;
+      value = static_cast<double>(packed) / 8388608.0;
+    } else if (wav.bitsPerSample == 32) {
+      int32_t packed = 0;
+      std::memcpy(&packed, sample, sizeof(int32_t));
+      value = static_cast<double>(packed) / 2147483648.0;
+    } else {
+      error = "Unsupported WAV sample width";
+      return false;
+    }
+    wav.samples.push_back(ClampDouble(value, -1.0, 1.0));
+  }
+
+  return !wav.samples.empty();
+}
+
 double DbToLinear(double db) {
   return std::pow(10.0, ClampDouble(db, -18.0, 18.0) / 20.0);
 }
@@ -175,9 +297,29 @@ double DeckSample(const DeckState& deck, double absoluteFrame, double sampleRate
   return std::sin(twoPi * deck.frequency * absoluteFrame / sampleRate) * deck.gain * EqGainForFrequency(deck);
 }
 
+double WavSample(const WavData& wav, double renderFrame, double renderSampleRate, uint16_t channel) {
+  if (wav.samples.empty() || wav.channels == 0 || renderSampleRate <= 0.0) return 0.0;
+  const double sourceFrame = renderFrame * static_cast<double>(wav.sampleRate) / renderSampleRate;
+  const size_t frameIndex = static_cast<size_t>(sourceFrame);
+  const size_t frameCount = wav.samples.size() / wav.channels;
+  if (frameIndex >= frameCount) return 0.0;
+  const uint16_t sourceChannel = wav.channels == 1 ? 0 : std::min<uint16_t>(channel, wav.channels - 1);
+  return wav.samples[(frameIndex * wav.channels) + sourceChannel];
+}
+
 void MixDeckFrame(const DeckState& deck, DeckStats& stats, double sample, double& left, double& right) {
   const double deckLeft = sample * deck.leftScale;
   const double deckRight = sample * deck.rightScale;
+  left += deckLeft;
+  right += deckRight;
+  stats.leftPeak = std::max(stats.leftPeak, std::abs(deckLeft));
+  stats.rightPeak = std::max(stats.rightPeak, std::abs(deckRight));
+}
+
+void MixDeckStereoFrame(const DeckState& deck, DeckStats& stats, double sourceLeft, double sourceRight, double& left, double& right) {
+  const double eqGain = EqGainForFrequency(deck);
+  const double deckLeft = sourceLeft * deck.gain * eqGain * deck.leftScale;
+  const double deckRight = sourceRight * deck.gain * eqGain * deck.rightScale;
   left += deckLeft;
   right += deckRight;
   stats.leftPeak = std::max(stats.leftPeak, std::abs(deckLeft));
@@ -191,7 +333,7 @@ void PrintDescribe() {
     << "\"version\":\"0.1.0\","
     << "\"backend\":\"wasapi-skeleton\","
     << "\"deckCount\":2,"
-    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\",\"--render-silence\",\"--render-tone\"],"
+    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\",\"--render-silence\",\"--render-tone\",\"--render-wav\"],"
     << "\"capabilities\":{"
     << "\"perDeckCapture\":false,"
     << "\"perDeckPan\":true,"
@@ -618,6 +760,179 @@ int RenderTone(
   return 0;
 }
 
+int RenderWav(
+  int durationMs,
+  const std::wstring& deckAPath,
+  double deckAGain,
+  double deckAPan,
+  double deckAEqLowDb,
+  double deckAEqMidDb,
+  double deckAEqHighDb) {
+  WavData deckAWav;
+  std::string wavError;
+  if (!LoadWavFile(deckAPath, deckAWav, wavError)) {
+    std::cerr << "{\"error\":\"" << wavError << "\"}\n";
+    return 10;
+  }
+
+  ComPtr<IMMDevice> renderDevice;
+  if (!GetDefaultEndpoint(eRender, renderDevice)) {
+    std::cerr << "{\"error\":\"Default render endpoint unavailable\"}\n";
+    return 2;
+  }
+
+  WAVEFORMATEX* mixFormat = nullptr;
+  if (!GetMixFormat(renderDevice.Get(), &mixFormat)) {
+    std::cerr << "{\"error\":\"Render mix format unavailable\"}\n";
+    return 3;
+  }
+
+  ComPtr<IAudioClient> audioClient;
+  HRESULT hr = renderDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &audioClient);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient activation failed\"}\n";
+    return 4;
+  }
+
+  const REFERENCE_TIME requestedDuration = 1000000; // 100 ms
+  hr = audioClient->Initialize(
+    AUDCLNT_SHAREMODE_SHARED,
+    0,
+    requestedDuration,
+    0,
+    mixFormat,
+    nullptr);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient Initialize render failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 5;
+  }
+
+  ComPtr<IAudioRenderClient> renderClient;
+  hr = audioClient->GetService(IID_PPV_ARGS(&renderClient));
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"GetService IAudioRenderClient failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 6;
+  }
+
+  UINT32 bufferFrames = 0;
+  audioClient->GetBufferSize(&bufferFrames);
+  REFERENCE_TIME defaultPeriod = 0;
+  REFERENCE_TIME minimumPeriod = 0;
+  audioClient->GetDevicePeriod(&defaultPeriod, &minimumPeriod);
+
+  const DWORD startTick = GetTickCount();
+  const DWORD targetMs = static_cast<DWORD>(std::max(50, std::min(10000, durationMs)));
+  const double sampleRate = std::max<DWORD>(1, mixFormat->nSamplesPerSec);
+  DeckState deckA = MakeDeck("A", 1000.0, deckAGain, deckAPan, deckAEqLowDb, deckAEqMidDb, deckAEqHighDb);
+  DeckStats deckAStats;
+  RenderStats renderStats;
+  const uint64_t sourceFrames = deckAWav.samples.size() / std::max<uint16_t>(1, deckAWav.channels);
+
+  hr = audioClient->Start();
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient Start failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 7;
+  }
+
+  while (GetTickCount() - startTick < targetMs) {
+    UINT32 paddingFrames = 0;
+    hr = audioClient->GetCurrentPadding(&paddingFrames);
+    if (FAILED(hr)) {
+      renderStats.underruns += 1;
+      Sleep(1);
+      continue;
+    }
+
+    const UINT32 availableFrames = bufferFrames > paddingFrames ? bufferFrames - paddingFrames : 0;
+    if (availableFrames == 0) {
+      Sleep(static_cast<DWORD>(std::max<REFERENCE_TIME>(1, defaultPeriod / 20000)));
+      continue;
+    }
+
+    BYTE* buffer = nullptr;
+    hr = renderClient->GetBuffer(availableFrames, &buffer);
+    if (FAILED(hr) || buffer == nullptr) {
+      renderStats.underruns += 1;
+      Sleep(1);
+      continue;
+    }
+
+    for (UINT32 frame = 0; frame < availableFrames; ++frame) {
+      const double absoluteFrame = static_cast<double>(renderStats.framesWritten + frame);
+      double left = 0.0;
+      double right = 0.0;
+      const double sourceLeft = WavSample(deckAWav, absoluteFrame, sampleRate, 0);
+      const double sourceRight = WavSample(deckAWav, absoluteFrame, sampleRate, 1);
+      MixDeckStereoFrame(deckA, deckAStats, sourceLeft, sourceRight, left, right);
+      left = ClampDouble(left, -0.95, 0.95);
+      right = ClampDouble(right, -0.95, 0.95);
+
+      renderStats.masterPeakLeft = std::max(renderStats.masterPeakLeft, std::abs(left));
+      renderStats.masterPeakRight = std::max(renderStats.masterPeakRight, std::abs(right));
+      WriteInterleavedFrame(buffer, mixFormat, frame, left, right);
+    }
+
+    hr = renderClient->ReleaseBuffer(availableFrames, 0);
+    if (FAILED(hr)) {
+      renderStats.underruns += 1;
+      continue;
+    }
+
+    renderStats.framesWritten += availableFrames;
+    deckAStats.framesWritten += availableFrames;
+    renderStats.passes += 1;
+  }
+
+  audioClient->Stop();
+  const DWORD elapsedMs = std::max<DWORD>(1, GetTickCount() - startTick);
+
+  std::cout
+    << "{"
+    << "\"status\":\"ready\","
+    << "\"backend\":\"wasapi-wav-render\","
+    << "\"deviceName\":\"" << EscapeJson(GetDeviceName(renderDevice.Get())) << "\","
+    << "\"format\":{"
+    << "\"sampleRate\":" << mixFormat->nSamplesPerSec << ","
+    << "\"channels\":" << mixFormat->nChannels << ","
+    << "\"bitsPerSample\":" << mixFormat->wBitsPerSample << ","
+    << "\"blockAlign\":" << mixFormat->nBlockAlign
+    << "},"
+    << "\"source\":{"
+    << "\"type\":\"wav\","
+    << "\"sampleRate\":" << deckAWav.sampleRate << ","
+    << "\"channels\":" << deckAWav.channels << ","
+    << "\"bitsPerSample\":" << deckAWav.bitsPerSample << ","
+    << "\"frames\":" << sourceFrames
+    << "},"
+    << "\"buffer\":{"
+    << "\"frames\":" << bufferFrames << ","
+    << "\"durationMs\":" << (bufferFrames * 1000.0 / sampleRate) << ","
+    << "\"defaultPeriodMs\":" << (defaultPeriod / 10000.0) << ","
+    << "\"minimumPeriodMs\":" << (minimumPeriod / 10000.0)
+    << "},"
+    << "\"render\":{"
+    << "\"type\":\"wav\","
+    << "\"requestedMs\":" << targetMs << ","
+    << "\"elapsedMs\":" << elapsedMs << ","
+    << "\"framesWritten\":" << renderStats.framesWritten << ","
+    << "\"passes\":" << renderStats.passes << ","
+    << "\"underruns\":" << renderStats.underruns << ","
+    << "\"masterPeakLeft\":" << renderStats.masterPeakLeft << ","
+    << "\"masterPeakRight\":" << renderStats.masterPeakRight
+    << "},"
+    << "\"routes\":["
+    << "{\"deck\":\"A\",\"status\":\"wav\",\"gain\":" << deckA.gain << ",\"pan\":" << deckA.pan << ",\"eqLowDb\":" << deckA.eqLowDb << ",\"eqMidDb\":" << deckA.eqMidDb << ",\"eqHighDb\":" << deckA.eqHighDb << ",\"eqLinear\":" << EqGainForFrequency(deckA) << ",\"framesWritten\":" << deckAStats.framesWritten << ",\"leftPeak\":" << deckAStats.leftPeak << ",\"rightPeak\":" << deckAStats.rightPeak << "}"
+    << "]"
+    << "}\n";
+
+  CoTaskMemFree(mixFormat);
+  return 0;
+}
+
 int wmain(int argc, wchar_t** argv) {
   ComInit com;
   if (FAILED(com.hr)) {
@@ -683,6 +998,30 @@ int wmain(int argc, wchar_t** argv) {
       deckBEqLowDb,
       deckBEqMidDb,
       deckBEqHighDb);
+  }
+  if (command == L"--render-wav") {
+    int durationMs = 1000;
+    std::wstring deckAPath;
+    double deckAGain = 0.12;
+    double deckAPan = 0.0;
+    double deckAEqLowDb = 0.0;
+    double deckAEqMidDb = 0.0;
+    double deckAEqHighDb = 0.0;
+    for (int i = 2; i < argc - 1; ++i) {
+      const std::wstring arg = argv[i];
+      if (arg == L"--duration-ms") durationMs = _wtoi(argv[i + 1]);
+      if (arg == L"--deck-a") deckAPath = argv[i + 1];
+      if (arg == L"--deck-a-gain") deckAGain = _wtof(argv[i + 1]);
+      if (arg == L"--deck-a-pan") deckAPan = _wtof(argv[i + 1]);
+      if (arg == L"--deck-a-eq-low") deckAEqLowDb = _wtof(argv[i + 1]);
+      if (arg == L"--deck-a-eq-mid") deckAEqMidDb = _wtof(argv[i + 1]);
+      if (arg == L"--deck-a-eq-high") deckAEqHighDb = _wtof(argv[i + 1]);
+    }
+    if (deckAPath.empty()) {
+      std::cerr << "{\"error\":\"--deck-a WAV path is required\"}\n";
+      return 65;
+    }
+    return RenderWav(durationMs, deckAPath, deckAGain, deckAPan, deckAEqLowDb, deckAEqMidDb, deckAEqHighDb);
   }
 
   std::cerr << "{\"error\":\"Unknown command\"}\n";

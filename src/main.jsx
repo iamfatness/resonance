@@ -700,6 +700,11 @@ function DesktopEnginePanel({ engine }) {
               Master peak L {Math.round((state.router.nativeSnapshot.render.masterPeakLeft || 0) * 100)}% / R {Math.round((state.router.nativeSnapshot.render.masterPeakRight || 0) * 100)}%
             </small>
           )}
+          {state.router.nativeSnapshot?.render?.type === 'wav' && state.router.nativeSnapshot?.source && (
+            <small>
+              WAV source: {state.router.nativeSnapshot.source.sampleRate} Hz, {state.router.nativeSnapshot.source.channels} ch, {state.router.nativeSnapshot.source.frames} frames
+            </small>
+          )}
           {state.router.nativeSnapshot?.routes?.some((route) => route.eqLinear) && (
             <small>
               Native EQ A {Math.round(((state.router.nativeSnapshot.routes.find((route) => route.deck === 'A')?.eqLinear || 1) - 1) * 100)}% / B {Math.round(((state.router.nativeSnapshot.routes.find((route) => route.deck === 'B')?.eqLinear || 1) - 1) * 100)}%

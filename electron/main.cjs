@@ -76,6 +76,7 @@ function registerIpc() {
   ipcMain.handle('engine:selectDevices', (_event, devices) => sendEngineCommand('SELECT_DEVICES', { devices }));
   ipcMain.handle('engine:renderSilence', (_event, durationMs) => sendEngineCommand('RENDER_SILENCE', { durationMs }));
   ipcMain.handle('engine:renderTone', (_event, durationMs) => sendEngineCommand('RENDER_TONE', { durationMs }));
+  ipcMain.handle('engine:renderWav', (_event, payload) => sendEngineCommand('RENDER_WAV', { payload }));
 }
 
 function createMainWindow() {

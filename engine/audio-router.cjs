@@ -278,6 +278,72 @@ class DesktopAudioRouter {
     );
   }
 
+  renderWav({ deckAPath, durationMs = 1000 } = {}, callback) {
+    if (!this.hasNativeRouter?.() || !this.nativeRouterPath || !deckAPath) {
+      callback?.(null, null);
+      return;
+    }
+
+    const deckA = this.settings?.deckProcessing?.A || {};
+    const volumes = this.settings?.deckVolumes || {};
+    const deckAEq = eqBands(deckA);
+    const args = [
+      '--render-wav',
+      '--duration-ms',
+      String(durationMs),
+      '--deck-a',
+      String(deckAPath),
+      '--deck-a-gain',
+      String(clamp((volumes.A || 0) / 100 * 0.2, 0, 0.35)),
+      '--deck-a-pan',
+      String(clamp(deckA.pan, -50, 50)),
+      '--deck-a-eq-low',
+      String(deckAEq.low),
+      '--deck-a-eq-mid',
+      String(deckAEq.mid),
+      '--deck-a-eq-high',
+      String(deckAEq.high),
+    ];
+
+    execFile(
+      this.nativeRouterPath,
+      args,
+      { windowsHide: true, timeout: Math.max(3000, durationMs + 2000) },
+      (error, stdout, stderr) => {
+        if (error) {
+          const snapshot = {
+            status: 'error',
+            error: stderr?.trim() || error.message,
+            updatedAt: new Date().toISOString(),
+          };
+          this.nativeSnapshot = snapshot;
+          this.state = this.buildState(this.state.status);
+          callback?.(error, snapshot);
+          return;
+        }
+
+        try {
+          this.nativeSnapshot = {
+            ...JSON.parse(stdout.trim()),
+            updatedAt: new Date().toISOString(),
+          };
+        } catch (parseError) {
+          this.nativeSnapshot = {
+            status: 'error',
+            error: parseError.message,
+            updatedAt: new Date().toISOString(),
+          };
+          this.state = this.buildState(this.state.status);
+          callback?.(parseError, this.nativeSnapshot);
+          return;
+        }
+
+        this.state = this.buildState(this.state.status);
+        callback?.(null, this.nativeSnapshot);
+      },
+    );
+  }
+
   zeroDeckMeters() {
     return Object.fromEntries(DEFAULT_DECKS.map((deck) => {
       const route = this.state.routes.find((candidate) => candidate.deck === deck) || defaultRoute(deck);
