@@ -60,11 +60,11 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 - `--run-once` initializes the default render client and reports real WASAPI buffer size, device period, and route health without streaming audio yet.
 - `--render-silence --duration-ms 250` starts the render client, writes silent buffers, and reports frames written, passes, underruns, and elapsed time.
 - `--render-tone --duration-ms 250` generates two quiet deck test tones, applies per-deck gain, pan, and first-pass native EQ band gain, mixes them into the WASAPI render buffer, and reports per-deck/master peaks.
-- `--render-wav --deck-a C:\path\file.wav --duration-ms 1000` decodes a PCM/float WAV file, applies Deck A gain, pan, and first-pass native EQ, and feeds it through the same WASAPI render path.
+- `--render-wav --deck-a C:\path\a.wav --deck-b C:\path\b.wav --duration-ms 1000` decodes one or two PCM/float WAV files, applies per-deck gain, pan, and first-pass native EQ, then mixes them through the same WASAPI render path.
 
 The tone and WAV render paths now use native `DeckState`, `DeckStats`, and `RenderStats` structures plus reusable helpers for source generation, EQ gain, pan, mixing, and peak tracking. This is the same path that virtual-device capture and plugin processing should feed later.
 
-The Electron desktop shell exposes this path through a Deck A WAV picker in the desktop engine panel. The picker returns only the selected absolute file path to the trusted desktop renderer, then the engine sends that path to the native router helper.
+The Electron desktop shell exposes this path through Deck A and Deck B WAV pickers in the desktop engine panel. The picker returns only the selected absolute file path to the trusted desktop renderer, then the engine sends that path to the native router helper.
 
 ```text
 Deck A playback -> app EQ/plugin chain -> master output

@@ -1822,15 +1822,17 @@ button {
   background: #0d1112;
 }
 
-.wav-render-panel > div:first-child {
+.wav-render-list {
   display: grid;
-  gap: 3px;
+  gap: 7px;
   min-width: 0;
 }
 
-.wav-render-panel > div:last-child {
-  display: flex;
+.wav-render-list > div {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr) auto;
   gap: 8px;
+  align-items: center;
 }
 
 .wav-render-panel span {
@@ -2591,8 +2593,8 @@ canvas {
     grid-template-columns: 1fr;
   }
 
-  .wav-render-panel > div:last-child {
-    flex-wrap: wrap;
+  .wav-render-list > div {
+    grid-template-columns: 1fr;
   }
 
   .deck-bus-grid {

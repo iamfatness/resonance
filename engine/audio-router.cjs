@@ -278,15 +278,17 @@ class DesktopAudioRouter {
     );
   }
 
-  renderWav({ deckAPath, durationMs = 1000 } = {}, callback) {
+  renderWav({ deckAPath, deckBPath, durationMs = 1000 } = {}, callback) {
     if (!this.hasNativeRouter?.() || !this.nativeRouterPath || !deckAPath) {
       callback?.(null, null);
       return;
     }
 
     const deckA = this.settings?.deckProcessing?.A || {};
+    const deckB = this.settings?.deckProcessing?.B || {};
     const volumes = this.settings?.deckVolumes || {};
     const deckAEq = eqBands(deckA);
+    const deckBEq = eqBands(deckB);
     const args = [
       '--render-wav',
       '--duration-ms',
@@ -295,15 +297,28 @@ class DesktopAudioRouter {
       String(deckAPath),
       '--deck-a-gain',
       String(clamp((volumes.A || 0) / 100 * 0.2, 0, 0.35)),
+      '--deck-b-gain',
+      String(clamp((volumes.B || 0) / 100 * 0.2, 0, 0.35)),
       '--deck-a-pan',
       String(clamp(deckA.pan, -50, 50)),
+      '--deck-b-pan',
+      String(clamp(deckB.pan, -50, 50)),
       '--deck-a-eq-low',
       String(deckAEq.low),
       '--deck-a-eq-mid',
       String(deckAEq.mid),
       '--deck-a-eq-high',
       String(deckAEq.high),
+      '--deck-b-eq-low',
+      String(deckBEq.low),
+      '--deck-b-eq-mid',
+      String(deckBEq.mid),
+      '--deck-b-eq-high',
+      String(deckBEq.high),
     ];
+    if (deckBPath) {
+      args.push('--deck-b', String(deckBPath));
+    }
 
     execFile(
       this.nativeRouterPath,

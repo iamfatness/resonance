@@ -543,6 +543,7 @@ function useDesktopEngine(settings) {
   const [engineState, setEngineState] = useState(null);
   const [meters, setMeters] = useState(null);
   const [deckAWav, setDeckAWav] = useState(null);
+  const [deckBWav, setDeckBWav] = useState(null);
 
   useEffect(() => {
     if (!desktopApi?.engine) return undefined;
@@ -588,7 +589,13 @@ function useDesktopEngine(settings) {
       if (selection) setDeckAWav(selection);
       return selection;
     },
+    selectDeckBWav: async () => {
+      const selection = await desktopApi?.selectWavFile?.();
+      if (selection) setDeckBWav(selection);
+      return selection;
+    },
     deckAWav,
+    deckBWav,
     refreshDevices: () => desktopApi?.engine?.refreshDevices?.(),
     selectDevices: (devices) => desktopApi?.engine?.selectDevices?.(devices),
   };
@@ -648,20 +655,25 @@ function DesktopEnginePanel({ engine }) {
         <button type="button" onClick={() => engine.renderTone?.(250)}>Render Tone</button>
       </div>
       <div className="wav-render-panel">
-        <div>
-          <span>Deck A WAV</span>
-          <strong>{engine.deckAWav?.name || 'No file selected'}</strong>
+        <div className="wav-render-list">
+          <div>
+            <span>Deck A WAV</span>
+            <strong>{engine.deckAWav?.name || 'No file selected'}</strong>
+            <button type="button" onClick={engine.selectDeckAWav}>Choose A</button>
+          </div>
+          <div>
+            <span>Deck B WAV</span>
+            <strong>{engine.deckBWav?.name || 'No file selected'}</strong>
+            <button type="button" onClick={engine.selectDeckBWav}>Choose B</button>
+          </div>
         </div>
-        <div>
-          <button type="button" onClick={engine.selectDeckAWav}>Choose WAV</button>
-          <button
-            type="button"
-            onClick={() => engine.renderWav?.({ deckAPath: engine.deckAWav?.path, durationMs: 1000 })}
-            disabled={!engine.deckAWav?.path}
-          >
-            Render WAV
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => engine.renderWav?.({ deckAPath: engine.deckAWav?.path, deckBPath: engine.deckBWav?.path, durationMs: 1000 })}
+          disabled={!engine.deckAWav?.path}
+        >
+          Render WAV Mix
+        </button>
       </div>
       <div className="engine-meter-grid">
         <div className="engine-meter">
@@ -727,6 +739,11 @@ function DesktopEnginePanel({ engine }) {
           {state.router.nativeSnapshot?.render?.type === 'wav' && state.router.nativeSnapshot?.source && (
             <small>
               WAV source: {state.router.nativeSnapshot.source.sampleRate} Hz, {state.router.nativeSnapshot.source.channels} ch, {state.router.nativeSnapshot.source.frames} frames
+            </small>
+          )}
+          {state.router.nativeSnapshot?.render?.type === 'wav' && state.router.nativeSnapshot?.sources?.length > 1 && (
+            <small>
+              WAV mix: {state.router.nativeSnapshot.sources.map((source) => `Deck ${source.deck} ${source.sampleRate} Hz/${source.channels} ch`).join(' | ')}
             </small>
           )}
           {state.router.nativeSnapshot?.routes?.some((route) => route.eqLinear) && (
