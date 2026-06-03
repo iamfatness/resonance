@@ -542,6 +542,7 @@ function useDesktopEngine(settings) {
   const desktopApi = typeof window !== 'undefined' ? window.resonanceDesktop : null;
   const [engineState, setEngineState] = useState(null);
   const [meters, setMeters] = useState(null);
+  const [deckAWav, setDeckAWav] = useState(null);
 
   useEffect(() => {
     if (!desktopApi?.engine) return undefined;
@@ -581,6 +582,13 @@ function useDesktopEngine(settings) {
     stop: () => desktopApi?.engine?.stop?.(),
     renderSilence: (durationMs) => desktopApi?.engine?.renderSilence?.(durationMs),
     renderTone: (durationMs) => desktopApi?.engine?.renderTone?.(durationMs),
+    renderWav: (payload) => desktopApi?.engine?.renderWav?.(payload),
+    selectDeckAWav: async () => {
+      const selection = await desktopApi?.selectWavFile?.();
+      if (selection) setDeckAWav(selection);
+      return selection;
+    },
+    deckAWav,
     refreshDevices: () => desktopApi?.engine?.refreshDevices?.(),
     selectDevices: (devices) => desktopApi?.engine?.selectDevices?.(devices),
   };
@@ -639,6 +647,22 @@ function DesktopEnginePanel({ engine }) {
         <button type="button" onClick={() => engine.renderSilence?.(250)}>Render Silence</button>
         <button type="button" onClick={() => engine.renderTone?.(250)}>Render Tone</button>
       </div>
+      <div className="wav-render-panel">
+        <div>
+          <span>Deck A WAV</span>
+          <strong>{engine.deckAWav?.name || 'No file selected'}</strong>
+        </div>
+        <div>
+          <button type="button" onClick={engine.selectDeckAWav}>Choose WAV</button>
+          <button
+            type="button"
+            onClick={() => engine.renderWav?.({ deckAPath: engine.deckAWav?.path, durationMs: 1000 })}
+            disabled={!engine.deckAWav?.path}
+          >
+            Render WAV
+          </button>
+        </div>
+      </div>
       <div className="engine-meter-grid">
         <div className="engine-meter">
           <span>Input</span>
@@ -692,7 +716,7 @@ function DesktopEnginePanel({ engine }) {
           )}
           {state.router.nativeSnapshot?.render && (
             <small>
-              {state.router.nativeSnapshot.render.type === 'tone' ? 'Tone' : 'Silence'} render: {state.router.nativeSnapshot.render.framesWritten} frames in {state.router.nativeSnapshot.render.elapsedMs} ms, {state.router.nativeSnapshot.render.underruns} underruns
+              {state.router.nativeSnapshot.render.type === 'tone' ? 'Tone' : state.router.nativeSnapshot.render.type === 'wav' ? 'WAV' : 'Silence'} render: {state.router.nativeSnapshot.render.framesWritten} frames in {state.router.nativeSnapshot.render.elapsedMs} ms, {state.router.nativeSnapshot.render.underruns} underruns
             </small>
           )}
           {state.router.nativeSnapshot?.render?.type === 'tone' && (

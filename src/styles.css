@@ -1811,6 +1811,60 @@ button {
   cursor: not-allowed;
 }
 
+.wav-render-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0d1112;
+}
+
+.wav-render-panel > div:first-child {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.wav-render-panel > div:last-child {
+  display: flex;
+  gap: 8px;
+}
+
+.wav-render-panel span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.wav-render-panel strong {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wav-render-panel button {
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #181d1f;
+  color: var(--teal);
+  cursor: pointer;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.wav-render-panel button:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
 .engine-meter-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2531,6 +2585,14 @@ canvas {
 
   .engine-meter-grid {
     grid-template-columns: 1fr;
+  }
+
+  .wav-render-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .wav-render-panel > div:last-child {
+    flex-wrap: wrap;
   }
 
   .deck-bus-grid {

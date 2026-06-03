@@ -1,4 +1,4 @@
-const { app, BrowserWindow, Menu, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, shell, dialog } = require('electron');
 const { fork } = require('node:child_process');
 const path = require('node:path');
 
@@ -68,6 +68,24 @@ function sendEngineCommand(type, payload = {}) {
 }
 
 function registerIpc() {
+  ipcMain.handle('dialog:selectWav', async () => {
+    const window = BrowserWindow.getFocusedWindow();
+    const result = await dialog.showOpenDialog(window || undefined, {
+      title: 'Choose Deck A WAV',
+      properties: ['openFile'],
+      filters: [
+        { name: 'WAV audio', extensions: ['wav'] },
+      ],
+    });
+
+    if (result.canceled || !result.filePaths[0]) return null;
+    const filePath = result.filePaths[0];
+    return {
+      path: filePath,
+      name: path.basename(filePath),
+    };
+  });
+
   ipcMain.handle('engine:getState', () => sendEngineCommand('GET_STATE'));
   ipcMain.handle('engine:refreshDevices', () => sendEngineCommand('REFRESH_DEVICES'));
   ipcMain.handle('engine:start', () => sendEngineCommand('START'));

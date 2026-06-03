@@ -64,6 +64,8 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 
 The tone and WAV render paths now use native `DeckState`, `DeckStats`, and `RenderStats` structures plus reusable helpers for source generation, EQ gain, pan, mixing, and peak tracking. This is the same path that virtual-device capture and plugin processing should feed later.
 
+The Electron desktop shell exposes this path through a Deck A WAV picker in the desktop engine panel. The picker returns only the selected absolute file path to the trusted desktop renderer, then the engine sends that path to the native router helper.
+
 ```text
 Deck A playback -> app EQ/plugin chain -> master output
 Deck B playback -> app EQ/plugin chain -> master output
