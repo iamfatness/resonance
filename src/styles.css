@@ -2047,7 +2047,7 @@ button {
 
 .plugin-host-status {
   display: grid;
-  grid-template-columns: 1fr auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 4px 10px;
   padding: 8px 10px;
   border: 1px solid var(--line);
@@ -2061,6 +2061,24 @@ button {
 
 .plugin-host-status strong {
   color: var(--amber);
+}
+
+.plugin-host-status button {
+  min-height: 24px;
+  padding: 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #151b1c;
+  color: var(--text);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.plugin-host-status button:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
 }
 
 .plugin-host-status small {

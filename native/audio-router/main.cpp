@@ -6,6 +6,7 @@
 #include <Mmdeviceapi.h>
 #include <Propvarutil.h>
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstring>
 #include <cmath>
@@ -150,6 +151,101 @@ struct DeckStats {
   uint64_t framesWritten = 0;
   double leftPeak = 0.0;
   double rightPeak = 0.0;
+};
+
+constexpr size_t kPersistentEqBandCount = 8;
+const std::array<double, kPersistentEqBandCount> kPersistentEqFrequencies = { 31.0, 62.0, 125.0, 250.0, 500.0, 1000.0, 2000.0, 4000.0 };
+
+struct BiquadFilter {
+  double b0 = 1.0;
+  double b1 = 0.0;
+  double b2 = 0.0;
+  double a1 = 0.0;
+  double a2 = 0.0;
+  double z1 = 0.0;
+  double z2 = 0.0;
+
+  void Reset() {
+    z1 = 0.0;
+    z2 = 0.0;
+  }
+
+  void ConfigurePeak(double sampleRate, double frequency, double gainDb, double q = 1.15) {
+    if (sampleRate <= 0.0 || frequency <= 0.0 || frequency >= sampleRate * 0.5) {
+      b0 = 1.0;
+      b1 = 0.0;
+      b2 = 0.0;
+      a1 = 0.0;
+      a2 = 0.0;
+      return;
+    }
+
+    const double clampedGain = ClampDouble(gainDb, -18.0, 18.0);
+    if (std::abs(clampedGain) < 0.001) {
+      b0 = 1.0;
+      b1 = 0.0;
+      b2 = 0.0;
+      a1 = 0.0;
+      a2 = 0.0;
+      return;
+    }
+
+    const double twoPi = 6.28318530717958647692;
+    const double a = std::pow(10.0, clampedGain / 40.0);
+    const double omega = twoPi * frequency / sampleRate;
+    const double alpha = std::sin(omega) / (2.0 * q);
+    const double cosOmega = std::cos(omega);
+    const double rawB0 = 1.0 + alpha * a;
+    const double rawB1 = -2.0 * cosOmega;
+    const double rawB2 = 1.0 - alpha * a;
+    const double rawA0 = 1.0 + alpha / a;
+    const double rawA1 = -2.0 * cosOmega;
+    const double rawA2 = 1.0 - alpha / a;
+
+    b0 = rawB0 / rawA0;
+    b1 = rawB1 / rawA0;
+    b2 = rawB2 / rawA0;
+    a1 = rawA1 / rawA0;
+    a2 = rawA2 / rawA0;
+  }
+
+  double Process(double input) {
+    const double output = (b0 * input) + z1;
+    z1 = (b1 * input) - (a1 * output) + z2;
+    z2 = (b2 * input) - (a2 * output);
+    if (!std::isfinite(z1)) z1 = 0.0;
+    if (!std::isfinite(z2)) z2 = 0.0;
+    return std::isfinite(output) ? output : 0.0;
+  }
+};
+
+struct PersistentDeckEq {
+  std::array<double, kPersistentEqBandCount> gainsDb = {};
+  std::array<BiquadFilter, kPersistentEqBandCount> leftFilters;
+  std::array<BiquadFilter, kPersistentEqBandCount> rightFilters;
+
+  void Configure(double sampleRate) {
+    for (size_t index = 0; index < kPersistentEqBandCount; ++index) {
+      const double gain = ClampDouble(gainsDb[index], -18.0, 18.0);
+      gainsDb[index] = gain;
+      leftFilters[index].ConfigurePeak(sampleRate, kPersistentEqFrequencies[index], gain);
+      rightFilters[index].ConfigurePeak(sampleRate, kPersistentEqFrequencies[index], gain);
+    }
+  }
+
+  void Reset() {
+    for (size_t index = 0; index < kPersistentEqBandCount; ++index) {
+      leftFilters[index].Reset();
+      rightFilters[index].Reset();
+    }
+  }
+
+  void Process(double& left, double& right) {
+    for (size_t index = 0; index < kPersistentEqBandCount; ++index) {
+      left = leftFilters[index].Process(left);
+      right = rightFilters[index].Process(right);
+    }
+  }
 };
 
 struct RenderStats {
@@ -328,6 +424,7 @@ double WavDurationMs(const WavData& wav) {
 }
 
 void MixDeckStereoFrame(const DeckState& deck, DeckStats& stats, double sourceLeft, double sourceRight, double& left, double& right);
+void MixDeckStereoFrameWithoutEq(const DeckState& deck, DeckStats& stats, double sourceLeft, double sourceRight, double& left, double& right);
 
 std::wstring Utf8ToWide(const std::string& value) {
   if (value.empty()) return L"";
@@ -388,6 +485,7 @@ struct ServerDeck {
   bool playing = false;
   uint64_t positionFrames = 0;
   DeckState processing = MakeDeck("A", 1000.0, 0.12, 0.0, 0.0, 0.0, 0.0);
+  PersistentDeckEq eq;
   DeckStats stats;
   std::wstring name;
   std::string error;
@@ -438,6 +536,13 @@ void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, cons
       << "\"eqMidDb\":" << deck.processing.eqMidDb << ","
       << "\"eqHighDb\":" << deck.processing.eqHighDb << ","
       << "\"eqLinear\":" << EqGainForFrequency(deck.processing) << ","
+      << "\"eqBandsDb\":[";
+    for (size_t index = 0; index < kPersistentEqBandCount; ++index) {
+      if (index > 0) std::cout << ",";
+      std::cout << deck.eq.gainsDb[index];
+    }
+    std::cout
+      << "],"
       << "\"framesWritten\":" << deck.stats.framesWritten << ","
       << "\"leftPeak\":" << deck.stats.leftPeak << ","
       << "\"rightPeak\":" << deck.stats.rightPeak << "}";
@@ -476,7 +581,7 @@ void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, cons
   std::cout.flush();
 }
 
-void ApplyServerSettings(ServerDeck& deck, const std::string& line) {
+void ApplyServerSettings(ServerDeck& deck, const std::string& line, double sampleRate) {
   deck.processing = MakeDeck(
     deck.id == 'B' ? "B" : "A",
     1000.0,
@@ -485,9 +590,14 @@ void ApplyServerSettings(ServerDeck& deck, const std::string& line) {
     JsonNumberValue(line, "eqLowDb", deck.processing.eqLowDb),
     JsonNumberValue(line, "eqMidDb", deck.processing.eqMidDb),
     JsonNumberValue(line, "eqHighDb", deck.processing.eqHighDb));
+  for (size_t index = 0; index < kPersistentEqBandCount; ++index) {
+    const std::string key = "eq" + std::to_string(static_cast<int>(kPersistentEqFrequencies[index])) + "Db";
+    deck.eq.gainsDb[index] = ClampDouble(JsonNumberValue(line, key, deck.eq.gainsDb[index]), -18.0, 18.0);
+  }
+  deck.eq.Configure(sampleRate);
 }
 
-void RunServerCommand(ServerState& state, const std::string& line) {
+void RunServerCommand(ServerState& state, const std::string& line, double sampleRate) {
   const std::string type = JsonStringValue(line, "type");
   const std::string deckId = JsonStringValue(line, "deck");
   std::lock_guard<std::mutex> lock(state.mutex);
@@ -508,6 +618,7 @@ void RunServerCommand(ServerState& state, const std::string& line) {
       deck.playing = false;
       deck.positionFrames = 0;
       deck.stats = {};
+      deck.eq.Reset();
       deck.error.clear();
       deck.name = Utf8ToWide(JsonStringValue(line, "name"));
     } else {
@@ -520,7 +631,7 @@ void RunServerCommand(ServerState& state, const std::string& line) {
   }
 
   if (type == "settings") {
-    ApplyServerSettings(deck, line);
+    ApplyServerSettings(deck, line, sampleRate);
     return;
   }
 
@@ -540,6 +651,7 @@ void RunServerCommand(ServerState& state, const std::string& line) {
     deck.playing = false;
     deck.positionFrames = 0;
     deck.stats = {};
+    deck.eq.Reset();
     return;
   }
 
@@ -548,6 +660,7 @@ void RunServerCommand(ServerState& state, const std::string& line) {
     const uint64_t targetFrame = static_cast<uint64_t>(positionMs * deck.wav.sampleRate / 1000.0);
     const uint64_t frameCount = deck.wav.channels == 0 ? 0 : deck.wav.samples.size() / deck.wav.channels;
     deck.positionFrames = std::min<uint64_t>(targetFrame, frameCount);
+    deck.eq.Reset();
     return;
   }
 }
@@ -608,11 +721,13 @@ int RunPersistentServer(const std::wstring& outputDeviceId) {
     CoTaskMemFree(rawOpenedDeviceId);
   }
   const double sampleRate = std::max<DWORD>(1, mixFormat->nSamplesPerSec);
+  state.deckA.eq.Configure(sampleRate);
+  state.deckB.eq.Configure(sampleRate);
 
-  std::thread commandThread([&state]() {
+  std::thread commandThread([&state, sampleRate]() {
     std::string line;
     while (std::getline(std::cin, line)) {
-      if (!line.empty()) RunServerCommand(state, line);
+      if (!line.empty()) RunServerCommand(state, line, sampleRate);
       std::lock_guard<std::mutex> lock(state.mutex);
       if (!state.running) break;
     }
@@ -678,9 +793,10 @@ int RunPersistentServer(const std::wstring& outputDeviceId) {
             return;
           }
           const double renderFrame = static_cast<double>(deck.positionFrames + frame);
-          const double sourceLeft = WavSample(deck.wav, renderFrame, sampleRate, 0);
-          const double sourceRight = WavSample(deck.wav, renderFrame, sampleRate, 1);
-          MixDeckStereoFrame(deck.processing, deck.stats, sourceLeft, sourceRight, left, right);
+          double sourceLeft = WavSample(deck.wav, renderFrame, sampleRate, 0);
+          double sourceRight = WavSample(deck.wav, renderFrame, sampleRate, 1);
+          deck.eq.Process(sourceLeft, sourceRight);
+          MixDeckStereoFrameWithoutEq(deck.processing, deck.stats, sourceLeft, sourceRight, left, right);
         };
         mixDeck(state.deckA);
         mixDeck(state.deckB);
@@ -735,6 +851,15 @@ void MixDeckStereoFrame(const DeckState& deck, DeckStats& stats, double sourceLe
   const double eqGain = EqGainForFrequency(deck);
   const double deckLeft = sourceLeft * deck.gain * eqGain * deck.leftScale;
   const double deckRight = sourceRight * deck.gain * eqGain * deck.rightScale;
+  left += deckLeft;
+  right += deckRight;
+  stats.leftPeak = std::max(stats.leftPeak, std::abs(deckLeft));
+  stats.rightPeak = std::max(stats.rightPeak, std::abs(deckRight));
+}
+
+void MixDeckStereoFrameWithoutEq(const DeckState& deck, DeckStats& stats, double sourceLeft, double sourceRight, double& left, double& right) {
+  const double deckLeft = sourceLeft * deck.gain * deck.leftScale;
+  const double deckRight = sourceRight * deck.gain * deck.rightScale;
   left += deckLeft;
   right += deckRight;
   stats.leftPeak = std::max(stats.leftPeak, std::abs(deckLeft));

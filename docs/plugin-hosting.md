@@ -8,8 +8,12 @@ Resonance can stage plugin-chain settings in the desktop UI now, but third-party
 - The desktop engine receives per-deck `pluginChain` settings over IPC.
 - The app EQ can be bypassed.
 - Direct browser audio uses a flat EQ curve while bypass is enabled.
-- The desktop audio router exposes mock Deck A/B routes and simulated bus meters.
+- The desktop audio router can play local Deck A/B WAV sources through the persistent native WASAPI router.
+- The desktop plugin host runs a safe read-only scan for VST3 and Waves candidates in common Windows install paths.
+- The desktop panel reports scan status, candidate count, supported formats, and a short candidate summary.
 - VST3/Waves plugins are not executed yet.
+
+The scanner only enumerates files and directories. It does not load plugin DLLs, instantiate VST3 bundles, execute Waves shells, or inspect plugin parameters.
 
 ## Why Waves Requires Desktop Hosting
 
@@ -29,9 +33,23 @@ Resonance virtual playback device
 1. Replace the mock desktop router backend with native per-deck PCM routing.
 2. Capture real PCM from the virtual playback device.
 3. Render processed PCM to the selected Windows output.
-4. Add VST3 plugin discovery for common install paths.
+4. Expand VST3/Waves discovery metadata beyond scan-only candidates.
 5. Load one plugin instance in-process or through a sandboxed helper.
 6. Add plugin parameter state, bypass, ordering, and preset persistence.
 7. Validate Waves plugins specifically after the generic VST3 path works.
 
 The safest first implementation is a separate native helper process for plugin hosting. If a third-party plugin crashes, Resonance can restart that helper without taking down the Electron UI.
+
+## Scan Paths
+
+The desktop engine scans these common Windows locations when they exist:
+
+```text
+C:\Program Files\Common Files\VST3
+C:\Program Files (x86)\Common Files\VST3
+C:\Program Files\Waves
+C:\Program Files (x86)\Waves
+C:\ProgramData\Waves Audio
+```
+
+Additional scan roots can be supplied for local testing with `RESONANCE_PLUGIN_SCAN_PATHS`, using the normal Windows path delimiter.

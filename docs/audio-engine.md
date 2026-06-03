@@ -23,7 +23,7 @@ The engine reports:
 - desktop audio router backend and Deck A/B route state
 - active EQ settings
 - app EQ bypass state
-- staged plugin-chain settings
+- staged plugin-chain settings and scan-only VST3/Waves candidate discovery
 - desktop readiness diagnostics
 - live input/output peak meters
 - clipping status
@@ -52,9 +52,9 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 
 ## Desktop Router
 
-`engine/audio-router.cjs` is the stable router boundary for Deck A and Deck B. Today it runs in mock mode and produces simulated per-deck bus meters that react to deck volume, pan, EQ activity, and staged plugins. It also publishes route records so the UI can show where each deck is expected to flow.
+`engine/audio-router.cjs` is the stable router boundary for Deck A and Deck B. It still provides mock meters when native helpers are missing, but when `native/audio-router` is built it manages the persistent router process and forwards deck playback, output selection, gain, pan, and EQ settings.
 
-`native/audio-router` is the native helper skeleton for the future WASAPI router backend. Its first commands are intentionally narrow:
+`native/audio-router` is the native WASAPI router backend. Its current commands are intentionally narrow:
 
 - `--describe` reports the helper name, version, command list, and capability flags.
 - `--probe` initializes COM, probes default Windows audio endpoints, and reports the default render mix format.
@@ -65,9 +65,11 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 - `--list-devices` returns active WASAPI render and capture endpoints with MMDevice IDs that can be opened by the native router.
 - `--server --output-id <wasapi-device-id>` starts a persistent WASAPI render process on a selected output endpoint. The engine sends newline-delimited JSON commands on stdin (`load`, `settings`, `play`, `pause`, `stop`, `seek`, `exit`) and receives newline-delimited JSON snapshots on stdout with source state, routes, peaks, render frames, device ID/name, and underrun counts.
 
-The tone and WAV render paths now use native `DeckState`, `DeckStats`, and `RenderStats` structures plus reusable helpers for source generation, EQ gain, pan, mixing, and peak tracking. This is the same path that virtual-device capture and plugin processing should feed later.
+The tone and one-shot WAV render paths use the legacy low/mid/high EQ compatibility path. Persistent `--server` playback uses the deck's full 8-band biquad EQ chain for the 31 Hz, 62 Hz, 125 Hz, 250 Hz, 500 Hz, 1 kHz, 2 kHz, and 4 kHz UI bands before pan and mix.
 
 The Electron desktop shell exposes this path through Deck A and Deck B WAV pickers in the desktop engine panel. Each deck can load a WAV, play, pause, stop, and seek. The Output dropdown now uses native WASAPI endpoint IDs, restarts the persistent router when the selected output changes, reloads loaded decks, and preserves play state where possible. The engine keeps one native router process open while decks play, forwards per-deck settings changes to that process, and uses native snapshots for meters and deck positions.
+
+`engine/plugin-host.cjs` is the desktop plugin-host boundary for the next phase. Today it performs read-only candidate discovery only: it scans common Windows VST3 and Waves install locations, reports supported formats, candidate counts, and a short candidate list to the Electron UI, and exposes a refresh command over IPC. It does not load plugin binaries or execute third-party plugin code.
 
 ```text
 Deck A playback -> app EQ/plugin chain -> master output
@@ -78,8 +80,7 @@ The native backend should replace the mock meter source without changing the ren
 
 ## Next Milestones
 
-1. Add a real biquad EQ chain per native deck instead of low/mid/high scalar gain.
-2. Add a native router backend that can accept Deck A/B PCM independently from non-WAV sources.
-3. Capture from a loopback/virtual playback endpoint.
-4. Move the Web Audio EQ model into a shared DSP config shape.
-5. Add native VST3 plugin hosting for staged plugin chains.
+1. Add a native router backend that can accept Deck A/B PCM independently from non-WAV sources.
+2. Capture from a loopback/virtual playback endpoint.
+3. Move the Web Audio EQ model into a shared DSP config shape.
+4. Turn scan-only VST3/Waves discovery into a sandboxed native plugin host for staged plugin chains.

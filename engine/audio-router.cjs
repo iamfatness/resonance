@@ -33,6 +33,11 @@ function eqBands(processing = {}) {
   };
 }
 
+function eqBandGains(processing = {}) {
+  const curve = processing.eqBypassed ? [] : processing.curve || [];
+  return [0, 1, 2, 3, 4, 5, 6, 7].map((index) => clamp(curve[index], -18, 18));
+}
+
 function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_DECKS.map(defaultRoute), nativeSnapshot = null } = {}) {
   const isNativeSkeleton = backend === 'native-router';
   return {
@@ -216,6 +221,7 @@ class DesktopAudioRouter {
     const processing = this.settings?.deckProcessing?.[deck] || {};
     const volumes = this.settings?.deckVolumes || {};
     const eq = eqBands(processing);
+    const eqGains = eqBandGains(processing);
     return {
       type: 'settings',
       deck,
@@ -224,6 +230,14 @@ class DesktopAudioRouter {
       eqLowDb: eq.low,
       eqMidDb: eq.mid,
       eqHighDb: eq.high,
+      eq31Db: eqGains[0],
+      eq62Db: eqGains[1],
+      eq125Db: eqGains[2],
+      eq250Db: eqGains[3],
+      eq500Db: eqGains[4],
+      eq1000Db: eqGains[5],
+      eq2000Db: eqGains[6],
+      eq4000Db: eqGains[7],
     };
   }
 

@@ -614,6 +614,7 @@ function useDesktopEngine(settings) {
     deckAWav,
     deckBWav,
     refreshDevices: () => desktopApi?.engine?.refreshDevices?.(),
+    refreshPlugins: () => desktopApi?.engine?.refreshPlugins?.(),
     selectDevices: (devices) => desktopApi?.engine?.selectDevices?.(devices),
   };
 }
@@ -790,6 +791,11 @@ function DesktopEnginePanel({ engine }) {
               Native EQ A {Math.round(((state.router.nativeSnapshot.routes.find((route) => route.deck === 'A')?.eqLinear || 1) - 1) * 100)}% / B {Math.round(((state.router.nativeSnapshot.routes.find((route) => route.deck === 'B')?.eqLinear || 1) - 1) * 100)}%
             </small>
           )}
+          {state.router.nativeSnapshot?.routes?.some((route) => Array.isArray(route.eqBandsDb)) && (
+            <small>
+              Native 8-band EQ A {Math.max(...(state.router.nativeSnapshot.routes.find((route) => route.deck === 'A')?.eqBandsDb || [0])).toFixed(1)} dB / B {Math.max(...(state.router.nativeSnapshot.routes.find((route) => route.deck === 'B')?.eqBandsDb || [0])).toFixed(1)} dB
+            </small>
+          )}
         </div>
       )}
       <p>
@@ -799,7 +805,19 @@ function DesktopEnginePanel({ engine }) {
         <div className="plugin-host-status">
           <span>Plugin host</span>
           <strong>{state.pluginHost.status}</strong>
-          <small>{state.settings?.appEqBypassed ? 'App EQ bypassed' : `${Object.values(state.settings?.deckProcessing || {}).reduce((count, deck) => count + (deck.pluginChain?.length || 0), 0)} deck plugins staged`}</small>
+          <button type="button" onClick={() => engine.refreshPlugins?.()} disabled={state.pluginHost.scanStatus === 'scanning'}>
+            {state.pluginHost.scanStatus === 'scanning' ? 'Scanning' : 'Rescan'}
+          </button>
+          <small>
+            {state.pluginHost.pluginCount || 0} candidates | {(state.pluginHost.supportedFormats || []).join(', ') || 'VST3'} scan-only | {state.settings?.appEqBypassed ? 'App EQ bypassed' : `${Object.values(state.settings?.deckProcessing || {}).reduce((count, deck) => count + (deck.pluginChain?.length || 0), 0)} deck plugins staged`}
+          </small>
+          {state.pluginHost.candidates?.length > 0 && (
+            <small>
+              Found: {state.pluginHost.candidates.slice(0, 3).map((plugin) => plugin.name).join(', ')}
+              {state.pluginHost.pluginCount > 3 ? ` +${state.pluginHost.pluginCount - 3} more` : ''}
+            </small>
+          )}
+          {state.pluginHost.note && <small>{state.pluginHost.note}</small>}
         </div>
       )}
       {diagnostics.length > 0 && (

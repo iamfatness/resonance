@@ -2,6 +2,7 @@ const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { DesktopAudioRouter } = require('./audio-router.cjs');
+const { scanPluginCandidates, supportedFormats, plannedVendors } = require('./plugin-host.cjs');
 
 const rootDir = path.resolve(__dirname, '..');
 const listAudioDevicesScript = path.join(rootDir, 'scripts', 'list-audio-devices.ps1');
@@ -56,10 +57,16 @@ const engineState = {
     ...(persistedState.settings || {}),
   },
   pluginHost: {
-    status: 'planned',
-    formats: ['VST3'],
-    vendors: ['Waves'],
-    note: 'Native plugin hosting is not active until the desktop audio router can process PCM.',
+    status: 'pending',
+    scanStatus: 'pending',
+    pluginCount: 0,
+    candidates: [],
+    summary: { byFormat: {}, byVendor: {} },
+    supportedFormats,
+    plannedVendors,
+    roots: [],
+    note: 'Native plugin hosting is scan-only; plugins are not loaded or executed yet.',
+    plannedRouting: 'Deck PCM -> native EQ or plugin-chain bypass lane -> future sandboxed VST3/Waves host -> master bus.',
   },
   playbackDecks: {
     A: { ...defaultPlaybackDeck },
@@ -174,6 +181,7 @@ function buildDiagnostics() {
   const hasNativeRouterHelper = hasNativeRouter();
   const hasSysvadSource = fs.existsSync(sysvadSolution);
   const hasPersistedSettings = fs.existsSync(settingsPath);
+  const pluginScanReady = engineState.pluginHost.scanStatus === 'ready';
   const hasWindowsAudioScan = engineState.deviceScan.status === 'ready';
   const hasVirtualDevice = engineState.devices.inputs.some((device) => (
     device.id === 'resonance-virtual-input' && device.available
@@ -242,11 +250,51 @@ function buildDiagnostics() {
       {
         id: 'plugin-host',
         label: 'Plugin host',
-        status: 'planned',
-        detail: 'VST3/Waves hosting starts after PCM capture/render routing is active.',
+        status: pluginScanReady ? 'pending' : engineState.pluginHost.scanStatus === 'error' ? 'blocked' : 'pending',
+        detail: pluginScanReady
+          ? `Scan-only mode found ${engineState.pluginHost.pluginCount || 0} candidate plugins.`
+          : engineState.pluginHost.error || 'VST3/Waves scan is pending.',
       },
     ],
   };
+}
+
+function refreshPlugins(requestId) {
+  engineState.pluginHost = {
+    ...engineState.pluginHost,
+    status: 'scanning',
+    scanStatus: 'scanning',
+    error: null,
+  };
+  publishState();
+
+  try {
+    const result = scanPluginCandidates();
+    engineState.pluginHost = {
+      status: 'scan-only',
+      scanStatus: 'ready',
+      scannedAt: result.scannedAt,
+      durationMs: result.durationMs,
+      pluginCount: result.count,
+      candidates: result.candidates.slice(0, 24),
+      summary: result.summary,
+      supportedFormats: result.supportedFormats,
+      plannedVendors: result.plannedVendors,
+      roots: result.roots,
+      errors: result.errors,
+      note: result.note,
+      plannedRouting: result.plannedRouting,
+    };
+  } catch (error) {
+    engineState.pluginHost = {
+      ...engineState.pluginHost,
+      status: 'error',
+      scanStatus: 'error',
+      error: error.message,
+    };
+  }
+
+  publishState(requestId);
 }
 
 function persistEngineState() {
@@ -892,6 +940,7 @@ function renderWav(requestId, payload = {}) {
 process.on('message', (message = {}) => {
   if (message.type === 'GET_STATE') publishState(message.requestId);
   if (message.type === 'REFRESH_DEVICES') refreshDevices(message.requestId);
+  if (message.type === 'REFRESH_PLUGINS') refreshPlugins(message.requestId);
   if (message.type === 'START') start(message.requestId);
   if (message.type === 'STOP') stop(message.requestId);
   if (message.type === 'UPDATE_SETTINGS') updateSettings(message.requestId, message.settings);
@@ -907,6 +956,7 @@ process.on('message', (message = {}) => {
 });
 
 syncEngineMode();
+refreshPlugins();
 refreshDevices();
 
 process.on('disconnect', () => {
