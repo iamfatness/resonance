@@ -307,6 +307,12 @@ double WavSample(const WavData& wav, double renderFrame, double renderSampleRate
   return wav.samples[(frameIndex * wav.channels) + sourceChannel];
 }
 
+double WavDurationMs(const WavData& wav) {
+  if (wav.sampleRate == 0 || wav.channels == 0) return 0.0;
+  const double frames = static_cast<double>(wav.samples.size() / wav.channels);
+  return frames * 1000.0 / static_cast<double>(wav.sampleRate);
+}
+
 void MixDeckFrame(const DeckState& deck, DeckStats& stats, double sample, double& left, double& right) {
   const double deckLeft = sample * deck.leftScale;
   const double deckRight = sample * deck.rightScale;
@@ -764,6 +770,8 @@ int RenderWav(
   int durationMs,
   const std::wstring& deckAPath,
   const std::wstring& deckBPath,
+  double deckAStartMs,
+  double deckBStartMs,
   double deckAGain,
   double deckBGain,
   double deckAPan,
@@ -776,12 +784,17 @@ int RenderWav(
   double deckBEqHighDb) {
   WavData deckAWav;
   std::string wavError;
-  if (!LoadWavFile(deckAPath, deckAWav, wavError)) {
+  const bool hasDeckA = !deckAPath.empty();
+  const bool hasDeckB = !deckBPath.empty();
+  if (!hasDeckA && !hasDeckB) {
+    std::cerr << "{\"error\":\"At least one deck WAV path is required\"}\n";
+    return 65;
+  }
+  if (hasDeckA && !LoadWavFile(deckAPath, deckAWav, wavError)) {
     std::cerr << "{\"error\":\"" << wavError << "\"}\n";
     return 10;
   }
   WavData deckBWav;
-  const bool hasDeckB = !deckBPath.empty();
   if (hasDeckB && !LoadWavFile(deckBPath, deckBWav, wavError)) {
     std::cerr << "{\"error\":\"" << wavError << "\"}\n";
     return 11;
@@ -843,8 +856,10 @@ int RenderWav(
   DeckStats deckAStats;
   DeckStats deckBStats;
   RenderStats renderStats;
-  const uint64_t sourceFrames = deckAWav.samples.size() / std::max<uint16_t>(1, deckAWav.channels);
+  const uint64_t sourceFrames = hasDeckA ? deckAWav.samples.size() / std::max<uint16_t>(1, deckAWav.channels) : 0;
   const uint64_t sourceBFrames = hasDeckB ? deckBWav.samples.size() / std::max<uint16_t>(1, deckBWav.channels) : 0;
+  const double deckAStartFrame = ClampDouble(deckAStartMs, 0.0, WavDurationMs(deckAWav)) * sampleRate / 1000.0;
+  const double deckBStartFrame = ClampDouble(deckBStartMs, 0.0, WavDurationMs(deckBWav)) * sampleRate / 1000.0;
 
   hr = audioClient->Start();
   if (FAILED(hr)) {
@@ -880,12 +895,14 @@ int RenderWav(
       const double absoluteFrame = static_cast<double>(renderStats.framesWritten + frame);
       double left = 0.0;
       double right = 0.0;
-      const double sourceLeft = WavSample(deckAWav, absoluteFrame, sampleRate, 0);
-      const double sourceRight = WavSample(deckAWav, absoluteFrame, sampleRate, 1);
-      MixDeckStereoFrame(deckA, deckAStats, sourceLeft, sourceRight, left, right);
+      if (hasDeckA) {
+        const double sourceLeft = WavSample(deckAWav, deckAStartFrame + absoluteFrame, sampleRate, 0);
+        const double sourceRight = WavSample(deckAWav, deckAStartFrame + absoluteFrame, sampleRate, 1);
+        MixDeckStereoFrame(deckA, deckAStats, sourceLeft, sourceRight, left, right);
+      }
       if (hasDeckB) {
-        const double sourceBLeft = WavSample(deckBWav, absoluteFrame, sampleRate, 0);
-        const double sourceBRight = WavSample(deckBWav, absoluteFrame, sampleRate, 1);
+        const double sourceBLeft = WavSample(deckBWav, deckBStartFrame + absoluteFrame, sampleRate, 0);
+        const double sourceBRight = WavSample(deckBWav, deckBStartFrame + absoluteFrame, sampleRate, 1);
         MixDeckStereoFrame(deckB, deckBStats, sourceBLeft, sourceBRight, left, right);
       }
       left = ClampDouble(left, -0.95, 0.95);
@@ -903,7 +920,7 @@ int RenderWav(
     }
 
     renderStats.framesWritten += availableFrames;
-    deckAStats.framesWritten += availableFrames;
+    if (hasDeckA) deckAStats.framesWritten += availableFrames;
     if (hasDeckB) deckBStats.framesWritten += availableFrames;
     renderStats.passes += 1;
   }
@@ -922,17 +939,30 @@ int RenderWav(
     << "\"bitsPerSample\":" << mixFormat->wBitsPerSample << ","
     << "\"blockAlign\":" << mixFormat->nBlockAlign
     << "},"
-    << "\"source\":{"
-    << "\"type\":\"wav\","
-    << "\"sampleRate\":" << deckAWav.sampleRate << ","
-    << "\"channels\":" << deckAWav.channels << ","
-    << "\"bitsPerSample\":" << deckAWav.bitsPerSample << ","
-    << "\"frames\":" << sourceFrames
-    << "},"
-    << "\"sources\":["
-    << "{\"deck\":\"A\",\"type\":\"wav\",\"sampleRate\":" << deckAWav.sampleRate << ",\"channels\":" << deckAWav.channels << ",\"bitsPerSample\":" << deckAWav.bitsPerSample << ",\"frames\":" << sourceFrames << "}";
+    << "\"source\":";
+  if (hasDeckA) {
+    std::cout
+      << "{"
+      << "\"type\":\"wav\","
+      << "\"sampleRate\":" << deckAWav.sampleRate << ","
+      << "\"channels\":" << deckAWav.channels << ","
+      << "\"bitsPerSample\":" << deckAWav.bitsPerSample << ","
+      << "\"frames\":" << sourceFrames << ","
+      << "\"startMs\":" << deckAStartMs
+      << "}";
+  } else {
+    std::cout << "null";
+  }
+  std::cout
+    << ",\"sources\":[";
+  bool wroteSource = false;
+  if (hasDeckA) {
+    std::cout << "{\"deck\":\"A\",\"type\":\"wav\",\"sampleRate\":" << deckAWav.sampleRate << ",\"channels\":" << deckAWav.channels << ",\"bitsPerSample\":" << deckAWav.bitsPerSample << ",\"frames\":" << sourceFrames << ",\"durationMs\":" << WavDurationMs(deckAWav) << ",\"startMs\":" << deckAStartMs << "}";
+    wroteSource = true;
+  }
   if (hasDeckB) {
-    std::cout << ",{\"deck\":\"B\",\"type\":\"wav\",\"sampleRate\":" << deckBWav.sampleRate << ",\"channels\":" << deckBWav.channels << ",\"bitsPerSample\":" << deckBWav.bitsPerSample << ",\"frames\":" << sourceBFrames << "}";
+    if (wroteSource) std::cout << ",";
+    std::cout << "{\"deck\":\"B\",\"type\":\"wav\",\"sampleRate\":" << deckBWav.sampleRate << ",\"channels\":" << deckBWav.channels << ",\"bitsPerSample\":" << deckBWav.bitsPerSample << ",\"frames\":" << sourceBFrames << ",\"durationMs\":" << WavDurationMs(deckBWav) << ",\"startMs\":" << deckBStartMs << "}";
   }
   std::cout
     << "],"
@@ -952,10 +982,15 @@ int RenderWav(
     << "\"masterPeakLeft\":" << renderStats.masterPeakLeft << ","
     << "\"masterPeakRight\":" << renderStats.masterPeakRight
     << "},"
-    << "\"routes\":["
-    << "{\"deck\":\"A\",\"status\":\"wav\",\"gain\":" << deckA.gain << ",\"pan\":" << deckA.pan << ",\"eqLowDb\":" << deckA.eqLowDb << ",\"eqMidDb\":" << deckA.eqMidDb << ",\"eqHighDb\":" << deckA.eqHighDb << ",\"eqLinear\":" << EqGainForFrequency(deckA) << ",\"framesWritten\":" << deckAStats.framesWritten << ",\"leftPeak\":" << deckAStats.leftPeak << ",\"rightPeak\":" << deckAStats.rightPeak << "}";
+    << "\"routes\":[";
+  bool wroteRoute = false;
+  if (hasDeckA) {
+    std::cout << "{\"deck\":\"A\",\"status\":\"wav\",\"gain\":" << deckA.gain << ",\"pan\":" << deckA.pan << ",\"eqLowDb\":" << deckA.eqLowDb << ",\"eqMidDb\":" << deckA.eqMidDb << ",\"eqHighDb\":" << deckA.eqHighDb << ",\"eqLinear\":" << EqGainForFrequency(deckA) << ",\"framesWritten\":" << deckAStats.framesWritten << ",\"leftPeak\":" << deckAStats.leftPeak << ",\"rightPeak\":" << deckAStats.rightPeak << "}";
+    wroteRoute = true;
+  }
   if (hasDeckB) {
-    std::cout << ",{\"deck\":\"B\",\"status\":\"wav\",\"gain\":" << deckB.gain << ",\"pan\":" << deckB.pan << ",\"eqLowDb\":" << deckB.eqLowDb << ",\"eqMidDb\":" << deckB.eqMidDb << ",\"eqHighDb\":" << deckB.eqHighDb << ",\"eqLinear\":" << EqGainForFrequency(deckB) << ",\"framesWritten\":" << deckBStats.framesWritten << ",\"leftPeak\":" << deckBStats.leftPeak << ",\"rightPeak\":" << deckBStats.rightPeak << "}";
+    if (wroteRoute) std::cout << ",";
+    std::cout << "{\"deck\":\"B\",\"status\":\"wav\",\"gain\":" << deckB.gain << ",\"pan\":" << deckB.pan << ",\"eqLowDb\":" << deckB.eqLowDb << ",\"eqMidDb\":" << deckB.eqMidDb << ",\"eqHighDb\":" << deckB.eqHighDb << ",\"eqLinear\":" << EqGainForFrequency(deckB) << ",\"framesWritten\":" << deckBStats.framesWritten << ",\"leftPeak\":" << deckBStats.leftPeak << ",\"rightPeak\":" << deckBStats.rightPeak << "}";
   }
   std::cout
     << "]"
@@ -1035,6 +1070,8 @@ int wmain(int argc, wchar_t** argv) {
     int durationMs = 1000;
     std::wstring deckAPath;
     std::wstring deckBPath;
+    double deckAStartMs = 0.0;
+    double deckBStartMs = 0.0;
     double deckAGain = 0.12;
     double deckBGain = 0.12;
     double deckAPan = 0.0;
@@ -1050,6 +1087,8 @@ int wmain(int argc, wchar_t** argv) {
       if (arg == L"--duration-ms") durationMs = _wtoi(argv[i + 1]);
       if (arg == L"--deck-a") deckAPath = argv[i + 1];
       if (arg == L"--deck-b") deckBPath = argv[i + 1];
+      if (arg == L"--deck-a-start-ms") deckAStartMs = _wtof(argv[i + 1]);
+      if (arg == L"--deck-b-start-ms") deckBStartMs = _wtof(argv[i + 1]);
       if (arg == L"--deck-a-gain") deckAGain = _wtof(argv[i + 1]);
       if (arg == L"--deck-b-gain") deckBGain = _wtof(argv[i + 1]);
       if (arg == L"--deck-a-pan") deckAPan = _wtof(argv[i + 1]);
@@ -1061,14 +1100,16 @@ int wmain(int argc, wchar_t** argv) {
       if (arg == L"--deck-b-eq-mid") deckBEqMidDb = _wtof(argv[i + 1]);
       if (arg == L"--deck-b-eq-high") deckBEqHighDb = _wtof(argv[i + 1]);
     }
-    if (deckAPath.empty()) {
-      std::cerr << "{\"error\":\"--deck-a WAV path is required\"}\n";
+    if (deckAPath.empty() && deckBPath.empty()) {
+      std::cerr << "{\"error\":\"At least one deck WAV path is required\"}\n";
       return 65;
     }
     return RenderWav(
       durationMs,
       deckAPath,
       deckBPath,
+      deckAStartMs,
+      deckBStartMs,
       deckAGain,
       deckBGain,
       deckAPan,

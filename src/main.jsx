@@ -538,6 +538,13 @@ function VideoDeck({ label, video, query, setQuery, onSubmit, player, volume, se
   );
 }
 
+function formatPlaybackTime(ms = 0) {
+  const totalSeconds = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
 function useDesktopEngine(settings) {
   const desktopApi = typeof window !== 'undefined' ? window.resonanceDesktop : null;
   const [engineState, setEngineState] = useState(null);
@@ -586,14 +593,24 @@ function useDesktopEngine(settings) {
     renderWav: (payload) => desktopApi?.engine?.renderWav?.(payload),
     selectDeckAWav: async () => {
       const selection = await desktopApi?.selectWavFile?.();
-      if (selection) setDeckAWav(selection);
+      if (selection) {
+        setDeckAWav(selection);
+        await desktopApi?.engine?.loadDeckWav?.({ deck: 'A', filePath: selection.path, name: selection.name });
+      }
       return selection;
     },
     selectDeckBWav: async () => {
       const selection = await desktopApi?.selectWavFile?.();
-      if (selection) setDeckBWav(selection);
+      if (selection) {
+        setDeckBWav(selection);
+        await desktopApi?.engine?.loadDeckWav?.({ deck: 'B', filePath: selection.path, name: selection.name });
+      }
       return selection;
     },
+    playDeck: (deck) => desktopApi?.engine?.playDeck?.({ deck }),
+    pauseDeck: (deck) => desktopApi?.engine?.pauseDeck?.({ deck }),
+    stopDeck: (deck) => desktopApi?.engine?.stopDeck?.({ deck }),
+    seekDeck: (deck, positionMs) => desktopApi?.engine?.seekDeck?.({ deck, positionMs }),
     deckAWav,
     deckBWav,
     refreshDevices: () => desktopApi?.engine?.refreshDevices?.(),
@@ -610,6 +627,7 @@ function DesktopEnginePanel({ engine }) {
   const outputs = state.devices?.outputs || [];
   const diagnostics = state.diagnostics?.checks || [];
   const routes = state.router?.routes || [];
+  const playbackDecks = state.playbackDecks || {};
 
   return (
     <section className="desktop-engine-panel">
@@ -656,16 +674,37 @@ function DesktopEnginePanel({ engine }) {
       </div>
       <div className="wav-render-panel">
         <div className="wav-render-list">
-          <div>
-            <span>Deck A WAV</span>
-            <strong>{engine.deckAWav?.name || 'No file selected'}</strong>
-            <button type="button" onClick={engine.selectDeckAWav}>Choose A</button>
-          </div>
-          <div>
-            <span>Deck B WAV</span>
-            <strong>{engine.deckBWav?.name || 'No file selected'}</strong>
-            <button type="button" onClick={engine.selectDeckBWav}>Choose B</button>
-          </div>
+          {['A', 'B'].map((deck) => {
+            const deckState = playbackDecks[deck] || {};
+            const durationMs = deckState.durationMs || 0;
+            const positionMs = deckState.positionMs || 0;
+            const isPlaying = deckState.status === 'playing';
+            return (
+              <div className="wav-playback-row" key={deck}>
+                <span>Deck {deck} WAV</span>
+                <strong>{deckState.name || (deck === 'A' ? engine.deckAWav?.name : engine.deckBWav?.name) || 'No file selected'}</strong>
+                <div className="wav-playback-controls">
+                  <button type="button" onClick={deck === 'A' ? engine.selectDeckAWav : engine.selectDeckBWav}>Choose {deck}</button>
+                  <button type="button" onClick={() => (isPlaying ? engine.pauseDeck(deck) : engine.playDeck(deck))} disabled={!deckState.path}>
+                    {isPlaying ? 'Pause' : 'Play'}
+                  </button>
+                  <button type="button" onClick={() => engine.stopDeck(deck)} disabled={!deckState.path}>Stop</button>
+                </div>
+                <label className="wav-playback-seek">
+                  <small>{formatPlaybackTime(positionMs)} / {durationMs ? formatPlaybackTime(durationMs) : '--:--'}</small>
+                  <input
+                    type="range"
+                    min="0"
+                    max={Math.max(1, durationMs)}
+                    value={Math.min(positionMs, Math.max(1, durationMs))}
+                    disabled={!deckState.path}
+                    onChange={(event) => engine.seekDeck(deck, Number(event.target.value))}
+                    aria-label={`Deck ${deck} WAV position`}
+                  />
+                </label>
+              </div>
+            );
+          })}
         </div>
         <button
           type="button"

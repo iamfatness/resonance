@@ -26,6 +26,15 @@ const defaultSettings = {
   outputGain: 0.9,
 };
 
+const defaultPlaybackDeck = {
+  path: null,
+  name: null,
+  status: 'empty',
+  positionMs: 0,
+  durationMs: 0,
+  lastStartedAt: null,
+};
+
 function readPersistedState() {
   try {
     if (!fs.existsSync(settingsPath)) return {};
@@ -51,6 +60,10 @@ const engineState = {
     formats: ['VST3'],
     vendors: ['Waves'],
     note: 'Native plugin hosting is not active until the desktop audio router can process PCM.',
+  },
+  playbackDecks: {
+    A: { ...defaultPlaybackDeck },
+    B: { ...defaultPlaybackDeck },
   },
   router: null,
   devices: {
@@ -106,6 +119,7 @@ const engineState = {
 let meterTimer = null;
 let nativeMeterBusy = false;
 let nativeRouterBusy = false;
+let livePlaybackBusy = false;
 let lastRouterStatePublish = 0;
 const audioRouter = new DesktopAudioRouter({
   settings: engineState.settings,
@@ -257,6 +271,72 @@ function hasNativeRouter() {
   return fs.existsSync(audioRouterExe);
 }
 
+function readWavInfo(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  if (buffer.toString('ascii', 0, 4) !== 'RIFF' || buffer.toString('ascii', 8, 12) !== 'WAVE') {
+    throw new Error('File is not a WAV file.');
+  }
+
+  let offset = 12;
+  let channels = 0;
+  let sampleRate = 0;
+  let bitsPerSample = 0;
+  let dataBytes = 0;
+  while (offset + 8 <= buffer.length) {
+    const tag = buffer.toString('ascii', offset, offset + 4);
+    const size = buffer.readUInt32LE(offset + 4);
+    const chunkStart = offset + 8;
+    if (tag === 'fmt ') {
+      channels = buffer.readUInt16LE(chunkStart + 2);
+      sampleRate = buffer.readUInt32LE(chunkStart + 4);
+      bitsPerSample = buffer.readUInt16LE(chunkStart + 14);
+    }
+    if (tag === 'data') dataBytes = size;
+    offset = chunkStart + size + (size % 2);
+  }
+
+  if (!channels || !sampleRate || !bitsPerSample || !dataBytes) {
+    throw new Error('WAV metadata is incomplete.');
+  }
+
+  const bytesPerFrame = channels * (bitsPerSample / 8);
+  const frames = Math.floor(dataBytes / Math.max(1, bytesPerFrame));
+  return {
+    channels,
+    sampleRate,
+    bitsPerSample,
+    frames,
+    durationMs: Math.round(frames * 1000 / sampleRate),
+  };
+}
+
+function currentDeckPosition(deckState) {
+  if (deckState.status !== 'playing' || !deckState.lastStartedAt) return deckState.positionMs || 0;
+  return Math.min(
+    deckState.durationMs || Number.MAX_SAFE_INTEGER,
+    (deckState.positionMs || 0) + (Date.now() - Date.parse(deckState.lastStartedAt)),
+  );
+}
+
+function snapshotDeckPlayback() {
+  for (const deck of ['A', 'B']) {
+    const deckState = engineState.playbackDecks[deck];
+    deckState.positionMs = currentDeckPosition(deckState);
+    if (deckState.durationMs && deckState.positionMs >= deckState.durationMs) {
+      deckState.positionMs = deckState.durationMs;
+      deckState.status = deckState.path ? 'stopped' : 'empty';
+      deckState.lastStartedAt = null;
+    } else if (deckState.status === 'playing') {
+      deckState.lastStartedAt = new Date().toISOString();
+    }
+  }
+}
+
+function hasPlayingDeck() {
+  snapshotDeckPlayback();
+  return Object.values(engineState.playbackDecks).some((deck) => deck.status === 'playing' && deck.path);
+}
+
 function syncEngineMode() {
   engineState.mode = hasNativeRouter() ? 'native-router-skeleton' : hasNativeMeter() ? 'wasapi-loopback-meter' : 'windows-enumeration';
   engineState.router = audioRouter.getState();
@@ -294,10 +374,75 @@ function nextMockMeters() {
   engineState.meters = audioRouter.nextMockMeters(engineState.settings.outputGain ?? 0.9);
 }
 
+function updateMetersFromNativeRoutes(snapshot) {
+  if (!snapshot?.routes?.length) return;
+  const decks = { ...engineState.meters.decks };
+  let outputPeak = 0;
+  for (const route of snapshot.routes) {
+    const deck = route.deck;
+    if (!deck) continue;
+    const leftPeak = Math.max(0, Math.min(1, Number(route.leftPeak) || 0));
+    const rightPeak = Math.max(0, Math.min(1, Number(route.rightPeak) || 0));
+    const routePeak = Math.max(leftPeak, rightPeak);
+    outputPeak = Math.max(outputPeak, routePeak);
+    decks[deck] = {
+      ...(decks[deck] || {}),
+      inputPeak: routePeak,
+      outputPeak: routePeak,
+      leftPeak,
+      rightPeak,
+      pan: Number(route.pan) || 0,
+      pluginCount: decks[deck]?.pluginCount || 0,
+      eqActivity: Math.min(1, Math.abs((Number(route.eqLinear) || 1) - 1)),
+    };
+  }
+
+  engineState.meters = {
+    inputPeak: outputPeak,
+    outputPeak,
+    inputRms: outputPeak * 0.58,
+    outputRms: outputPeak * 0.62,
+    clipping: outputPeak >= 0.98,
+    decks,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function renderLivePlaybackChunk() {
+  if (!hasNativeRouter() || livePlaybackBusy || !hasPlayingDeck()) return false;
+
+  const chunkMs = 450;
+  const deckA = engineState.playbackDecks.A;
+  const deckB = engineState.playbackDecks.B;
+  const deckAPlaying = deckA.status === 'playing' && deckA.path;
+  const deckBPlaying = deckB.status === 'playing' && deckB.path;
+  const deckAStartMs = deckAPlaying ? currentDeckPosition(deckA) : 0;
+  const deckBStartMs = deckBPlaying ? currentDeckPosition(deckB) : 0;
+  livePlaybackBusy = true;
+  audioRouter.renderWav({
+    deckAPath: deckAPlaying ? deckA.path : null,
+    deckBPath: deckBPlaying ? deckB.path : null,
+    deckAStartMs,
+    deckBStartMs,
+    durationMs: chunkMs,
+  }, (_error, snapshot) => {
+    livePlaybackBusy = false;
+    if (snapshot?.render) {
+      snapshotDeckPlayback();
+      updateMetersFromNativeRoutes(snapshot);
+      engineState.router = audioRouter.getState();
+      publishMeters();
+      publishState();
+    }
+  });
+  return true;
+}
+
 function startMetering() {
   if (meterTimer) return;
   meterTimer = setInterval(() => {
     if (engineState.status !== 'running') return;
+    if (renderLivePlaybackChunk()) return;
     if (hasNativeRouter()) {
       syncEngineMode();
       nextMockMeters();
@@ -358,6 +503,7 @@ function stopMetering() {
   meterTimer = null;
   nativeMeterBusy = false;
   nativeRouterBusy = false;
+  livePlaybackBusy = false;
   lastRouterStatePublish = 0;
 }
 
@@ -475,6 +621,13 @@ function stop(requestId) {
   engineState.status = 'idle';
   stopMetering();
   audioRouter.stop();
+  snapshotDeckPlayback();
+  for (const deck of ['A', 'B']) {
+    if (engineState.playbackDecks[deck].status === 'playing') {
+      engineState.playbackDecks[deck].status = 'paused';
+      engineState.playbackDecks[deck].lastStartedAt = null;
+    }
+  }
   engineState.router = audioRouter.getState();
   engineState.meters = {
     inputPeak: 0,
@@ -487,6 +640,79 @@ function stop(requestId) {
   };
   publishState(requestId);
   publishMeters();
+}
+
+function loadDeckWav(requestId, { deck, filePath, name } = {}) {
+  const deckId = deck === 'B' ? 'B' : 'A';
+  if (!filePath) {
+    publishState(requestId);
+    return;
+  }
+
+  try {
+    const info = readWavInfo(filePath);
+    engineState.playbackDecks[deckId] = {
+      path: filePath,
+      name: name || path.basename(filePath),
+      status: 'loaded',
+      positionMs: 0,
+      durationMs: info.durationMs,
+      lastStartedAt: null,
+      format: info,
+    };
+  } catch (error) {
+    engineState.playbackDecks[deckId] = {
+      ...defaultPlaybackDeck,
+      status: 'error',
+      error: error.message,
+    };
+  }
+  publishState(requestId);
+}
+
+function playDeck(requestId, { deck } = {}) {
+  const deckId = deck === 'B' ? 'B' : 'A';
+  const deckState = engineState.playbackDecks[deckId];
+  if (!deckState.path) {
+    publishState(requestId);
+    return;
+  }
+
+  if (deckState.durationMs && deckState.positionMs >= deckState.durationMs) {
+    deckState.positionMs = 0;
+  }
+  deckState.status = 'playing';
+  deckState.lastStartedAt = new Date().toISOString();
+  if (engineState.status !== 'running') start();
+  publishState(requestId);
+}
+
+function pauseDeck(requestId, { deck } = {}) {
+  const deckId = deck === 'B' ? 'B' : 'A';
+  const deckState = engineState.playbackDecks[deckId];
+  deckState.positionMs = currentDeckPosition(deckState);
+  deckState.status = deckState.path ? 'paused' : 'empty';
+  deckState.lastStartedAt = null;
+  publishState(requestId);
+}
+
+function stopDeck(requestId, { deck } = {}) {
+  const deckId = deck === 'B' ? 'B' : 'A';
+  const deckState = engineState.playbackDecks[deckId];
+  deckState.positionMs = 0;
+  deckState.status = deckState.path ? 'stopped' : 'empty';
+  deckState.lastStartedAt = null;
+  publishState(requestId);
+}
+
+function seekDeck(requestId, { deck, positionMs } = {}) {
+  const deckId = deck === 'B' ? 'B' : 'A';
+  const deckState = engineState.playbackDecks[deckId];
+  deckState.positionMs = Math.max(0, Math.min(deckState.durationMs || 0, Number(positionMs) || 0));
+  if (deckState.status === 'playing') {
+    deckState.lastStartedAt = new Date().toISOString();
+  }
+  publishState(requestId);
 }
 
 function updateSettings(requestId, settings = {}) {
@@ -566,6 +792,11 @@ process.on('message', (message = {}) => {
   if (message.type === 'RENDER_SILENCE') renderSilence(message.requestId, message.durationMs);
   if (message.type === 'RENDER_TONE') renderTone(message.requestId, message.durationMs);
   if (message.type === 'RENDER_WAV') renderWav(message.requestId, message.payload);
+  if (message.type === 'LOAD_DECK_WAV') loadDeckWav(message.requestId, message.payload);
+  if (message.type === 'PLAY_DECK') playDeck(message.requestId, message.payload);
+  if (message.type === 'PAUSE_DECK') pauseDeck(message.requestId, message.payload);
+  if (message.type === 'STOP_DECK') stopDeck(message.requestId, message.payload);
+  if (message.type === 'SEEK_DECK') seekDeck(message.requestId, message.payload);
 });
 
 syncEngineMode();

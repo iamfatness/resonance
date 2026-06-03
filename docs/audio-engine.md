@@ -4,7 +4,7 @@ The desktop audio engine is a user-mode process started by Electron.
 
 ## Current Backend
 
-The current engine is a process boundary, control protocol, Windows endpoint enumerator, deck router contract, and live metering backend. When the native helper is built, Resonance reads default-output WASAPI loopback levels for real peak/RMS meters; otherwise it falls back to generated development meters. Real processed PCM routing is not wired yet.
+The current engine is a process boundary, control protocol, Windows endpoint enumerator, deck router contract, live metering backend, and early native WAV playback bridge. When the native router helper is built, Resonance can play local WAV files from Deck A and Deck B through the WASAPI render path with per-deck gain, pan, and EQ. Browser YouTube audio still cannot be routed through this native chain until a desktop capture or virtual-device path is connected.
 
 ```text
 Electron main process
@@ -60,11 +60,11 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 - `--run-once` initializes the default render client and reports real WASAPI buffer size, device period, and route health without streaming audio yet.
 - `--render-silence --duration-ms 250` starts the render client, writes silent buffers, and reports frames written, passes, underruns, and elapsed time.
 - `--render-tone --duration-ms 250` generates two quiet deck test tones, applies per-deck gain, pan, and first-pass native EQ band gain, mixes them into the WASAPI render buffer, and reports per-deck/master peaks.
-- `--render-wav --deck-a C:\path\a.wav --deck-b C:\path\b.wav --duration-ms 1000` decodes one or two PCM/float WAV files, applies per-deck gain, pan, and first-pass native EQ, then mixes them through the same WASAPI render path.
+- `--render-wav --deck-a C:\path\a.wav --deck-b C:\path\b.wav --deck-a-start-ms 12000 --deck-b-start-ms 0 --duration-ms 1000` decodes one or two PCM/float WAV files, applies per-deck gain, pan, and first-pass native EQ, then mixes them through the same WASAPI render path. Either deck may be omitted for solo playback.
 
 The tone and WAV render paths now use native `DeckState`, `DeckStats`, and `RenderStats` structures plus reusable helpers for source generation, EQ gain, pan, mixing, and peak tracking. This is the same path that virtual-device capture and plugin processing should feed later.
 
-The Electron desktop shell exposes this path through Deck A and Deck B WAV pickers in the desktop engine panel. The picker returns only the selected absolute file path to the trusted desktop renderer, then the engine sends that path to the native router helper.
+The Electron desktop shell exposes this path through Deck A and Deck B WAV pickers in the desktop engine panel. Each deck can load a WAV, play, pause, stop, and seek. The engine keeps deck playhead state and renders short native WAV chunks from the current position so the desktop app can exercise live per-deck playback before the final long-running native router service exists.
 
 ```text
 Deck A playback -> app EQ/plugin chain -> master output
@@ -75,10 +75,11 @@ The native backend should replace the mock meter source without changing the ren
 
 ## Next Milestones
 
-1. Replace PowerShell endpoint enumeration with a native WASAPI helper.
-2. Select specific WASAPI loopback/output endpoints instead of only the system default meter.
-3. Add a native router backend that can accept Deck A/B PCM independently.
-4. Capture from a loopback/virtual playback endpoint.
-5. Render processed PCM to the selected output endpoint.
-6. Move the Web Audio EQ model into a shared DSP config shape.
-7. Add native VST3 plugin hosting for staged plugin chains.
+1. Replace short chunk playback with a persistent native router process.
+2. Replace PowerShell endpoint enumeration with a native WASAPI helper.
+3. Select specific WASAPI loopback/output endpoints instead of only the system default meter.
+4. Add a native router backend that can accept Deck A/B PCM independently.
+5. Capture from a loopback/virtual playback endpoint.
+6. Render processed PCM to the selected output endpoint.
+7. Move the Web Audio EQ model into a shared DSP config shape.
+8. Add native VST3 plugin hosting for staged plugin chains.

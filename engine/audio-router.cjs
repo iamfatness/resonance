@@ -278,8 +278,8 @@ class DesktopAudioRouter {
     );
   }
 
-  renderWav({ deckAPath, deckBPath, durationMs = 1000 } = {}, callback) {
-    if (!this.hasNativeRouter?.() || !this.nativeRouterPath || !deckAPath) {
+  renderWav({ deckAPath, deckBPath, deckAStartMs = 0, deckBStartMs = 0, durationMs = 1000 } = {}, callback) {
+    if (!this.hasNativeRouter?.() || !this.nativeRouterPath || (!deckAPath && !deckBPath)) {
       callback?.(null, null);
       return;
     }
@@ -293,8 +293,10 @@ class DesktopAudioRouter {
       '--render-wav',
       '--duration-ms',
       String(durationMs),
-      '--deck-a',
-      String(deckAPath),
+      '--deck-a-start-ms',
+      String(Math.max(0, Number(deckAStartMs) || 0)),
+      '--deck-b-start-ms',
+      String(Math.max(0, Number(deckBStartMs) || 0)),
       '--deck-a-gain',
       String(clamp((volumes.A || 0) / 100 * 0.2, 0, 0.35)),
       '--deck-b-gain',
@@ -316,6 +318,9 @@ class DesktopAudioRouter {
       '--deck-b-eq-high',
       String(deckBEq.high),
     ];
+    if (deckAPath) {
+      args.push('--deck-a', String(deckAPath));
+    }
     if (deckBPath) {
       args.push('--deck-b', String(deckBPath));
     }

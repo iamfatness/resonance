@@ -1835,6 +1835,37 @@ button {
   align-items: center;
 }
 
+.wav-render-list > .wav-playback-row {
+  grid-template-columns: 82px minmax(120px, 1fr) auto;
+}
+
+.wav-playback-controls {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.wav-playback-seek {
+  display: grid;
+  grid-column: 2 / -1;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+.wav-playback-seek small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.wav-playback-seek input {
+  width: 100%;
+  accent-color: var(--teal);
+}
+
 .wav-render-panel span {
   color: var(--muted);
   font-size: 12px;
@@ -2594,6 +2625,20 @@ canvas {
   }
 
   .wav-render-list > div {
+    grid-template-columns: 1fr;
+  }
+
+  .wav-render-list > .wav-playback-row {
+    grid-template-columns: 1fr;
+  }
+
+  .wav-playback-controls {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .wav-playback-seek {
+    grid-column: auto;
     grid-template-columns: 1fr;
   }
 
