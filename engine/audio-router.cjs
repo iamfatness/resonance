@@ -64,6 +64,7 @@ class DesktopAudioRouter {
     this.nativeSnapshot = null;
     this.serverProcess = null;
     this.serverReady = false;
+    this.serverOutputDeviceId = null;
     this.onServerSnapshot = onSnapshot || null;
     this.startedAt = null;
     this.state = this.buildState();
@@ -82,6 +83,9 @@ class DesktopAudioRouter {
   selectDevices({ inputDeviceId, outputDeviceId } = {}) {
     this.inputDeviceId = inputDeviceId || this.inputDeviceId;
     this.outputDeviceId = outputDeviceId || this.outputDeviceId;
+    if (this.serverProcess && outputDeviceId && outputDeviceId !== this.serverOutputDeviceId) {
+      this.stopPersistentServer();
+    }
     this.state = this.buildState(this.state.status);
   }
 
@@ -118,19 +122,28 @@ class DesktopAudioRouter {
     return buildRouterState({ backend, status, routes, nativeSnapshot: this.nativeSnapshot });
   }
 
-  startPersistentServer({ onSnapshot } = {}) {
+  startPersistentServer({ onSnapshot, outputDeviceId } = {}) {
     if (!this.hasNativeRouter?.() || !this.nativeRouterPath) return false;
     this.onServerSnapshot = onSnapshot || this.onServerSnapshot;
+    if (outputDeviceId) this.outputDeviceId = outputDeviceId;
     if (this.serverProcess) return true;
 
-    this.serverProcess = spawn(this.nativeRouterPath, ['--server'], {
+    const args = ['--server'];
+    const selectedOutput = this.outputDeviceId || 'default-output';
+    if (selectedOutput && selectedOutput !== 'default-output') {
+      args.push('--output-id', selectedOutput);
+    }
+    this.serverOutputDeviceId = selectedOutput;
+    const launchedProcess = spawn(this.nativeRouterPath, args, {
       windowsHide: true,
       stdio: ['pipe', 'pipe', 'pipe'],
     });
+    this.serverProcess = launchedProcess;
     this.serverReady = false;
 
-    const stdout = readline.createInterface({ input: this.serverProcess.stdout });
+    const stdout = readline.createInterface({ input: launchedProcess.stdout });
     stdout.on('line', (line) => {
+      if (this.serverProcess !== launchedProcess) return;
       if (!line.trim()) return;
       try {
         this.nativeSnapshot = {
@@ -153,13 +166,15 @@ class DesktopAudioRouter {
     });
 
     let stderr = '';
-    this.serverProcess.stderr.on('data', (chunk) => {
+    launchedProcess.stderr.on('data', (chunk) => {
       stderr += chunk.toString();
     });
 
-    this.serverProcess.on('exit', () => {
+    launchedProcess.on('exit', () => {
+      if (this.serverProcess !== launchedProcess) return;
       this.serverProcess = null;
       this.serverReady = false;
+      this.serverOutputDeviceId = null;
       if (stderr.trim()) {
         this.nativeSnapshot = {
           status: 'error',
@@ -181,6 +196,7 @@ class DesktopAudioRouter {
     const processToStop = this.serverProcess;
     this.serverProcess = null;
     this.serverReady = false;
+    this.serverOutputDeviceId = null;
     setTimeout(() => {
       if (!processToStop.killed) processToStop.kill();
     }, 1000).unref?.();

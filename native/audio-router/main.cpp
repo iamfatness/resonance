@@ -60,6 +60,18 @@ bool GetDefaultEndpoint(EDataFlow flow, ComPtr<IMMDevice>& device) {
   return SUCCEEDED(enumerator->GetDefaultAudioEndpoint(flow, eConsole, &device));
 }
 
+bool GetEndpointByIdOrDefault(EDataFlow flow, const std::wstring& deviceId, ComPtr<IMMDevice>& device) {
+  if (deviceId.empty() || deviceId == L"default-output" || deviceId == L"default-input") {
+    return GetDefaultEndpoint(flow, device);
+  }
+
+  ComPtr<IMMDeviceEnumerator> enumerator;
+  HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator));
+  if (FAILED(hr)) return false;
+  hr = enumerator->GetDevice(deviceId.c_str(), &device);
+  return SUCCEEDED(hr);
+}
+
 bool GetMixFormat(IMMDevice* device, WAVEFORMATEX** mixFormat) {
   ComPtr<IAudioClient> audioClient;
   HRESULT hr = device->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &audioClient);
@@ -402,7 +414,7 @@ double ServerDeckPositionMs(const ServerDeck& deck) {
   return static_cast<double>(deck.positionFrames) * 1000.0 / static_cast<double>(deck.wav.sampleRate);
 }
 
-void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, const std::wstring& deviceName, const char* eventType) {
+void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, const std::wstring& deviceName, const std::wstring& deviceId, const char* eventType) {
   std::lock_guard<std::mutex> lock(state.mutex);
   const double sampleRate = mixFormat ? std::max<DWORD>(1, mixFormat->nSamplesPerSec) : 48000.0;
   auto printDeckSource = [](const ServerDeck& deck) {
@@ -437,6 +449,7 @@ void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, cons
     << "\"event\":\"" << eventType << "\","
     << "\"backend\":\"wasapi-persistent-router\","
     << "\"deviceName\":\"" << EscapeJson(deviceName) << "\","
+    << "\"deviceId\":\"" << EscapeJson(deviceId) << "\","
     << "\"format\":{"
     << "\"sampleRate\":" << static_cast<uint32_t>(sampleRate) << ","
     << "\"channels\":" << (mixFormat ? mixFormat->nChannels : 0) << ","
@@ -539,7 +552,7 @@ void RunServerCommand(ServerState& state, const std::string& line) {
   }
 }
 
-int RunPersistentServer() {
+int RunPersistentServer(const std::wstring& outputDeviceId) {
   ServerState state;
   state.deckA.id = 'A';
   state.deckA.processing = MakeDeck("A", 1000.0, 0.12, -12.0, 0.0, 0.0, 0.0);
@@ -547,7 +560,7 @@ int RunPersistentServer() {
   state.deckB.processing = MakeDeck("B", 1000.0, 0.08, 12.0, 0.0, 0.0, 0.0);
 
   ComPtr<IMMDevice> renderDevice;
-  if (!GetDefaultEndpoint(eRender, renderDevice)) {
+  if (!GetEndpointByIdOrDefault(eRender, outputDeviceId, renderDevice)) {
     std::cerr << "{\"error\":\"Default render endpoint unavailable\"}\n";
     return 2;
   }
@@ -588,6 +601,12 @@ int RunPersistentServer() {
   REFERENCE_TIME minimumPeriod = 0;
   audioClient->GetDevicePeriod(&defaultPeriod, &minimumPeriod);
   const std::wstring deviceName = GetDeviceName(renderDevice.Get());
+  std::wstring openedDeviceId;
+  LPWSTR rawOpenedDeviceId = nullptr;
+  if (SUCCEEDED(renderDevice->GetId(&rawOpenedDeviceId)) && rawOpenedDeviceId != nullptr) {
+    openedDeviceId = rawOpenedDeviceId;
+    CoTaskMemFree(rawOpenedDeviceId);
+  }
   const double sampleRate = std::max<DWORD>(1, mixFormat->nSamplesPerSec);
 
   std::thread commandThread([&state]() {
@@ -613,7 +632,7 @@ int RunPersistentServer() {
     return 7;
   }
 
-  PrintServerSnapshot(state, mixFormat, deviceName, "ready");
+  PrintServerSnapshot(state, mixFormat, deviceName, openedDeviceId, "ready");
   DWORD lastSnapshotTick = GetTickCount();
   while (true) {
     {
@@ -692,13 +711,13 @@ int RunPersistentServer() {
     const DWORD now = GetTickCount();
     if (now - lastSnapshotTick >= 250) {
       lastSnapshotTick = now;
-      PrintServerSnapshot(state, mixFormat, deviceName, "meters");
+      PrintServerSnapshot(state, mixFormat, deviceName, openedDeviceId, "meters");
     }
   }
 
   audioClient->Stop();
   if (commandThread.joinable()) commandThread.join();
-  PrintServerSnapshot(state, mixFormat, deviceName, "stopped");
+  PrintServerSnapshot(state, mixFormat, deviceName, openedDeviceId, "stopped");
   CoTaskMemFree(mixFormat);
   return 0;
 }
@@ -729,7 +748,7 @@ void PrintDescribe() {
     << "\"version\":\"0.1.0\","
     << "\"backend\":\"wasapi-skeleton\","
     << "\"deckCount\":2,"
-    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\",\"--render-silence\",\"--render-tone\",\"--render-wav\",\"--server\"],"
+    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\",\"--render-silence\",\"--render-tone\",\"--render-wav\",\"--server\",\"--list-devices\"],"
     << "\"capabilities\":{"
     << "\"perDeckCapture\":false,"
     << "\"perDeckPan\":true,"
@@ -738,6 +757,46 @@ void PrintDescribe() {
     << "\"nativePcmRouting\":false"
     << "}"
     << "}\n";
+}
+
+int PrintDeviceList() {
+  ComPtr<IMMDeviceEnumerator> enumerator;
+  HRESULT hr = CoCreateInstance(__uuidof(MMDeviceEnumerator), nullptr, CLSCTX_ALL, IID_PPV_ARGS(&enumerator));
+  if (FAILED(hr)) {
+    std::cerr << "{\"error\":\"MMDeviceEnumerator activation failed\"}\n";
+    return 2;
+  }
+
+  auto printFlow = [&](EDataFlow flow, const char* role, bool& wroteDevice) {
+    ComPtr<IMMDeviceCollection> collection;
+    if (FAILED(enumerator->EnumAudioEndpoints(flow, DEVICE_STATE_ACTIVE, &collection))) return;
+    UINT count = 0;
+    collection->GetCount(&count);
+    for (UINT index = 0; index < count; ++index) {
+      ComPtr<IMMDevice> device;
+      if (FAILED(collection->Item(index, &device))) continue;
+      LPWSTR rawId = nullptr;
+      if (FAILED(device->GetId(&rawId)) || rawId == nullptr) continue;
+      if (wroteDevice) std::cout << ",";
+      std::cout
+        << "{"
+        << "\"id\":\"" << EscapeJson(rawId) << "\","
+        << "\"name\":\"" << EscapeJson(GetDeviceName(device.Get())) << "\","
+        << "\"role\":\"" << role << "\","
+        << "\"available\":true,"
+        << "\"backend\":\"wasapi\""
+        << "}";
+      wroteDevice = true;
+      CoTaskMemFree(rawId);
+    }
+  };
+
+  bool wroteDevice = false;
+  std::cout << "[";
+  printFlow(eRender, "output", wroteDevice);
+  printFlow(eCapture, "input", wroteDevice);
+  std::cout << "]\n";
+  return 0;
 }
 
 int PrintProbe() {
@@ -1405,11 +1464,18 @@ int wmain(int argc, wchar_t** argv) {
   if (command == L"--probe") {
     return PrintProbe();
   }
+  if (command == L"--list-devices") {
+    return PrintDeviceList();
+  }
   if (command == L"--run-once") {
     return RunOnce();
   }
   if (command == L"--server") {
-    return RunPersistentServer();
+    std::wstring outputDeviceId;
+    for (int i = 2; i < argc - 1; ++i) {
+      if (std::wstring(argv[i]) == L"--output-id") outputDeviceId = argv[i + 1];
+    }
+    return RunPersistentServer(outputDeviceId);
   }
   if (command == L"--render-silence") {
     int durationMs = 500;

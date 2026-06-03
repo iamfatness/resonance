@@ -338,6 +338,29 @@ function hasPlayingDeck() {
   return Object.values(engineState.playbackDecks).some((deck) => deck.status === 'playing' && deck.path);
 }
 
+function syncPlaybackDecksToNativeRouter() {
+  if (!hasNativeRouter()) return;
+  audioRouter.startPersistentServer({
+    onSnapshot: handleNativeRouterSnapshot,
+    outputDeviceId: engineState.outputDeviceId,
+  });
+  for (const deckId of ['A', 'B']) {
+    const deckState = engineState.playbackDecks[deckId];
+    if (!deckState.path) continue;
+    audioRouter.loadDeckWav({ deck: deckId, filePath: deckState.path, name: deckState.name });
+    if (deckState.positionMs) audioRouter.seekDeck(deckId, deckState.positionMs);
+    if (deckState.status === 'playing') audioRouter.playDeck(deckId);
+  }
+}
+
+function ensureNativeRouterStarted() {
+  if (!hasNativeRouter()) return;
+  audioRouter.startPersistentServer({
+    onSnapshot: handleNativeRouterSnapshot,
+    outputDeviceId: engineState.outputDeviceId,
+  });
+}
+
 function syncEngineMode() {
   engineState.mode = hasNativeRouter() ? 'native-router-persistent' : hasNativeMeter() ? 'wasapi-loopback-meter' : 'windows-enumeration';
   engineState.router = audioRouter.getState();
@@ -539,6 +562,7 @@ function normalizeDevice(device, fallbackRole) {
     available: Boolean(device.available),
     note: device.status && device.status !== 'OK' ? `Windows status: ${device.status}` : undefined,
     manufacturer: device.manufacturer,
+    backend: device.backend,
   };
 }
 
@@ -593,6 +617,39 @@ function refreshDevices(requestId) {
   };
   publishState();
 
+  if (hasNativeRouter()) {
+    execFile(
+      audioRouterExe,
+      ['--list-devices'],
+      { windowsHide: true, timeout: 5000 },
+      (error, stdout, stderr) => {
+        if (!error) {
+          try {
+            const parsed = stdout.trim() ? JSON.parse(stdout) : [];
+            applyEnumeratedDevices(parsed);
+            engineState.deviceScan = {
+              status: 'ready',
+              error: null,
+              scannedAt: new Date().toISOString(),
+            };
+            publishState(requestId);
+            return;
+          } catch (parseError) {
+            engineState.deviceScan.error = parseError.message;
+          }
+        } else {
+          engineState.deviceScan.error = stderr || error.message;
+        }
+        refreshDevicesWithPowerShell(requestId);
+      },
+    );
+    return;
+  }
+
+  refreshDevicesWithPowerShell(requestId);
+}
+
+function refreshDevicesWithPowerShell(requestId) {
   execFile(
     'powershell.exe',
     ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', listAudioDevicesScript],
@@ -635,7 +692,7 @@ function start(requestId) {
   engineState.lastStartedAt = new Date().toISOString();
   audioRouter.start();
   if (hasNativeRouter()) {
-    audioRouter.startPersistentServer({ onSnapshot: handleNativeRouterSnapshot });
+    syncPlaybackDecksToNativeRouter();
   }
   engineState.router = audioRouter.getState();
   if (!hasNativeMeter()) nextMockMeters();
@@ -688,8 +745,7 @@ function loadDeckWav(requestId, { deck, filePath, name } = {}) {
       format: info,
     };
     if (hasNativeRouter()) {
-      audioRouter.startPersistentServer({ onSnapshot: handleNativeRouterSnapshot });
-      audioRouter.loadDeckWav({ deck: deckId, filePath, name: name || path.basename(filePath) });
+      syncPlaybackDecksToNativeRouter();
     }
   } catch (error) {
     engineState.playbackDecks[deckId] = {
@@ -716,6 +772,7 @@ function playDeck(requestId, { deck } = {}) {
   deckState.lastStartedAt = new Date().toISOString();
   if (engineState.status !== 'running') start();
   if (hasNativeRouter()) {
+    ensureNativeRouterStarted();
     audioRouter.playDeck(deckId);
   }
   publishState(requestId);
@@ -728,6 +785,7 @@ function pauseDeck(requestId, { deck } = {}) {
   deckState.status = deckState.path ? 'paused' : 'empty';
   deckState.lastStartedAt = null;
   if (hasNativeRouter()) {
+    ensureNativeRouterStarted();
     audioRouter.pauseDeck(deckId);
   }
   publishState(requestId);
@@ -740,6 +798,7 @@ function stopDeck(requestId, { deck } = {}) {
   deckState.status = deckState.path ? 'stopped' : 'empty';
   deckState.lastStartedAt = null;
   if (hasNativeRouter()) {
+    ensureNativeRouterStarted();
     audioRouter.stopDeck(deckId);
   }
   publishState(requestId);
@@ -753,6 +812,7 @@ function seekDeck(requestId, { deck, positionMs } = {}) {
     deckState.lastStartedAt = new Date().toISOString();
   }
   if (hasNativeRouter()) {
+    ensureNativeRouterStarted();
     audioRouter.seekDeck(deckId, deckState.positionMs);
   }
   publishState(requestId);
@@ -780,10 +840,14 @@ function updateSettings(requestId, settings = {}) {
 function selectDevices(requestId, devices = {}) {
   if (devices.inputDeviceId) engineState.inputDeviceId = devices.inputDeviceId;
   if (devices.outputDeviceId) engineState.outputDeviceId = devices.outputDeviceId;
+  snapshotDeckPlayback();
   audioRouter.selectDevices({
     inputDeviceId: engineState.inputDeviceId,
     outputDeviceId: engineState.outputDeviceId,
   });
+  if (devices.outputDeviceId && engineState.status === 'running') {
+    syncPlaybackDecksToNativeRouter();
+  }
   engineState.router = audioRouter.getState();
   persistEngineState();
   publishState(requestId);
