@@ -580,6 +580,7 @@ function useDesktopEngine(settings) {
     start: () => desktopApi?.engine?.start?.(),
     stop: () => desktopApi?.engine?.stop?.(),
     renderSilence: (durationMs) => desktopApi?.engine?.renderSilence?.(durationMs),
+    renderTone: (durationMs) => desktopApi?.engine?.renderTone?.(durationMs),
     refreshDevices: () => desktopApi?.engine?.refreshDevices?.(),
     selectDevices: (devices) => desktopApi?.engine?.selectDevices?.(devices),
   };
@@ -636,6 +637,7 @@ function DesktopEnginePanel({ engine }) {
         <button type="button" onClick={engine.start} disabled={state.status === 'running'}>Start Engine</button>
         <button type="button" onClick={engine.stop} disabled={state.status !== 'running'}>Stop</button>
         <button type="button" onClick={() => engine.renderSilence?.(250)}>Render Silence</button>
+        <button type="button" onClick={() => engine.renderTone?.(250)}>Render Tone</button>
       </div>
       <div className="engine-meter-grid">
         <div className="engine-meter">
@@ -690,7 +692,12 @@ function DesktopEnginePanel({ engine }) {
           )}
           {state.router.nativeSnapshot?.render && (
             <small>
-              Silence render: {state.router.nativeSnapshot.render.framesWritten} frames in {state.router.nativeSnapshot.render.elapsedMs} ms, {state.router.nativeSnapshot.render.underruns} underruns
+              {state.router.nativeSnapshot.render.type === 'tone' ? 'Tone' : 'Silence'} render: {state.router.nativeSnapshot.render.framesWritten} frames in {state.router.nativeSnapshot.render.elapsedMs} ms, {state.router.nativeSnapshot.render.underruns} underruns
+            </small>
+          )}
+          {state.router.nativeSnapshot?.render?.type === 'tone' && (
+            <small>
+              Master peak L {Math.round((state.router.nativeSnapshot.render.masterPeakLeft || 0) * 100)}% / R {Math.round((state.router.nativeSnapshot.render.masterPeakRight || 0) * 100)}%
             </small>
           )}
         </div>

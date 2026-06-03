@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('resonanceDesktop', {
     start: () => ipcRenderer.invoke('engine:start'),
     stop: () => ipcRenderer.invoke('engine:stop'),
     renderSilence: (durationMs) => ipcRenderer.invoke('engine:renderSilence', durationMs),
+    renderTone: (durationMs) => ipcRenderer.invoke('engine:renderTone', durationMs),
     updateSettings: (settings) => ipcRenderer.invoke('engine:updateSettings', settings),
     selectDevices: (devices) => ipcRenderer.invoke('engine:selectDevices', devices),
     onState: (callback) => {

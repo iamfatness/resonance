@@ -186,6 +186,68 @@ class DesktopAudioRouter {
     );
   }
 
+  renderTone(durationMs = 250, callback) {
+    if (!this.hasNativeRouter?.() || !this.nativeRouterPath) {
+      callback?.(null, null);
+      return;
+    }
+
+    const deckA = this.settings?.deckProcessing?.A || {};
+    const deckB = this.settings?.deckProcessing?.B || {};
+    const volumes = this.settings?.deckVolumes || {};
+    const args = [
+      '--render-tone',
+      '--duration-ms',
+      String(durationMs),
+      '--deck-a-gain',
+      String(clamp((volumes.A || 0) / 100 * 0.12, 0, 0.2)),
+      '--deck-b-gain',
+      String(clamp((volumes.B || 0) / 100 * 0.12, 0, 0.2)),
+      '--deck-a-pan',
+      String(clamp(deckA.pan, -50, 50)),
+      '--deck-b-pan',
+      String(clamp(deckB.pan, -50, 50)),
+    ];
+
+    execFile(
+      this.nativeRouterPath,
+      args,
+      { windowsHide: true, timeout: Math.max(2000, durationMs + 1500) },
+      (error, stdout, stderr) => {
+        if (error) {
+          const snapshot = {
+            status: 'error',
+            error: stderr?.trim() || error.message,
+            updatedAt: new Date().toISOString(),
+          };
+          this.nativeSnapshot = snapshot;
+          this.state = this.buildState(this.state.status);
+          callback?.(error, snapshot);
+          return;
+        }
+
+        try {
+          this.nativeSnapshot = {
+            ...JSON.parse(stdout.trim()),
+            updatedAt: new Date().toISOString(),
+          };
+        } catch (parseError) {
+          this.nativeSnapshot = {
+            status: 'error',
+            error: parseError.message,
+            updatedAt: new Date().toISOString(),
+          };
+          this.state = this.buildState(this.state.status);
+          callback?.(parseError, this.nativeSnapshot);
+          return;
+        }
+
+        this.state = this.buildState(this.state.status);
+        callback?.(null, this.nativeSnapshot);
+      },
+    );
+  }
+
   zeroDeckMeters() {
     return Object.fromEntries(DEFAULT_DECKS.map((deck) => {
       const route = this.state.routes.find((candidate) => candidate.deck === deck) || defaultRoute(deck);

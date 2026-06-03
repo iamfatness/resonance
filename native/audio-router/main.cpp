@@ -2,11 +2,13 @@
 #include <Audioclient.h>
 #include <Propkeydef.h>
 #include <Functiondiscoverykeys_devpkey.h>
+#include <ksmedia.h>
 #include <Mmdeviceapi.h>
 #include <Propvarutil.h>
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <cmath>
 #include <iostream>
 #include <sstream>
 #include <string>
@@ -61,6 +63,61 @@ bool GetMixFormat(IMMDevice* device, WAVEFORMATEX** mixFormat) {
   return SUCCEEDED(audioClient->GetMixFormat(mixFormat)) && *mixFormat != nullptr;
 }
 
+double ClampDouble(double value, double minValue, double maxValue) {
+  return std::max(minValue, std::min(maxValue, value));
+}
+
+bool IsFloatFormat(const WAVEFORMATEX* mixFormat) {
+  if (!mixFormat) return false;
+  if (mixFormat->wFormatTag == WAVE_FORMAT_IEEE_FLOAT) return true;
+  if (mixFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE && mixFormat->cbSize >= 22) {
+    const WAVEFORMATEXTENSIBLE* extensible = reinterpret_cast<const WAVEFORMATEXTENSIBLE*>(mixFormat);
+    return IsEqualGUID(extensible->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT);
+  }
+  return false;
+}
+
+void WriteSample(BYTE* sample, WORD bitsPerSample, bool isFloat, double value) {
+  const double clamped = ClampDouble(value, -1.0, 1.0);
+  if (isFloat && bitsPerSample == 32) {
+    *reinterpret_cast<float*>(sample) = static_cast<float>(clamped);
+    return;
+  }
+  if (bitsPerSample == 16) {
+    *reinterpret_cast<int16_t*>(sample) = static_cast<int16_t>(clamped * 32767.0);
+    return;
+  }
+  if (bitsPerSample == 24) {
+    const int32_t packed = static_cast<int32_t>(clamped * 8388607.0);
+    sample[0] = static_cast<BYTE>(packed & 0xff);
+    sample[1] = static_cast<BYTE>((packed >> 8) & 0xff);
+    sample[2] = static_cast<BYTE>((packed >> 16) & 0xff);
+    return;
+  }
+  if (bitsPerSample == 32) {
+    *reinterpret_cast<int32_t*>(sample) = static_cast<int32_t>(clamped * 2147483647.0);
+  }
+}
+
+void WriteInterleavedFrame(BYTE* buffer, const WAVEFORMATEX* mixFormat, UINT32 frame, double left, double right) {
+  const WORD channels = std::max<WORD>(1, mixFormat->nChannels);
+  const WORD bitsPerSample = mixFormat->wBitsPerSample;
+  const WORD bytesPerSample = std::max<WORD>(1, bitsPerSample / 8);
+  const bool isFloat = IsFloatFormat(mixFormat);
+  BYTE* frameStart = buffer + (frame * mixFormat->nBlockAlign);
+
+  for (WORD channel = 0; channel < channels; ++channel) {
+    const double value = channel == 0 ? left : channel == 1 ? right : 0.0;
+    WriteSample(frameStart + (channel * bytesPerSample), bitsPerSample, isFloat, value);
+  }
+}
+
+void PanScales(double pan, double& leftScale, double& rightScale) {
+  const double normalized = ClampDouble(pan, -50.0, 50.0) / 50.0;
+  leftScale = normalized <= 0.0 ? 1.0 : 1.0 - normalized;
+  rightScale = normalized >= 0.0 ? 1.0 : 1.0 + normalized;
+}
+
 void PrintDescribe() {
   std::cout
     << "{"
@@ -68,7 +125,7 @@ void PrintDescribe() {
     << "\"version\":\"0.1.0\","
     << "\"backend\":\"wasapi-skeleton\","
     << "\"deckCount\":2,"
-    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\",\"--render-silence\"],"
+    << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\",\"--render-silence\",\"--render-tone\"],"
     << "\"capabilities\":{"
     << "\"perDeckCapture\":false,"
     << "\"perDeckPan\":true,"
@@ -330,6 +387,178 @@ int RenderSilence(int durationMs) {
   return 0;
 }
 
+int RenderTone(int durationMs, double deckAGain, double deckBGain, double deckAPan, double deckBPan) {
+  ComPtr<IMMDevice> renderDevice;
+  if (!GetDefaultEndpoint(eRender, renderDevice)) {
+    std::cerr << "{\"error\":\"Default render endpoint unavailable\"}\n";
+    return 2;
+  }
+
+  WAVEFORMATEX* mixFormat = nullptr;
+  if (!GetMixFormat(renderDevice.Get(), &mixFormat)) {
+    std::cerr << "{\"error\":\"Render mix format unavailable\"}\n";
+    return 3;
+  }
+
+  ComPtr<IAudioClient> audioClient;
+  HRESULT hr = renderDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &audioClient);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient activation failed\"}\n";
+    return 4;
+  }
+
+  const REFERENCE_TIME requestedDuration = 1000000; // 100 ms
+  hr = audioClient->Initialize(
+    AUDCLNT_SHAREMODE_SHARED,
+    0,
+    requestedDuration,
+    0,
+    mixFormat,
+    nullptr);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient Initialize render failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 5;
+  }
+
+  ComPtr<IAudioRenderClient> renderClient;
+  hr = audioClient->GetService(IID_PPV_ARGS(&renderClient));
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"GetService IAudioRenderClient failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 6;
+  }
+
+  UINT32 bufferFrames = 0;
+  audioClient->GetBufferSize(&bufferFrames);
+  REFERENCE_TIME defaultPeriod = 0;
+  REFERENCE_TIME minimumPeriod = 0;
+  audioClient->GetDevicePeriod(&defaultPeriod, &minimumPeriod);
+
+  const DWORD startTick = GetTickCount();
+  const DWORD targetMs = static_cast<DWORD>(std::max(50, std::min(5000, durationMs)));
+  const double sampleRate = std::max<DWORD>(1, mixFormat->nSamplesPerSec);
+  const double twoPi = 6.28318530717958647692;
+  const double deckAFrequency = 220.0;
+  const double deckBFrequency = 330.0;
+  double deckALeftScale = 1.0;
+  double deckARightScale = 1.0;
+  double deckBLeftScale = 1.0;
+  double deckBRightScale = 1.0;
+  PanScales(deckAPan, deckALeftScale, deckARightScale);
+  PanScales(deckBPan, deckBLeftScale, deckBRightScale);
+
+  uint64_t framesWritten = 0;
+  uint32_t renderPasses = 0;
+  uint32_t underruns = 0;
+  double deckAPeakLeft = 0.0;
+  double deckAPeakRight = 0.0;
+  double deckBPeakLeft = 0.0;
+  double deckBPeakRight = 0.0;
+  double masterPeakLeft = 0.0;
+  double masterPeakRight = 0.0;
+
+  hr = audioClient->Start();
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::cerr << "{\"error\":\"IAudioClient Start failed\",\"hresult\":" << static_cast<int32_t>(hr) << "}\n";
+    return 7;
+  }
+
+  while (GetTickCount() - startTick < targetMs) {
+    UINT32 paddingFrames = 0;
+    hr = audioClient->GetCurrentPadding(&paddingFrames);
+    if (FAILED(hr)) {
+      underruns += 1;
+      Sleep(1);
+      continue;
+    }
+
+    const UINT32 availableFrames = bufferFrames > paddingFrames ? bufferFrames - paddingFrames : 0;
+    if (availableFrames == 0) {
+      Sleep(static_cast<DWORD>(std::max<REFERENCE_TIME>(1, defaultPeriod / 20000)));
+      continue;
+    }
+
+    BYTE* buffer = nullptr;
+    hr = renderClient->GetBuffer(availableFrames, &buffer);
+    if (FAILED(hr) || buffer == nullptr) {
+      underruns += 1;
+      Sleep(1);
+      continue;
+    }
+
+    for (UINT32 frame = 0; frame < availableFrames; ++frame) {
+      const double absoluteFrame = static_cast<double>(framesWritten + frame);
+      const double deckASample = std::sin(twoPi * deckAFrequency * absoluteFrame / sampleRate) * ClampDouble(deckAGain, 0.0, 0.25);
+      const double deckBSample = std::sin(twoPi * deckBFrequency * absoluteFrame / sampleRate) * ClampDouble(deckBGain, 0.0, 0.25);
+      const double deckALeft = deckASample * deckALeftScale;
+      const double deckARight = deckASample * deckARightScale;
+      const double deckBLeft = deckBSample * deckBLeftScale;
+      const double deckBRight = deckBSample * deckBRightScale;
+      const double left = ClampDouble(deckALeft + deckBLeft, -0.95, 0.95);
+      const double right = ClampDouble(deckARight + deckBRight, -0.95, 0.95);
+
+      deckAPeakLeft = std::max(deckAPeakLeft, std::abs(deckALeft));
+      deckAPeakRight = std::max(deckAPeakRight, std::abs(deckARight));
+      deckBPeakLeft = std::max(deckBPeakLeft, std::abs(deckBLeft));
+      deckBPeakRight = std::max(deckBPeakRight, std::abs(deckBRight));
+      masterPeakLeft = std::max(masterPeakLeft, std::abs(left));
+      masterPeakRight = std::max(masterPeakRight, std::abs(right));
+      WriteInterleavedFrame(buffer, mixFormat, frame, left, right);
+    }
+
+    hr = renderClient->ReleaseBuffer(availableFrames, 0);
+    if (FAILED(hr)) {
+      underruns += 1;
+      continue;
+    }
+
+    framesWritten += availableFrames;
+    renderPasses += 1;
+  }
+
+  audioClient->Stop();
+  const DWORD elapsedMs = std::max<DWORD>(1, GetTickCount() - startTick);
+
+  std::cout
+    << "{"
+    << "\"status\":\"ready\","
+    << "\"backend\":\"wasapi-tone-render\","
+    << "\"deviceName\":\"" << EscapeJson(GetDeviceName(renderDevice.Get())) << "\","
+    << "\"format\":{"
+    << "\"sampleRate\":" << mixFormat->nSamplesPerSec << ","
+    << "\"channels\":" << mixFormat->nChannels << ","
+    << "\"bitsPerSample\":" << mixFormat->wBitsPerSample << ","
+    << "\"blockAlign\":" << mixFormat->nBlockAlign
+    << "},"
+    << "\"buffer\":{"
+    << "\"frames\":" << bufferFrames << ","
+    << "\"durationMs\":" << (bufferFrames * 1000.0 / sampleRate) << ","
+    << "\"defaultPeriodMs\":" << (defaultPeriod / 10000.0) << ","
+    << "\"minimumPeriodMs\":" << (minimumPeriod / 10000.0)
+    << "},"
+    << "\"render\":{"
+    << "\"type\":\"tone\","
+    << "\"requestedMs\":" << targetMs << ","
+    << "\"elapsedMs\":" << elapsedMs << ","
+    << "\"framesWritten\":" << framesWritten << ","
+    << "\"passes\":" << renderPasses << ","
+    << "\"underruns\":" << underruns << ","
+    << "\"masterPeakLeft\":" << masterPeakLeft << ","
+    << "\"masterPeakRight\":" << masterPeakRight
+    << "},"
+    << "\"routes\":["
+    << "{\"deck\":\"A\",\"status\":\"tone\",\"frequency\":" << deckAFrequency << ",\"gain\":" << ClampDouble(deckAGain, 0.0, 0.25) << ",\"pan\":" << ClampDouble(deckAPan, -50.0, 50.0) << ",\"framesWritten\":" << framesWritten << ",\"leftPeak\":" << deckAPeakLeft << ",\"rightPeak\":" << deckAPeakRight << "},"
+    << "{\"deck\":\"B\",\"status\":\"tone\",\"frequency\":" << deckBFrequency << ",\"gain\":" << ClampDouble(deckBGain, 0.0, 0.25) << ",\"pan\":" << ClampDouble(deckBPan, -50.0, 50.0) << ",\"framesWritten\":" << framesWritten << ",\"leftPeak\":" << deckBPeakLeft << ",\"rightPeak\":" << deckBPeakRight << "}"
+    << "]"
+    << "}\n";
+
+  CoTaskMemFree(mixFormat);
+  return 0;
+}
+
 int wmain(int argc, wchar_t** argv) {
   ComInit com;
   if (FAILED(com.hr)) {
@@ -356,6 +585,22 @@ int wmain(int argc, wchar_t** argv) {
       }
     }
     return RenderSilence(durationMs);
+  }
+  if (command == L"--render-tone") {
+    int durationMs = 250;
+    double deckAGain = 0.08;
+    double deckBGain = 0.06;
+    double deckAPan = -18.0;
+    double deckBPan = 18.0;
+    for (int i = 2; i < argc - 1; ++i) {
+      const std::wstring arg = argv[i];
+      if (arg == L"--duration-ms") durationMs = _wtoi(argv[i + 1]);
+      if (arg == L"--deck-a-gain") deckAGain = _wtof(argv[i + 1]);
+      if (arg == L"--deck-b-gain") deckBGain = _wtof(argv[i + 1]);
+      if (arg == L"--deck-a-pan") deckAPan = _wtof(argv[i + 1]);
+      if (arg == L"--deck-b-pan") deckBPan = _wtof(argv[i + 1]);
+    }
+    return RenderTone(durationMs, deckAGain, deckBGain, deckAPan, deckBPan);
   }
 
   std::cerr << "{\"error\":\"Unknown command\"}\n";

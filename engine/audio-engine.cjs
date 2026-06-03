@@ -532,6 +532,18 @@ function renderSilence(requestId, durationMs = 250) {
   });
 }
 
+function renderTone(requestId, durationMs = 250) {
+  if (!hasNativeRouter()) {
+    publishState(requestId);
+    return;
+  }
+
+  audioRouter.renderTone(durationMs, () => {
+    engineState.router = audioRouter.getState();
+    publishState(requestId);
+  });
+}
+
 process.on('message', (message = {}) => {
   if (message.type === 'GET_STATE') publishState(message.requestId);
   if (message.type === 'REFRESH_DEVICES') refreshDevices(message.requestId);
@@ -540,6 +552,7 @@ process.on('message', (message = {}) => {
   if (message.type === 'UPDATE_SETTINGS') updateSettings(message.requestId, message.settings);
   if (message.type === 'SELECT_DEVICES') selectDevices(message.requestId, message.devices);
   if (message.type === 'RENDER_SILENCE') renderSilence(message.requestId, message.durationMs);
+  if (message.type === 'RENDER_TONE') renderTone(message.requestId, message.durationMs);
 });
 
 syncEngineMode();
