@@ -118,6 +118,72 @@ void PanScales(double pan, double& leftScale, double& rightScale) {
   rightScale = normalized >= 0.0 ? 1.0 : 1.0 + normalized;
 }
 
+struct DeckState {
+  const char* id;
+  double frequency;
+  double gain;
+  double pan;
+  double eqLowDb;
+  double eqMidDb;
+  double eqHighDb;
+  double leftScale;
+  double rightScale;
+};
+
+struct DeckStats {
+  uint64_t framesWritten = 0;
+  double leftPeak = 0.0;
+  double rightPeak = 0.0;
+};
+
+struct RenderStats {
+  uint64_t framesWritten = 0;
+  uint32_t passes = 0;
+  uint32_t underruns = 0;
+  double masterPeakLeft = 0.0;
+  double masterPeakRight = 0.0;
+};
+
+double DbToLinear(double db) {
+  return std::pow(10.0, ClampDouble(db, -18.0, 18.0) / 20.0);
+}
+
+double EqGainForFrequency(const DeckState& deck) {
+  if (deck.frequency < 260.0) return DbToLinear(deck.eqLowDb);
+  if (deck.frequency < 2500.0) return DbToLinear(deck.eqMidDb);
+  return DbToLinear(deck.eqHighDb);
+}
+
+DeckState MakeDeck(const char* id, double frequency, double gain, double pan, double eqLowDb, double eqMidDb, double eqHighDb) {
+  DeckState deck = {
+    id,
+    frequency,
+    ClampDouble(gain, 0.0, 0.25),
+    ClampDouble(pan, -50.0, 50.0),
+    ClampDouble(eqLowDb, -18.0, 18.0),
+    ClampDouble(eqMidDb, -18.0, 18.0),
+    ClampDouble(eqHighDb, -18.0, 18.0),
+    1.0,
+    1.0,
+  };
+  PanScales(deck.pan, deck.leftScale, deck.rightScale);
+  return deck;
+}
+
+double DeckSample(const DeckState& deck, double absoluteFrame, double sampleRate) {
+  const double twoPi = 6.28318530717958647692;
+  return std::sin(twoPi * deck.frequency * absoluteFrame / sampleRate) * deck.gain * EqGainForFrequency(deck);
+}
+
+void MixDeckFrame(const DeckState& deck, DeckStats& stats, double sample, double& left, double& right) {
+  const double deckLeft = sample * deck.leftScale;
+  const double deckRight = sample * deck.rightScale;
+  left += deckLeft;
+  right += deckRight;
+  stats.leftPeak = std::max(stats.leftPeak, std::abs(deckLeft));
+  stats.rightPeak = std::max(stats.rightPeak, std::abs(deckRight));
+}
+
 void PrintDescribe() {
   std::cout
     << "{"
@@ -129,7 +195,7 @@ void PrintDescribe() {
     << "\"capabilities\":{"
     << "\"perDeckCapture\":false,"
     << "\"perDeckPan\":true,"
-    << "\"perDeckEq\":false,"
+    << "\"perDeckEq\":true,"
     << "\"perDeckPlugins\":false,"
     << "\"nativePcmRouting\":false"
     << "}"
@@ -387,7 +453,18 @@ int RenderSilence(int durationMs) {
   return 0;
 }
 
-int RenderTone(int durationMs, double deckAGain, double deckBGain, double deckAPan, double deckBPan) {
+int RenderTone(
+  int durationMs,
+  double deckAGain,
+  double deckBGain,
+  double deckAPan,
+  double deckBPan,
+  double deckAEqLowDb,
+  double deckAEqMidDb,
+  double deckAEqHighDb,
+  double deckBEqLowDb,
+  double deckBEqMidDb,
+  double deckBEqHighDb) {
   ComPtr<IMMDevice> renderDevice;
   if (!GetDefaultEndpoint(eRender, renderDevice)) {
     std::cerr << "{\"error\":\"Default render endpoint unavailable\"}\n";
@@ -439,25 +516,11 @@ int RenderTone(int durationMs, double deckAGain, double deckBGain, double deckAP
   const DWORD startTick = GetTickCount();
   const DWORD targetMs = static_cast<DWORD>(std::max(50, std::min(5000, durationMs)));
   const double sampleRate = std::max<DWORD>(1, mixFormat->nSamplesPerSec);
-  const double twoPi = 6.28318530717958647692;
-  const double deckAFrequency = 220.0;
-  const double deckBFrequency = 330.0;
-  double deckALeftScale = 1.0;
-  double deckARightScale = 1.0;
-  double deckBLeftScale = 1.0;
-  double deckBRightScale = 1.0;
-  PanScales(deckAPan, deckALeftScale, deckARightScale);
-  PanScales(deckBPan, deckBLeftScale, deckBRightScale);
-
-  uint64_t framesWritten = 0;
-  uint32_t renderPasses = 0;
-  uint32_t underruns = 0;
-  double deckAPeakLeft = 0.0;
-  double deckAPeakRight = 0.0;
-  double deckBPeakLeft = 0.0;
-  double deckBPeakRight = 0.0;
-  double masterPeakLeft = 0.0;
-  double masterPeakRight = 0.0;
+  const DeckState deckA = MakeDeck("A", 220.0, deckAGain, deckAPan, deckAEqLowDb, deckAEqMidDb, deckAEqHighDb);
+  const DeckState deckB = MakeDeck("B", 330.0, deckBGain, deckBPan, deckBEqLowDb, deckBEqMidDb, deckBEqHighDb);
+  DeckStats deckAStats;
+  DeckStats deckBStats;
+  RenderStats renderStats;
 
   hr = audioClient->Start();
   if (FAILED(hr)) {
@@ -470,7 +533,7 @@ int RenderTone(int durationMs, double deckAGain, double deckBGain, double deckAP
     UINT32 paddingFrames = 0;
     hr = audioClient->GetCurrentPadding(&paddingFrames);
     if (FAILED(hr)) {
-      underruns += 1;
+      renderStats.underruns += 1;
       Sleep(1);
       continue;
     }
@@ -484,39 +547,35 @@ int RenderTone(int durationMs, double deckAGain, double deckBGain, double deckAP
     BYTE* buffer = nullptr;
     hr = renderClient->GetBuffer(availableFrames, &buffer);
     if (FAILED(hr) || buffer == nullptr) {
-      underruns += 1;
+      renderStats.underruns += 1;
       Sleep(1);
       continue;
     }
 
     for (UINT32 frame = 0; frame < availableFrames; ++frame) {
-      const double absoluteFrame = static_cast<double>(framesWritten + frame);
-      const double deckASample = std::sin(twoPi * deckAFrequency * absoluteFrame / sampleRate) * ClampDouble(deckAGain, 0.0, 0.25);
-      const double deckBSample = std::sin(twoPi * deckBFrequency * absoluteFrame / sampleRate) * ClampDouble(deckBGain, 0.0, 0.25);
-      const double deckALeft = deckASample * deckALeftScale;
-      const double deckARight = deckASample * deckARightScale;
-      const double deckBLeft = deckBSample * deckBLeftScale;
-      const double deckBRight = deckBSample * deckBRightScale;
-      const double left = ClampDouble(deckALeft + deckBLeft, -0.95, 0.95);
-      const double right = ClampDouble(deckARight + deckBRight, -0.95, 0.95);
+      const double absoluteFrame = static_cast<double>(renderStats.framesWritten + frame);
+      double left = 0.0;
+      double right = 0.0;
+      MixDeckFrame(deckA, deckAStats, DeckSample(deckA, absoluteFrame, sampleRate), left, right);
+      MixDeckFrame(deckB, deckBStats, DeckSample(deckB, absoluteFrame, sampleRate), left, right);
+      left = ClampDouble(left, -0.95, 0.95);
+      right = ClampDouble(right, -0.95, 0.95);
 
-      deckAPeakLeft = std::max(deckAPeakLeft, std::abs(deckALeft));
-      deckAPeakRight = std::max(deckAPeakRight, std::abs(deckARight));
-      deckBPeakLeft = std::max(deckBPeakLeft, std::abs(deckBLeft));
-      deckBPeakRight = std::max(deckBPeakRight, std::abs(deckBRight));
-      masterPeakLeft = std::max(masterPeakLeft, std::abs(left));
-      masterPeakRight = std::max(masterPeakRight, std::abs(right));
+      renderStats.masterPeakLeft = std::max(renderStats.masterPeakLeft, std::abs(left));
+      renderStats.masterPeakRight = std::max(renderStats.masterPeakRight, std::abs(right));
       WriteInterleavedFrame(buffer, mixFormat, frame, left, right);
     }
 
     hr = renderClient->ReleaseBuffer(availableFrames, 0);
     if (FAILED(hr)) {
-      underruns += 1;
+      renderStats.underruns += 1;
       continue;
     }
 
-    framesWritten += availableFrames;
-    renderPasses += 1;
+    renderStats.framesWritten += availableFrames;
+    deckAStats.framesWritten += availableFrames;
+    deckBStats.framesWritten += availableFrames;
+    renderStats.passes += 1;
   }
 
   audioClient->Stop();
@@ -543,15 +602,15 @@ int RenderTone(int durationMs, double deckAGain, double deckBGain, double deckAP
     << "\"type\":\"tone\","
     << "\"requestedMs\":" << targetMs << ","
     << "\"elapsedMs\":" << elapsedMs << ","
-    << "\"framesWritten\":" << framesWritten << ","
-    << "\"passes\":" << renderPasses << ","
-    << "\"underruns\":" << underruns << ","
-    << "\"masterPeakLeft\":" << masterPeakLeft << ","
-    << "\"masterPeakRight\":" << masterPeakRight
+    << "\"framesWritten\":" << renderStats.framesWritten << ","
+    << "\"passes\":" << renderStats.passes << ","
+    << "\"underruns\":" << renderStats.underruns << ","
+    << "\"masterPeakLeft\":" << renderStats.masterPeakLeft << ","
+    << "\"masterPeakRight\":" << renderStats.masterPeakRight
     << "},"
     << "\"routes\":["
-    << "{\"deck\":\"A\",\"status\":\"tone\",\"frequency\":" << deckAFrequency << ",\"gain\":" << ClampDouble(deckAGain, 0.0, 0.25) << ",\"pan\":" << ClampDouble(deckAPan, -50.0, 50.0) << ",\"framesWritten\":" << framesWritten << ",\"leftPeak\":" << deckAPeakLeft << ",\"rightPeak\":" << deckAPeakRight << "},"
-    << "{\"deck\":\"B\",\"status\":\"tone\",\"frequency\":" << deckBFrequency << ",\"gain\":" << ClampDouble(deckBGain, 0.0, 0.25) << ",\"pan\":" << ClampDouble(deckBPan, -50.0, 50.0) << ",\"framesWritten\":" << framesWritten << ",\"leftPeak\":" << deckBPeakLeft << ",\"rightPeak\":" << deckBPeakRight << "}"
+    << "{\"deck\":\"A\",\"status\":\"tone\",\"frequency\":" << deckA.frequency << ",\"gain\":" << deckA.gain << ",\"pan\":" << deckA.pan << ",\"eqLowDb\":" << deckA.eqLowDb << ",\"eqMidDb\":" << deckA.eqMidDb << ",\"eqHighDb\":" << deckA.eqHighDb << ",\"eqLinear\":" << EqGainForFrequency(deckA) << ",\"framesWritten\":" << deckAStats.framesWritten << ",\"leftPeak\":" << deckAStats.leftPeak << ",\"rightPeak\":" << deckAStats.rightPeak << "},"
+    << "{\"deck\":\"B\",\"status\":\"tone\",\"frequency\":" << deckB.frequency << ",\"gain\":" << deckB.gain << ",\"pan\":" << deckB.pan << ",\"eqLowDb\":" << deckB.eqLowDb << ",\"eqMidDb\":" << deckB.eqMidDb << ",\"eqHighDb\":" << deckB.eqHighDb << ",\"eqLinear\":" << EqGainForFrequency(deckB) << ",\"framesWritten\":" << deckBStats.framesWritten << ",\"leftPeak\":" << deckBStats.leftPeak << ",\"rightPeak\":" << deckBStats.rightPeak << "}"
     << "]"
     << "}\n";
 
@@ -592,6 +651,12 @@ int wmain(int argc, wchar_t** argv) {
     double deckBGain = 0.06;
     double deckAPan = -18.0;
     double deckBPan = 18.0;
+    double deckAEqLowDb = 0.0;
+    double deckAEqMidDb = 0.0;
+    double deckAEqHighDb = 0.0;
+    double deckBEqLowDb = 0.0;
+    double deckBEqMidDb = 0.0;
+    double deckBEqHighDb = 0.0;
     for (int i = 2; i < argc - 1; ++i) {
       const std::wstring arg = argv[i];
       if (arg == L"--duration-ms") durationMs = _wtoi(argv[i + 1]);
@@ -599,8 +664,25 @@ int wmain(int argc, wchar_t** argv) {
       if (arg == L"--deck-b-gain") deckBGain = _wtof(argv[i + 1]);
       if (arg == L"--deck-a-pan") deckAPan = _wtof(argv[i + 1]);
       if (arg == L"--deck-b-pan") deckBPan = _wtof(argv[i + 1]);
+      if (arg == L"--deck-a-eq-low") deckAEqLowDb = _wtof(argv[i + 1]);
+      if (arg == L"--deck-a-eq-mid") deckAEqMidDb = _wtof(argv[i + 1]);
+      if (arg == L"--deck-a-eq-high") deckAEqHighDb = _wtof(argv[i + 1]);
+      if (arg == L"--deck-b-eq-low") deckBEqLowDb = _wtof(argv[i + 1]);
+      if (arg == L"--deck-b-eq-mid") deckBEqMidDb = _wtof(argv[i + 1]);
+      if (arg == L"--deck-b-eq-high") deckBEqHighDb = _wtof(argv[i + 1]);
     }
-    return RenderTone(durationMs, deckAGain, deckBGain, deckAPan, deckBPan);
+    return RenderTone(
+      durationMs,
+      deckAGain,
+      deckBGain,
+      deckAPan,
+      deckBPan,
+      deckAEqLowDb,
+      deckAEqMidDb,
+      deckAEqHighDb,
+      deckBEqLowDb,
+      deckBEqMidDb,
+      deckBEqHighDb);
   }
 
   std::cerr << "{\"error\":\"Unknown command\"}\n";

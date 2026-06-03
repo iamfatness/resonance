@@ -16,6 +16,22 @@ function defaultRoute(deck) {
   };
 }
 
+function averageBand(curve = [], indexes = []) {
+  if (!Array.isArray(curve) || indexes.length === 0) return 0;
+  const values = indexes.map((index) => Number(curve[index]) || 0);
+  return values.reduce((total, value) => total + value, 0) / values.length;
+}
+
+function eqBands(processing = {}) {
+  if (processing.eqBypassed) return { low: 0, mid: 0, high: 0 };
+  const curve = processing.curve || [];
+  return {
+    low: clamp(averageBand(curve, [0, 1]), -18, 18),
+    mid: clamp(averageBand(curve, [2, 3, 4, 5]), -18, 18),
+    high: clamp(averageBand(curve, [6, 7]), -18, 18),
+  };
+}
+
 function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_DECKS.map(defaultRoute), nativeSnapshot = null } = {}) {
   const isNativeSkeleton = backend === 'native-router';
   return {
@@ -195,6 +211,8 @@ class DesktopAudioRouter {
     const deckA = this.settings?.deckProcessing?.A || {};
     const deckB = this.settings?.deckProcessing?.B || {};
     const volumes = this.settings?.deckVolumes || {};
+    const deckAEq = eqBands(deckA);
+    const deckBEq = eqBands(deckB);
     const args = [
       '--render-tone',
       '--duration-ms',
@@ -207,6 +225,18 @@ class DesktopAudioRouter {
       String(clamp(deckA.pan, -50, 50)),
       '--deck-b-pan',
       String(clamp(deckB.pan, -50, 50)),
+      '--deck-a-eq-low',
+      String(deckAEq.low),
+      '--deck-a-eq-mid',
+      String(deckAEq.mid),
+      '--deck-a-eq-high',
+      String(deckAEq.high),
+      '--deck-b-eq-low',
+      String(deckBEq.low),
+      '--deck-b-eq-mid',
+      String(deckBEq.mid),
+      '--deck-b-eq-high',
+      String(deckBEq.high),
     ];
 
     execFile(

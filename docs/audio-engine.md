@@ -59,7 +59,9 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 - `--probe` initializes COM, probes default Windows audio endpoints, and reports the default render mix format.
 - `--run-once` initializes the default render client and reports real WASAPI buffer size, device period, and route health without streaming audio yet.
 - `--render-silence --duration-ms 250` starts the render client, writes silent buffers, and reports frames written, passes, underruns, and elapsed time.
-- `--render-tone --duration-ms 250` generates two quiet deck test tones, applies per-deck gain and pan, mixes them into the WASAPI render buffer, and reports per-deck/master peaks.
+- `--render-tone --duration-ms 250` generates two quiet deck test tones, applies per-deck gain, pan, and first-pass native EQ band gain, mixes them into the WASAPI render buffer, and reports per-deck/master peaks.
+
+The tone render path now uses native `DeckState`, `DeckStats`, and `RenderStats` structures plus reusable helpers for source generation, EQ gain, pan, mixing, and peak tracking. This is the same path that local file PCM, virtual-device capture, and plugin processing should feed later.
 
 ```text
 Deck A playback -> app EQ/plugin chain -> master output
