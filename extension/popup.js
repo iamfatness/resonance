@@ -1,28 +1,4 @@
-const bands = ['31', '62', '125', '250', '500', '1k', '2k', '4k'];
-const instruments = ['Vocal', 'Bass', 'Drums', 'Guitar', 'Synth', 'Strings'];
-
-const moodPresets = {
-  Focus: {
-    curve: [2, 3.5, 2, 0, -2, -1, 1.5, 2],
-    instruments: { Vocal: 1.5, Bass: 1, Drums: -0.5, Guitar: 0, Synth: 2, Strings: 1 },
-  },
-  Lift: {
-    curve: [0, 1, 1.5, 2, 2.5, 3, 2, 1],
-    instruments: { Vocal: 2, Bass: 1, Drums: 2, Guitar: 1, Synth: 2.5, Strings: 1.5 },
-  },
-  Warmth: {
-    curve: [2.5, 3, 2, 1, 0, -1, -0.5, 0],
-    instruments: { Vocal: 1, Bass: 3, Drums: 1, Guitar: 1.5, Synth: -0.5, Strings: 2 },
-  },
-  Drive: {
-    curve: [1, 2.5, 2, 1.5, 2, 2.5, 1, 0],
-    instruments: { Vocal: 1, Bass: 2.5, Drums: 3, Guitar: 2.5, Synth: 1, Strings: -0.5 },
-  },
-  Night: {
-    curve: [1.5, 2, 1, -1, -2, -2.5, -1, 0.5],
-    instruments: { Vocal: -0.5, Bass: 2, Drums: -1, Guitar: 0, Synth: 1.5, Strings: 2 },
-  },
-};
+import { bands, flatCurve, instruments, moodPresets } from './lib/presets.js';
 
 let state = {
   active: false,
@@ -140,7 +116,7 @@ document.getElementById('manualToggle').addEventListener('change', (event) => {
 });
 
 document.getElementById('flatButton').addEventListener('click', () => {
-  updateSetting({ useManual: true, manualCurve: Array(bands.length).fill(0) });
+  updateSetting({ useManual: true, manualCurve: [...flatCurve] });
 });
 
 document.getElementById('outputGain').addEventListener('input', (event) => {

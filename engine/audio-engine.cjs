@@ -14,6 +14,7 @@ const windowsKitsRoot = 'C:\\Program Files (x86)\\Windows Kits\\10';
 const settingsDir = path.join(process.env.APPDATA || rootDir, 'Resonance');
 const settingsPath = path.join(settingsDir, 'engine-settings.json');
 
+// Keep this shape aligned with the canonical JSDoc/contracts in src/lib/presets.js.
 const defaultSettings = {
   preset: 'Focus',
   eqMode: 'Preset',

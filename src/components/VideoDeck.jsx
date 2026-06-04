@@ -1,0 +1,93 @@
+import { Music2, Pause, Play, Search, SlidersHorizontal, Volume2 } from 'lucide-react';
+import { isYoutubeLoadInput, parseYoutubePlaylistId } from '../lib/youtube.js';
+
+export function VideoDeck({
+  label,
+  video,
+  query,
+  setQuery,
+  onSubmit,
+  player,
+  volume,
+  setVolume,
+  pan,
+  setPan,
+  active,
+  onActivate,
+}) {
+  const actionLabel = parseYoutubePlaylistId(query)
+    ? 'Import'
+    : isYoutubeLoadInput(query)
+      ? 'Load'
+      : 'Search';
+
+  return (
+    <article className={`deck ${active ? 'active' : ''}`}>
+      <div className="deck-topline">
+        <button className="deck-label" onClick={onActivate} type="button">
+          <Music2 size={17} />
+          <span>Deck {label}</span>
+        </button>
+        <span className="deck-state">{player.ready ? 'YouTube ready' : 'Loading'}</span>
+      </div>
+      <form className="deck-search" onSubmit={onSubmit}>
+        <Search size={16} />
+        <input
+          aria-label={`Deck ${label} paste YouTube link or search for video`}
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder={`Paste YouTube link or search Deck ${label}`}
+        />
+        <button type="submit">{actionLabel}</button>
+      </form>
+      <div className="video-frame">
+        <div ref={player.containerRef} className="youtube-target" />
+      </div>
+      <div className="deck-meta">
+        <div>
+          <h1>{video.title}</h1>
+          <p>
+            {video.channel} - YouTube playback - {video.duration}
+          </p>
+        </div>
+        <button
+          className="icon-button"
+          onClick={player.toggle}
+          aria-label={player.playing ? `Pause Deck ${label}` : `Play Deck ${label}`}
+        >
+          {player.playing ? <Pause size={18} /> : <Play size={18} />}
+        </button>
+      </div>
+      <label className="deck-volume">
+        <span>
+          <Volume2 size={16} />
+          Deck {label}
+        </span>
+        <input
+          type="range"
+          min="0"
+          max="100"
+          value={volume}
+          onChange={(event) => setVolume(Number(event.target.value))}
+          aria-label={`Deck ${label} volume`}
+        />
+        <strong>{volume}%</strong>
+      </label>
+      <label className="deck-volume deck-pan">
+        <span>
+          <SlidersHorizontal size={16} />
+          Pan
+        </span>
+        <input
+          type="range"
+          min="-50"
+          max="50"
+          value={pan}
+          onChange={(event) => setPan(Number(event.target.value))}
+          aria-label={`Deck ${label} pan`}
+        />
+        <strong>{pan === 0 ? 'C' : pan < 0 ? `L${Math.abs(pan)}` : `R${pan}`}</strong>
+      </label>
+    </article>
+  );
+}

@@ -1,7 +1,37 @@
 {
+  "name": "resonance",
+  "version": "0.2.0",
+  "description": "Two-deck YouTube mixer prototype with mood EQ guidance and desktop audio routing experiments.",
+  "author": "iamfatness",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/iamfatness/resonance.git"
+  },
+  "bugs": {
+    "url": "https://github.com/iamfatness/resonance/issues"
+  },
+  "homepage": "https://resonance.iamfatness.us",
+  "keywords": [
+    "audio",
+    "youtube",
+    "mixer",
+    "eq",
+    "electron",
+    "wasapi"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier . --write",
+    "format:check": "prettier . --check",
+    "test": "vitest run",
     "desktop:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-electron-dev.ps1",
     "desktop:run": "npm run build && electron .",
     "desktop:package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-desktop-local.ps1",
@@ -20,14 +50,21 @@
   },
   "main": "electron/main.cjs",
   "dependencies": {
-    "@vitejs/plugin-react": "latest",
-    "lucide-react": "latest",
-    "react": "latest",
-    "react-dom": "latest",
-    "vite": "latest"
+    "@vitejs/plugin-react": "^6.0.2",
+    "lucide-react": "^1.17.0",
+    "react": "^19.2.6",
+    "react-dom": "^19.2.6",
+    "vite": "^8.0.14"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.1",
     "electron": "^39.2.7",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react-hooks": "^7.0.1",
+    "eslint-plugin-react-refresh": "^0.4.24",
+    "globals": "^16.5.0",
+    "prettier": "^3.7.4",
+    "vitest": "^4.0.15",
     "wrangler": "^4.95.0"
   }
 }

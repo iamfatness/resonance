@@ -1,20 +1,6 @@
-const OFFSCREEN_DOCUMENT = 'offscreen.html';
+import { defaultExtensionSettings } from './lib/presets.js';
 
-const defaultSettings = {
-  enabled: false,
-  preset: 'Focus',
-  outputGain: 0.9,
-  manualCurve: [2, 3.5, 2, 0, -2, -1, 1.5, 2],
-  useManual: false,
-  instruments: {
-    Vocal: 1.5,
-    Bass: 1,
-    Drums: -0.5,
-    Guitar: 0,
-    Synth: 2,
-    Strings: 1,
-  },
-};
+const OFFSCREEN_DOCUMENT = 'offscreen.html';
 
 let activeCapture = {
   tabId: null,
@@ -23,7 +9,7 @@ let activeCapture = {
 
 async function getSettings() {
   const stored = await chrome.storage.local.get('settings');
-  return { ...defaultSettings, ...(stored.settings || {}) };
+  return { ...defaultExtensionSettings, ...(stored.settings || {}) };
 }
 
 async function saveSettings(settings) {

@@ -52,6 +52,7 @@ release/Resonance-local/Resonance.exe
 - Node integration is disabled.
 - A preload bridge exposes minimal desktop metadata at `window.resonanceDesktop`.
 - A preload bridge exposes `window.resonanceDesktop.engine` for engine state, settings, devices, and meters.
+- The React desktop panel UI lives in `src/components/DesktopEnginePanel.jsx`, while the Electron bridge hook lives in `src/hooks/useDesktopEngine.js`.
 - External links open in the system browser.
 - The desktop app can enumerate Windows audio endpoints, select a native output, run the persistent WASAPI router, and route local WAV, pushed PCM, bounded loopback/capture windows, or continuous capture streams into Deck A/B.
 - When Windows reports an available Resonance virtual capture endpoint, the engine selects it as the default input for Deck A/B capture.

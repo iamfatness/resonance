@@ -2,6 +2,8 @@
 
 The Chrome extension beta captures the active Chrome tab and routes it through the Resonance EQ engine.
 
+Preset and instrument boost math for the extension lives in `extension/lib/presets.js`, mirroring the app's canonical `src/lib/presets.js` module.
+
 ## Download
 
 Beta package:

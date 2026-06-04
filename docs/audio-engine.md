@@ -81,5 +81,5 @@ The native backend should replace the mock meter source without changing the ren
 ## Next Milestones
 
 1. Validate the installed Resonance virtual driver against continuous Deck A/B capture on a Secure Boot machine.
-2. Move the Web Audio EQ model into a shared DSP config shape.
+2. Keep extending the shared DSP config shape in `src/lib/presets.js` and the extension mirror in `extension/lib/presets.js`.
 3. Turn scan-only VST3/Waves discovery into a sandboxed native plugin host for staged plugin chains.

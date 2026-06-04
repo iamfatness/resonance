@@ -15,18 +15,5 @@ if (Test-Path -LiteralPath $zipPath) {
   Remove-Item -LiteralPath $zipPath -Force
 }
 
-$files = Get-ChildItem -LiteralPath $extensionDir -File | Where-Object {
-  $_.Name -in @(
-    'manifest.json',
-    'background.js',
-    'offscreen.html',
-    'offscreen.js',
-    'popup.html',
-    'popup.js',
-    'popup.css',
-    'README.md'
-  )
-}
-
-Compress-Archive -LiteralPath $files.FullName -DestinationPath $zipPath -CompressionLevel Optimal
+Compress-Archive -Path (Join-Path $extensionDir '*') -DestinationPath $zipPath -CompressionLevel Optimal
 Write-Output "Packaged extension: $zipPath"
