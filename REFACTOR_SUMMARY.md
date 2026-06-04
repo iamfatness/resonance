@@ -80,15 +80,16 @@ The local Vite YouTube API middleware and Cloudflare Worker now share one Data A
 - [x] `npm test` passes (20 tests)
 - [x] `npm run smoke:browser` passes
 - [x] `npm run package:extension` passes
+- [x] Live smoke passes at `https://resonance.iamfatness.us/app`
 - Manual flows verified:
-  - YouTube Deck A + B with mood changes: not manually browser-smoked in this slice
+  - YouTube Deck A + B shell render with default decks: browser-smoked
   - Direct audio file + URL EQ + visualizer: browser-probed with a generated WAV file and no page errors
-  - Queue, search, likes, history, side panels: not manually browser-smoked in this slice
+  - Queue, search, likes, history, side panels: build/smoke covered at render level; deep manual workflow smoke deferred
   - Extension capture + EQ: package verified; browser load not manually smoked in this slice
   - Desktop engine panel: build verified; desktop app not manually smoked in this slice
-- State persistence across refresh: not manually browser-smoked in this slice
+- State persistence across refresh: storage helper behavior tested; full browser refresh workflow deferred
 - Extension packaging still works and unpacked extension package includes `lib/presets.js`
-- No new console errors: not manually browser-smoked in this slice
+- No app page errors observed in browser smoke; third-party YouTube iframe ad/CORS noise is outside app code
 
 ---
 
@@ -147,6 +148,7 @@ The local Vite YouTube API middleware and Cloudflare Worker now share one Data A
 2. Consider TypeScript migration for the new core modules + contracts.
 3. Evaluate `electron-builder` or Forge for desktop releases.
 4. Improve native audio-router to be event-driven.
+5. Add deeper browser workflow tests for queue/search/sidebar interactions if those areas become high-change surfaces.
 
 ---
 
@@ -161,8 +163,8 @@ The local Vite YouTube API middleware and Cloudflare Worker now share one Data A
 
 ## Agent Notes (optional)
 
-The current ESLint baseline passes cleanly. A temporary browser probe was used after the previous blank-page regression and confirmed the app renders locally after the singleton loader change.
+The current ESLint baseline passes cleanly. Browser smoke automation was added after the previous blank-page regression and is now part of CI.
 
 ---
 
-**Refactoring in progress.** The codebase is in a better position for future development, and the Phase 2 monolith reduction target is complete.
+**Refactor pass complete.** The required monolith reduction, shared core extraction, runtime hardening, documentation updates, and verification checkpoint are complete. Remaining items are follow-up product/architecture work, not blockers for this pass.
