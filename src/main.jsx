@@ -13,6 +13,7 @@ import {
   Repeat2,
   Search,
   Settings,
+  Shuffle,
   SkipBack,
   SkipForward,
   Volume2,
