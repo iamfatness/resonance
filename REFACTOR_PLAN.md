@@ -1,13 +1,13 @@
 # Resonance Refactoring Plan
 
-**Status**: Phase 2 continued / ready for queue/direct-source extraction
+**Status**: Phase 2 continued / ready for direct-source extraction
 **Owner**: Codex following `CODEX_PROMPT.md`  
 **Last Updated**: 2026-06-04  
 **Related**: `CODEX_PROMPT.md`, `REFACTOR_SUMMARY.md`
 
 This is the living checklist for the refactor. It must be kept current as work proceeds.
 
-**Current checkpoint**: Phase 0, Phase 1 core extraction, and three Phase 2 modularization slices are complete. Hooks plus `VideoDeck`, `LandingPage`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, and `EqPanel` are extracted. `src/main.jsx` is down from 2175 lines to 873 lines. Ready for queue and direct-source extraction.
+**Current checkpoint**: Phase 0, Phase 1 core extraction, and four Phase 2 modularization slices are complete. Hooks plus `VideoDeck`, `LandingPage`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 776 lines. Ready for direct-source extraction.
 
 ---
 
@@ -125,6 +125,7 @@ This is the living checklist for the refactor. It must be kept current as work p
 - `src/components/SearchResultsPanel.jsx`
 - `src/components/SidebarPanels.jsx`
 - `src/components/EqPanel.jsx`
+- `src/components/QueuePanel.jsx`
 - Additional components only after the current extraction passes build/tests.
 - Optional `shared/contracts.js` if JSDoc in `src/lib/presets.js` is not enough.
 
@@ -253,7 +254,7 @@ This is the living checklist for the refactor. It must be kept current as work p
 - [x] Extract search results panel after initial component extraction is stable.
 - [x] Extract sidebar panel sections after search extraction is stable.
 - [x] Extract EQ/plugin controls after preset module is stable.
-- [ ] Extract queue controls after EQ/plugin extraction is stable.
+- [x] Extract queue controls after EQ/plugin extraction is stable.
 - [ ] Extract direct-source controls after queue extraction is stable.
 - [ ] Keep `src/styles.css` unchanged initially.
 - [ ] Add CSS section comments or split only after component extraction passes.
@@ -267,6 +268,7 @@ This is the living checklist for the refactor. It must be kept current as work p
 - `src/main.jsx` now contains app state, session operations, direct-source controls, EQ/plugin controls, queue markup, and the remaining inline app panels rather than hook and large component definitions.
 - Search results and the left sidebar panels now live in extracted components with the same props/state contract as the previous inline JSX.
 - Mood presets, per-deck processing, plugin selection, instrument boosts, and manual EQ controls now live in `src/components/EqPanel.jsx`.
+- Mix status, like/dislike/queue actions, user queue controls, and playlist track loading now live in `src/components/QueuePanel.jsx`.
 - Lint passes with 2 existing hook dependency warnings isolated in `src/hooks/useYouTubePlayer.js`; these are scheduled for Phase 3 singleton loader work.
 
 ### Phase 3: Fix Fragile Runtime Areas
