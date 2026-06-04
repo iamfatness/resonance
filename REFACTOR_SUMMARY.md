@@ -2,13 +2,14 @@
 
 **Date**: 2026-06-04  
 **Performed by**: Codex following `CODEX_PROMPT.md`  
-**Phases Completed**: Phase 0, Phase 1 core extraction, Phase 2 UI modularization slices
+**Phases Completed**: Phase 0, Phase 1 core extraction, Phase 2 UI modularization slices, Phase 3 YouTube loader hardening
 
 ---
 
 ## Executive Summary
 
 The codebase now has real project hygiene, tests, linting, CI scaffolding, and extracted core model modules. `src/main.jsx` has continued shrinking from a monolith into an orchestration file: hooks, major UI surfaces, direct-source controls, search results, the left sidebar, EQ/plugin controls, and queue controls have moved into `src/hooks/` and `src/components/`. The app behavior and public Electron bridge contract were preserved.
+The YouTube iframe API now loads through a singleton platform module instead of each deck hook overwriting the global ready callback.
 
 ---
 
@@ -17,6 +18,7 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 ### Architecture & Structure
 - Added canonical app preset/DSP helpers in `src/lib/presets.js`.
 - Added pure YouTube parsing helpers in `src/lib/youtube.js`.
+- Added singleton YouTube iframe API loader in `src/platform/youtubeIframeApi.js`.
 - Added extension preset helper module in `extension/lib/presets.js`.
 - Extracted hooks:
   - `src/hooks/useYouTubePlayer.js`
@@ -46,7 +48,7 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 - EditorConfig
 
 ### Specific Bug / Fragility Fixes
-- YouTube player loading: hook moved, singleton/race fix remains for Phase 3.
+- YouTube player loading: singleton loader now prevents Deck A/B from racing on `window.onYouTubeIframeAPIReady`.
 - Direct audio EQ lifecycle: hook moved, lifecycle hardening remains for Phase 3.
 - State management / persistence: unchanged behavior; reducer extraction remains a follow-up.
 - Other: extension package now includes nested `lib/` files.
@@ -59,15 +61,15 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 - Keep extension runnable as unpacked source while adding `extension/lib/presets.js`.
 - Keep CSS intact during initial component extraction to avoid visual regressions.
 - Keep engine IPC and preload APIs unchanged.
-- Configure ESLint pragmatically so current React compiler cleanup remains a Phase 3 task rather than blocking Phase 0.
+- Configure ESLint pragmatically while still keeping the current source lint-clean.
 
 ---
 
 ## Verification Performed
 
 - [x] `npm run build` clean
-- [x] `npm run lint` clean with two existing React hook dependency warnings
-- [x] `npm test` passes (9 tests)
+- [x] `npm run lint` clean
+- [x] `npm test` passes (11 tests)
 - [x] `npm run package:extension` passes
 - Manual flows verified:
   - YouTube Deck A + B with mood changes: not manually browser-smoked in this slice
@@ -88,6 +90,8 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 - `src/lib/presets.test.js`
 - `src/lib/youtube.js`
 - `src/lib/youtube.test.js`
+- `src/platform/youtubeIframeApi.js`
+- `src/platform/youtubeIframeApi.test.js`
 - `src/lib/smoke.test.js`
 - `src/components/VideoDeck.jsx`
 - `src/components/LandingPage.jsx`
@@ -125,8 +129,8 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 
 ## Remaining Technical Debt & Recommended Follow-ups
 
-1. Phase 3: replace the YouTube iframe global callback with a singleton loader.
-2. Phase 3: harden `useLocalEq` cleanup for AudioContext/source changes.
+1. Phase 3: harden `useLocalEq` cleanup for AudioContext/source changes.
+2. Add browser smoke automation as a regular script so missing runtime imports are caught before deploy.
 3. Consider extracting session state/storage helpers if future feature work keeps growing `PlayerApp`.
 4. Dedupe Vite/Worker YouTube API normalizers.
 5. Consider TypeScript migration for the new core modules + contracts.
@@ -138,7 +142,7 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 ## How an Engineer Should Continue From Here
 
 - Read `src/lib/presets.js` first; it is now the heart of the app DSP model.
-- Start Phase 3 runtime hardening with the YouTube iframe singleton loader, then direct audio EQ cleanup.
+- Continue Phase 3 runtime hardening with direct audio EQ cleanup.
 - Run `npm run lint`, `npm test`, and `npm run build` after each extraction slice.
 - Keep `REFACTOR_PLAN.md` updated as the active checklist.
 
@@ -146,8 +150,8 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 
 ## Agent Notes (optional)
 
-The current ESLint baseline passes with two hook dependency warnings in `useYouTubePlayer.js`. Those warnings are intentionally left for the Phase 3 singleton YouTube loader work.
+The current ESLint baseline passes cleanly. A temporary browser probe was used after the previous blank-page regression and confirmed the app renders locally after the singleton loader change.
 
 ---
 
-**Refactoring in progress.** The codebase is in a better position for future development, but the full Phase 2 monolith reduction target is not complete yet.
+**Refactoring in progress.** The codebase is in a better position for future development, and the Phase 2 monolith reduction target is complete.

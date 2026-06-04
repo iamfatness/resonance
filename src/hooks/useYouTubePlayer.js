@@ -1,49 +1,43 @@
 import { useEffect, useRef, useState } from 'react';
+import { loadYouTubeIframeApi } from '../platform/youtubeIframeApi.js';
 
 export function useYouTubePlayer(videoId, volume, startSeconds = 0) {
   const containerRef = useRef(null);
   const playerRef = useRef(null);
+  const initialVideoRef = useRef({ videoId, volume, startSeconds });
   const [ready, setReady] = useState(false);
   const [playing, setPlaying] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
 
-    function loadPlayer() {
-      if (cancelled || !containerRef.current || !window.YT?.Player) return;
-      playerRef.current = new window.YT.Player(containerRef.current, {
-        videoId,
+    setReady(false);
+    setPlaying(false);
+
+    loadYouTubeIframeApi().then((yt) => {
+      if (cancelled || !containerRef.current) return;
+      const initialVideo = initialVideoRef.current;
+      playerRef.current = new yt.Player(containerRef.current, {
+        videoId: initialVideo.videoId,
         playerVars: {
           autoplay: 0,
           controls: 1,
           modestbranding: 1,
           rel: 0,
           playsinline: 1,
-          start: startSeconds || 0,
+          start: initialVideo.startSeconds || 0,
         },
         events: {
           onReady: () => {
-            playerRef.current?.setVolume?.(volume);
+            playerRef.current?.setVolume?.(initialVideo.volume);
             setReady(true);
           },
-          onStateChange: (event) => setPlaying(event.data === window.YT.PlayerState.PLAYING),
+          onStateChange: (event) => setPlaying(event.data === yt.PlayerState.PLAYING),
         },
       });
-    }
-
-    if (!window.YT) {
-      const tag = document.createElement('script');
-      tag.src = 'https://www.youtube.com/iframe_api';
-      document.head.appendChild(tag);
-    }
-
-    const previous = window.onYouTubeIframeAPIReady;
-    window.onYouTubeIframeAPIReady = () => {
-      previous?.();
-      loadPlayer();
-    };
-
-    if (window.YT?.Player) loadPlayer();
+    }).catch((error) => {
+      if (!cancelled) console.error(error);
+    });
 
     return () => {
       cancelled = true;
@@ -55,7 +49,6 @@ export function useYouTubePlayer(videoId, volume, startSeconds = 0) {
   useEffect(() => {
     if (!ready) return;
     playerRef.current?.loadVideoById?.({ videoId, startSeconds: startSeconds || 0 });
-    playerRef.current?.setVolume?.(volume);
   }, [ready, videoId, startSeconds]);
 
   useEffect(() => {

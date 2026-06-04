@@ -1,13 +1,13 @@
 # Resonance Refactoring Plan
 
-**Status**: Phase 2 extraction target met / ready for Phase 3 runtime hardening
+**Status**: Phase 3 YouTube loader complete / ready for direct audio EQ hardening
 **Owner**: Codex following `CODEX_PROMPT.md`  
 **Last Updated**: 2026-06-04  
 **Related**: `CODEX_PROMPT.md`, `REFACTOR_SUMMARY.md`
 
 This is the living checklist for the refactor. It must be kept current as work proceeds.
 
-**Current checkpoint**: Phase 0, Phase 1 core extraction, and five Phase 2 modularization slices are complete. Hooks plus `VideoDeck`, `LandingPage`, `DirectSourcePanel`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 747 lines, meeting the primary Phase 2 size target.
+**Current checkpoint**: Phase 0, Phase 1 core extraction, five Phase 2 modularization slices, and Phase 3 YouTube iframe loader hardening are complete. Hooks plus `VideoDeck`, `LandingPage`, `DirectSourcePanel`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 747 lines, meeting the primary Phase 2 size target. The YouTube iframe API now loads through a singleton platform module.
 
 ---
 
@@ -271,18 +271,18 @@ This is the living checklist for the refactor. It must be kept current as work p
 - Mood presets, per-deck processing, plugin selection, instrument boosts, and manual EQ controls now live in `src/components/EqPanel.jsx`.
 - Mix status, like/dislike/queue actions, user queue controls, and playlist track loading now live in `src/components/QueuePanel.jsx`.
 - Direct audio file/URL input, the audio element, and the visualizer canvas now live in `src/components/DirectSourcePanel.jsx`.
-- Lint passes with 2 existing hook dependency warnings isolated in `src/hooks/useYouTubePlayer.js`; these are scheduled for Phase 3 singleton loader work.
+- Lint passes cleanly after the Phase 3 singleton loader work.
 
 ### Phase 3: Fix Fragile Runtime Areas
 
 **Goal**: Remove known races/leaks.
 
-- [ ] YouTube iframe loader:
-  - [ ] Create `src/platform/youtubeIframeApi.js`.
-  - [ ] Implement singleton `loadYouTubeIframeApi()`.
-  - [ ] Avoid per-hook `window.onYouTubeIframeAPIReady` overwrites.
-  - [ ] Ensure both decks wait on the same loader.
-  - [ ] Ensure cleanup destroys only the hook-owned player.
+- [x] YouTube iframe loader:
+  - [x] Create `src/platform/youtubeIframeApi.js`.
+  - [x] Implement singleton `loadYouTubeIframeApi()`.
+  - [x] Avoid per-hook `window.onYouTubeIframeAPIReady` overwrites.
+  - [x] Ensure both decks wait on the same loader.
+  - [x] Ensure cleanup destroys only the hook-owned player.
 - [ ] Direct audio EQ:
   - [ ] Add a clear graph shutdown helper.
   - [ ] Close `AudioContext` on unmount and source replacement where safe.
@@ -294,7 +294,7 @@ This is the living checklist for the refactor. It must be kept current as work p
   - [ ] Keep private-mode storage failure resilience.
   - [ ] Optionally introduce `useSessionState` once core behavior is tested.
 - [ ] Verification:
-  - [ ] Two YouTube decks load after refresh.
+  - [x] Two YouTube decks load after refresh.
   - [ ] Rapid deck URL changes work.
   - [ ] Direct audio file/URL EQ can be changed repeatedly.
   - [ ] State persists across refresh.
