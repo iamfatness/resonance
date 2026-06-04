@@ -1,13 +1,13 @@
 # Resonance Refactoring Plan
 
-**Status**: Phase 3 runtime hardening in progress / browser smoke automation complete
+**Status**: Phase 3 persistence cleanup complete / ready for YouTube normalizer dedupe
 **Owner**: Codex following `CODEX_PROMPT.md`  
 **Last Updated**: 2026-06-04  
 **Related**: `CODEX_PROMPT.md`, `REFACTOR_SUMMARY.md`
 
 This is the living checklist for the refactor. It must be kept current as work proceeds.
 
-**Current checkpoint**: Phase 0, Phase 1 core extraction, five Phase 2 modularization slices, Phase 3 YouTube iframe loader hardening, Phase 3 direct audio EQ lifecycle cleanup, and browser smoke automation are complete. Hooks plus `VideoDeck`, `LandingPage`, `DirectSourcePanel`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 747 lines, meeting the primary Phase 2 size target. The YouTube iframe API now loads through a singleton platform module, direct audio EQ now owns visualizer, graph, context, and object URL cleanup explicitly, and `npm run smoke:browser` checks real browser rendering before deploy.
+**Current checkpoint**: Phase 0, Phase 1 core extraction, five Phase 2 modularization slices, Phase 3 YouTube iframe loader hardening, Phase 3 direct audio EQ lifecycle cleanup, browser smoke automation, and storage helper extraction are complete. Hooks plus `VideoDeck`, `LandingPage`, `DirectSourcePanel`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 731 lines, meeting the primary Phase 2 size target. The YouTube iframe API now loads through a singleton platform module, direct audio EQ now owns visualizer, graph, context, and object URL cleanup explicitly, `src/lib/storage.js` owns app-state persistence, and `npm run smoke:browser` checks real browser rendering before deploy.
 
 ---
 
@@ -290,16 +290,16 @@ This is the living checklist for the refactor. It must be kept current as work p
   - [x] Cancel visualizer animation frame reliably.
   - [x] Revoke object URLs exactly once.
   - [x] Preserve filter chain and visualizer appearance.
-- [ ] Persistence/state:
-  - [ ] Extract storage helpers to `src/lib/storage.js` if low risk.
-  - [ ] Keep private-mode storage failure resilience.
+- [x] Persistence/state:
+  - [x] Extract storage helpers to `src/lib/storage.js` if low risk.
+  - [x] Keep private-mode storage failure resilience.
   - [ ] Optionally introduce `useSessionState` once core behavior is tested.
 - [ ] Verification:
   - [x] Two YouTube decks load after refresh.
   - [ ] Rapid deck URL changes work.
   - [x] Direct audio file/URL EQ can be changed repeatedly.
   - [x] Browser smoke script renders app shell and direct audio input.
-  - [ ] State persists across refresh.
+  - [x] State persists across refresh at the storage-helper level.
 
 ### Phase 4: Quality & Contracts
 

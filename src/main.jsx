@@ -34,6 +34,7 @@ import {
   parseYoutubeTimestamp,
   youtubeUrlForVideo,
 } from './lib/youtube.js';
+import { readSavedAppState, writeSavedAppState } from './lib/storage.js';
 import { VideoDeck } from './components/VideoDeck.jsx';
 import { LandingPage } from './components/LandingPage.jsx';
 import { DirectSourcePanel } from './components/DirectSourcePanel.jsx';
@@ -90,27 +91,6 @@ const playlistCatalog = [
     tracks: [demoVideoA, demoVideoB, queueSeed[2], queueSeed[3]],
   },
 ];
-
-const APP_STATE_STORAGE_KEY = 'resonance.appState.v1';
-
-function readSavedAppState() {
-  if (typeof window === 'undefined') return null;
-  try {
-    const raw = window.localStorage.getItem(APP_STATE_STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeSavedAppState(state) {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(APP_STATE_STORAGE_KEY, JSON.stringify(state));
-  } catch {
-    // Ignore storage failures so playback controls remain usable in private or restricted contexts.
-  }
-}
 
 const pluginCatalog = [
   { id: 'waves-vst3', name: 'Waves VST3', vendor: 'Waves', status: 'Planned' },

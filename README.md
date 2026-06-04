@@ -113,6 +113,7 @@ npm run deploy:worker
 
 - `src/lib/presets.js` is the canonical source for mood presets, EQ bands, curve math, instrument boosts, and deck-processing defaults.
 - `src/lib/youtube.js` contains pure YouTube URL, playlist, timestamp, and watch URL helpers.
+- `src/lib/storage.js` owns browser app-state persistence under `resonance.appState.v1`.
 - `src/hooks/` contains platform hooks for YouTube iframe playback, direct browser EQ, and the desktop engine bridge.
 - `src/platform/youtubeIframeApi.js` owns the singleton YouTube iframe API script loader used by both decks.
 - `src/components/` contains extracted UI surfaces such as the landing page, YouTube deck, direct audio source panel, search results, sidebar panels, queue panel, EQ/plugin panel, and desktop engine panel.
