@@ -99,6 +99,7 @@ Quality checks:
 ```powershell
 npm run lint
 npm test
+npm run smoke:browser
 npm run format:check
 ```
 

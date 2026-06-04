@@ -32,6 +32,8 @@
     "format": "prettier . --write",
     "format:check": "prettier . --check",
     "test": "vitest run",
+    "smoke:browser": "npm run build && node scripts/browser-smoke.mjs",
+    "smoke:browser:preview": "node scripts/browser-smoke.mjs",
     "desktop:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-electron-dev.ps1",
     "desktop:run": "npm run build && electron .",
     "desktop:package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-desktop-local.ps1",
@@ -63,6 +65,7 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "globals": "^16.5.0",
+    "playwright": "^1.60.0",
     "prettier": "^3.7.4",
     "vitest": "^4.0.15",
     "wrangler": "^4.95.0"

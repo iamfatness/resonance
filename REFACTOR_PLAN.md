@@ -1,13 +1,13 @@
 # Resonance Refactoring Plan
 
-**Status**: Phase 3 runtime hardening in progress / direct audio cleanup complete
+**Status**: Phase 3 runtime hardening in progress / browser smoke automation complete
 **Owner**: Codex following `CODEX_PROMPT.md`  
 **Last Updated**: 2026-06-04  
 **Related**: `CODEX_PROMPT.md`, `REFACTOR_SUMMARY.md`
 
 This is the living checklist for the refactor. It must be kept current as work proceeds.
 
-**Current checkpoint**: Phase 0, Phase 1 core extraction, five Phase 2 modularization slices, Phase 3 YouTube iframe loader hardening, and Phase 3 direct audio EQ lifecycle cleanup are complete. Hooks plus `VideoDeck`, `LandingPage`, `DirectSourcePanel`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 747 lines, meeting the primary Phase 2 size target. The YouTube iframe API now loads through a singleton platform module, and direct audio EQ now owns visualizer, graph, context, and object URL cleanup explicitly.
+**Current checkpoint**: Phase 0, Phase 1 core extraction, five Phase 2 modularization slices, Phase 3 YouTube iframe loader hardening, Phase 3 direct audio EQ lifecycle cleanup, and browser smoke automation are complete. Hooks plus `VideoDeck`, `LandingPage`, `DirectSourcePanel`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 747 lines, meeting the primary Phase 2 size target. The YouTube iframe API now loads through a singleton platform module, direct audio EQ now owns visualizer, graph, context, and object URL cleanup explicitly, and `npm run smoke:browser` checks real browser rendering before deploy.
 
 ---
 
@@ -298,6 +298,7 @@ This is the living checklist for the refactor. It must be kept current as work p
   - [x] Two YouTube decks load after refresh.
   - [ ] Rapid deck URL changes work.
   - [x] Direct audio file/URL EQ can be changed repeatedly.
+  - [x] Browser smoke script renders app shell and direct audio input.
   - [ ] State persists across refresh.
 
 ### Phase 4: Quality & Contracts

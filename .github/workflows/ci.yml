@@ -32,3 +32,6 @@ jobs:
 
       - name: Build
         run: npm run build
+
+      - name: Browser smoke
+        run: npm run smoke:browser:preview

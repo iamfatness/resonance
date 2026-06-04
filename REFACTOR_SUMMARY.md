@@ -2,7 +2,7 @@
 
 **Date**: 2026-06-04  
 **Performed by**: Codex following `CODEX_PROMPT.md`  
-**Phases Completed**: Phase 0, Phase 1 core extraction, Phase 2 UI modularization slices, Phase 3 YouTube loader hardening, Phase 3 direct audio EQ cleanup
+**Phases Completed**: Phase 0, Phase 1 core extraction, Phase 2 UI modularization slices, Phase 3 YouTube loader hardening, Phase 3 direct audio EQ cleanup, browser smoke automation
 
 ---
 
@@ -11,6 +11,7 @@
 The codebase now has real project hygiene, tests, linting, CI scaffolding, and extracted core model modules. `src/main.jsx` has continued shrinking from a monolith into an orchestration file: hooks, major UI surfaces, direct-source controls, search results, the left sidebar, EQ/plugin controls, and queue controls have moved into `src/hooks/` and `src/components/`. The app behavior and public Electron bridge contract were preserved.
 The YouTube iframe API now loads through a singleton platform module instead of each deck hook overwriting the global ready callback.
 Direct audio EQ now has explicit cleanup ownership for its visualizer frame, Web Audio graph, audio context, and local object URLs.
+Browser smoke automation now starts a production preview and checks that the app shell and direct audio input render in Chromium.
 
 ---
 
@@ -45,6 +46,7 @@ Direct audio EQ now has explicit cleanup ownership for its visualizer frame, Web
 - package.json improvements
 - ESLint / Prettier
 - Tests (Vitest)
+- Browser smoke script (Playwright)
 - CI workflow
 - EditorConfig
 
@@ -71,6 +73,7 @@ Direct audio EQ now has explicit cleanup ownership for its visualizer frame, Web
 - [x] `npm run build` clean
 - [x] `npm run lint` clean
 - [x] `npm test` passes (11 tests)
+- [x] `npm run smoke:browser` passes
 - [x] `npm run package:extension` passes
 - Manual flows verified:
   - YouTube Deck A + B with mood changes: not manually browser-smoked in this slice
@@ -93,6 +96,7 @@ Direct audio EQ now has explicit cleanup ownership for its visualizer frame, Web
 - `src/lib/youtube.test.js`
 - `src/platform/youtubeIframeApi.js`
 - `src/platform/youtubeIframeApi.test.js`
+- `scripts/browser-smoke.mjs`
 - `src/lib/smoke.test.js`
 - `src/components/VideoDeck.jsx`
 - `src/components/LandingPage.jsx`
@@ -130,19 +134,18 @@ Direct audio EQ now has explicit cleanup ownership for its visualizer frame, Web
 
 ## Remaining Technical Debt & Recommended Follow-ups
 
-1. Add browser smoke automation as a regular script so missing runtime imports are caught before deploy.
-2. Consider extracting session state/storage helpers if future feature work keeps growing `PlayerApp`.
-3. Dedupe Vite/Worker YouTube API normalizers.
-4. Consider TypeScript migration for the new core modules + contracts.
-5. Evaluate `electron-builder` or Forge for desktop releases.
-6. Improve native audio-router to be event-driven.
+1. Consider extracting session state/storage helpers if future feature work keeps growing `PlayerApp`.
+2. Dedupe Vite/Worker YouTube API normalizers.
+3. Consider TypeScript migration for the new core modules + contracts.
+4. Evaluate `electron-builder` or Forge for desktop releases.
+5. Improve native audio-router to be event-driven.
 
 ---
 
 ## How an Engineer Should Continue From Here
 
 - Read `src/lib/presets.js` first; it is now the heart of the app DSP model.
-- Continue Phase 3 by adding a repeatable browser smoke script and then evaluate storage/session cleanup.
+- Continue Phase 3 by evaluating storage/session cleanup.
 - Run `npm run lint`, `npm test`, and `npm run build` after each extraction slice.
 - Keep `REFACTOR_PLAN.md` updated as the active checklist.
 
