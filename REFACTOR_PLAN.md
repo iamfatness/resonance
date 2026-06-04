@@ -1,13 +1,13 @@
 # Resonance Refactoring Plan
 
-**Status**: Phase 3 YouTube loader complete / ready for direct audio EQ hardening
+**Status**: Phase 3 runtime hardening in progress / direct audio cleanup complete
 **Owner**: Codex following `CODEX_PROMPT.md`  
 **Last Updated**: 2026-06-04  
 **Related**: `CODEX_PROMPT.md`, `REFACTOR_SUMMARY.md`
 
 This is the living checklist for the refactor. It must be kept current as work proceeds.
 
-**Current checkpoint**: Phase 0, Phase 1 core extraction, five Phase 2 modularization slices, and Phase 3 YouTube iframe loader hardening are complete. Hooks plus `VideoDeck`, `LandingPage`, `DirectSourcePanel`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 747 lines, meeting the primary Phase 2 size target. The YouTube iframe API now loads through a singleton platform module.
+**Current checkpoint**: Phase 0, Phase 1 core extraction, five Phase 2 modularization slices, Phase 3 YouTube iframe loader hardening, and Phase 3 direct audio EQ lifecycle cleanup are complete. Hooks plus `VideoDeck`, `LandingPage`, `DirectSourcePanel`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 747 lines, meeting the primary Phase 2 size target. The YouTube iframe API now loads through a singleton platform module, and direct audio EQ now owns visualizer, graph, context, and object URL cleanup explicitly.
 
 ---
 
@@ -283,12 +283,13 @@ This is the living checklist for the refactor. It must be kept current as work p
   - [x] Avoid per-hook `window.onYouTubeIframeAPIReady` overwrites.
   - [x] Ensure both decks wait on the same loader.
   - [x] Ensure cleanup destroys only the hook-owned player.
-- [ ] Direct audio EQ:
-  - [ ] Add a clear graph shutdown helper.
-  - [ ] Close `AudioContext` on unmount and source replacement where safe.
-  - [ ] Cancel visualizer animation frame reliably.
-  - [ ] Revoke object URLs exactly once.
-  - [ ] Preserve filter chain and visualizer appearance.
+- [x] Direct audio EQ:
+  - [x] Add a clear graph shutdown helper.
+  - [x] Close `AudioContext` on unmount.
+  - [x] Preserve the media-element graph across source replacement because browsers only allow one `MediaElementAudioSourceNode` per audio element.
+  - [x] Cancel visualizer animation frame reliably.
+  - [x] Revoke object URLs exactly once.
+  - [x] Preserve filter chain and visualizer appearance.
 - [ ] Persistence/state:
   - [ ] Extract storage helpers to `src/lib/storage.js` if low risk.
   - [ ] Keep private-mode storage failure resilience.
@@ -296,7 +297,7 @@ This is the living checklist for the refactor. It must be kept current as work p
 - [ ] Verification:
   - [x] Two YouTube decks load after refresh.
   - [ ] Rapid deck URL changes work.
-  - [ ] Direct audio file/URL EQ can be changed repeatedly.
+  - [x] Direct audio file/URL EQ can be changed repeatedly.
   - [ ] State persists across refresh.
 
 ### Phase 4: Quality & Contracts

@@ -1,20 +1,45 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { bandFreqs } from '../lib/presets.js';
 
 export function useLocalEq(activePreset, curve, sourceUrl) {
   const audioRef = useRef(null);
   const graphRef = useRef(null);
   const contextRef = useRef(null);
+  const sourceNodeRef = useRef(null);
   const filtersRef = useRef([]);
   const analyserRef = useRef(null);
+  const animationFrameRef = useRef(0);
+  const localFileUrlRef = useRef('');
   const [localFileUrl, setLocalFileUrl] = useState('');
   const [enabled, setEnabled] = useState(false);
 
-  useEffect(() => {
-    return () => {
-      if (localFileUrl) URL.revokeObjectURL(localFileUrl);
-    };
-  }, [localFileUrl]);
+  const stopVisualizer = useCallback(() => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = 0;
+    }
+  }, []);
+
+  const revokeLocalFileUrl = useCallback(() => {
+    if (!localFileUrlRef.current) return;
+    URL.revokeObjectURL(localFileUrlRef.current);
+    localFileUrlRef.current = '';
+  }, []);
+
+  const disconnectGraph = useCallback(({ updateState = true } = {}) => {
+    stopVisualizer();
+    sourceNodeRef.current?.disconnect?.();
+    filtersRef.current.forEach((filter) => filter.disconnect?.());
+    analyserRef.current?.disconnect?.();
+    if (contextRef.current && contextRef.current.state !== 'closed') {
+      contextRef.current.close();
+    }
+    contextRef.current = null;
+    sourceNodeRef.current = null;
+    filtersRef.current = [];
+    analyserRef.current = null;
+    if (updateState) setEnabled(false);
+  }, [stopVisualizer]);
 
   useEffect(() => {
     filtersRef.current.forEach((filter, index) => {
@@ -29,10 +54,9 @@ export function useLocalEq(activePreset, curve, sourceUrl) {
 
     const ctx = canvas.getContext('2d');
     const data = new Uint8Array(analyser.frequencyBinCount);
-    let frame = 0;
 
     function draw() {
-      frame = requestAnimationFrame(draw);
+      animationFrameRef.current = requestAnimationFrame(draw);
       const { width, height } = canvas;
       analyser.getByteFrequencyData(data);
       ctx.clearRect(0, 0, width, height);
@@ -55,12 +79,24 @@ export function useLocalEq(activePreset, curve, sourceUrl) {
     }
 
     draw();
-    return () => cancelAnimationFrame(frame);
-  }, [enabled]);
+    return stopVisualizer;
+  }, [enabled, stopVisualizer]);
+
+  useEffect(() => {
+    return () => {
+      disconnectGraph({ updateState: false });
+      revokeLocalFileUrl();
+    };
+  }, [disconnectGraph, revokeLocalFileUrl]);
 
   const activate = async () => {
     const audio = audioRef.current;
-    if (!audio || enabled) return;
+    if (!audio) return;
+
+    if (contextRef.current) {
+      await contextRef.current.resume?.();
+      return;
+    }
 
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     const context = new AudioContext();
@@ -83,8 +119,12 @@ export function useLocalEq(activePreset, curve, sourceUrl) {
     analyser.connect(context.destination);
 
     contextRef.current = context;
+    sourceNodeRef.current = source;
     filtersRef.current = filters;
     analyserRef.current = analyser;
+    filters.forEach((filter, index) => {
+      filter.gain.setTargetAtTime(curve[index] ?? 0, context.currentTime, 0.02);
+    });
     setEnabled(true);
   };
 
@@ -97,8 +137,10 @@ export function useLocalEq(activePreset, curve, sourceUrl) {
     enabled,
     setFile(file) {
       if (!file) return;
-      if (localFileUrl) URL.revokeObjectURL(localFileUrl);
-      setLocalFileUrl(URL.createObjectURL(file));
+      revokeLocalFileUrl();
+      const nextUrl = URL.createObjectURL(file);
+      localFileUrlRef.current = nextUrl;
+      setLocalFileUrl(nextUrl);
     },
     activate,
   };

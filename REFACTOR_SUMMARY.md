@@ -2,7 +2,7 @@
 
 **Date**: 2026-06-04  
 **Performed by**: Codex following `CODEX_PROMPT.md`  
-**Phases Completed**: Phase 0, Phase 1 core extraction, Phase 2 UI modularization slices, Phase 3 YouTube loader hardening
+**Phases Completed**: Phase 0, Phase 1 core extraction, Phase 2 UI modularization slices, Phase 3 YouTube loader hardening, Phase 3 direct audio EQ cleanup
 
 ---
 
@@ -10,6 +10,7 @@
 
 The codebase now has real project hygiene, tests, linting, CI scaffolding, and extracted core model modules. `src/main.jsx` has continued shrinking from a monolith into an orchestration file: hooks, major UI surfaces, direct-source controls, search results, the left sidebar, EQ/plugin controls, and queue controls have moved into `src/hooks/` and `src/components/`. The app behavior and public Electron bridge contract were preserved.
 The YouTube iframe API now loads through a singleton platform module instead of each deck hook overwriting the global ready callback.
+Direct audio EQ now has explicit cleanup ownership for its visualizer frame, Web Audio graph, audio context, and local object URLs.
 
 ---
 
@@ -49,7 +50,7 @@ The YouTube iframe API now loads through a singleton platform module instead of 
 
 ### Specific Bug / Fragility Fixes
 - YouTube player loading: singleton loader now prevents Deck A/B from racing on `window.onYouTubeIframeAPIReady`.
-- Direct audio EQ lifecycle: hook moved, lifecycle hardening remains for Phase 3.
+- Direct audio EQ lifecycle: visualizer, graph, context, and local object URL cleanup are now explicit.
 - State management / persistence: unchanged behavior; reducer extraction remains a follow-up.
 - Other: extension package now includes nested `lib/` files.
 
@@ -73,7 +74,7 @@ The YouTube iframe API now loads through a singleton platform module instead of 
 - [x] `npm run package:extension` passes
 - Manual flows verified:
   - YouTube Deck A + B with mood changes: not manually browser-smoked in this slice
-  - Direct audio file + URL EQ + visualizer: not manually browser-smoked in this slice
+  - Direct audio file + URL EQ + visualizer: browser-probed with a generated WAV file and no page errors
   - Queue, search, likes, history, side panels: not manually browser-smoked in this slice
   - Extension capture + EQ: package verified; browser load not manually smoked in this slice
   - Desktop engine panel: build verified; desktop app not manually smoked in this slice
@@ -129,20 +130,19 @@ The YouTube iframe API now loads through a singleton platform module instead of 
 
 ## Remaining Technical Debt & Recommended Follow-ups
 
-1. Phase 3: harden `useLocalEq` cleanup for AudioContext/source changes.
-2. Add browser smoke automation as a regular script so missing runtime imports are caught before deploy.
-3. Consider extracting session state/storage helpers if future feature work keeps growing `PlayerApp`.
-4. Dedupe Vite/Worker YouTube API normalizers.
-5. Consider TypeScript migration for the new core modules + contracts.
-6. Evaluate `electron-builder` or Forge for desktop releases.
-7. Improve native audio-router to be event-driven.
+1. Add browser smoke automation as a regular script so missing runtime imports are caught before deploy.
+2. Consider extracting session state/storage helpers if future feature work keeps growing `PlayerApp`.
+3. Dedupe Vite/Worker YouTube API normalizers.
+4. Consider TypeScript migration for the new core modules + contracts.
+5. Evaluate `electron-builder` or Forge for desktop releases.
+6. Improve native audio-router to be event-driven.
 
 ---
 
 ## How an Engineer Should Continue From Here
 
 - Read `src/lib/presets.js` first; it is now the heart of the app DSP model.
-- Continue Phase 3 runtime hardening with direct audio EQ cleanup.
+- Continue Phase 3 by adding a repeatable browser smoke script and then evaluate storage/session cleanup.
 - Run `npm run lint`, `npm test`, and `npm run build` after each extraction slice.
 - Keep `REFACTOR_PLAN.md` updated as the active checklist.
 
