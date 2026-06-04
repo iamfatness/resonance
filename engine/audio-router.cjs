@@ -50,10 +50,10 @@ function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_
       perDeckPan: true,
       perDeckEq: true,
       perDeckPlugins: false,
-      nativePcmRouting: false,
+      nativePcmRouting: backend === 'native-router',
     },
     note: isNativeSkeleton
-      ? 'Native router helper is built. Local WAV decks can use the persistent WASAPI mixer; browser capture and plugins are still pending.'
+      ? 'Native router helper is built. Local WAV, pushed PCM, and bounded WASAPI capture sources can use the persistent mixer; continuous virtual-device streams and plugins are still pending.'
       : backend === 'mock'
         ? 'Deck routing is simulated until native per-source PCM capture is connected.'
         : 'WASAPI metering is active; per-deck PCM routing is still simulated.',
@@ -252,6 +252,33 @@ class DesktopAudioRouter {
     if (!filePath || !this.startPersistentServer()) return false;
     const deckId = deck === 'B' ? 'B' : 'A';
     this.sendServerCommand({ type: 'load', deck: deckId, path: filePath, name });
+    this.sendServerCommand(this.deckCommandSettings(deckId));
+    return true;
+  }
+
+  pushDeckPcm({ deck = 'A', pcm16Base64, channels = 2, sampleRate = 48000 } = {}) {
+    if (!pcm16Base64 || !this.startPersistentServer()) return false;
+    const deckId = deck === 'B' ? 'B' : 'A';
+    this.sendServerCommand({
+      type: 'pcm',
+      deck: deckId,
+      channels,
+      sampleRate,
+      pcm16Base64,
+    });
+    this.sendServerCommand(this.deckCommandSettings(deckId));
+    return true;
+  }
+
+  captureLoopback({ deck = 'A', deviceId, durationMs = 500 } = {}) {
+    if (!this.startPersistentServer()) return false;
+    const deckId = deck === 'B' ? 'B' : 'A';
+    this.sendServerCommand({
+      type: 'captureLoopback',
+      deck: deckId,
+      deviceId: deviceId || this.outputDeviceId || 'default-output',
+      durationMs: clamp(durationMs, 50, 5000),
+    });
     this.sendServerCommand(this.deckCommandSettings(deckId));
     return true;
   }

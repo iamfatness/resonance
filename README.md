@@ -82,11 +82,11 @@ The Up next queue supports clearing, loading a queued item, play-next placement,
 
 Search results and imported playlists are enriched with YouTube video metadata, including real durations and live/upcoming status when the YouTube Data API returns it.
 
-Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ bypass, and per-deck plugin-chain state. These settings are sent to the Electron audio engine and persisted, but actual VST/Waves DSP for YouTube sources still requires the desktop audio router/virtual device path to deliver PCM audio into the engine.
+Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ bypass, and per-deck plugin-chain state. These settings are sent to the Electron audio engine and persisted. Local WAV decks and pushed PCM/capture buffers can now flow through the native persistent router; actual VST/Waves DSP for YouTube sources still requires the virtual-device path to deliver continuous PCM audio into the engine.
 
-The desktop engine has a mock two-bus routing prototype for Deck A and Deck B. The desktop panel shows simulated per-deck input, left, and right meters that react to deck volume, pan, EQ activity, and active staged plugins before real PCM routing is connected.
+The desktop engine has a native two-bus routing prototype for Deck A and Deck B when the audio router helper is built. The desktop panel shows per-deck input, left, and right meters from native snapshots for local WAV, pushed PCM, and bounded capture sources, with mock meters still available as a fallback.
 
-The mock routing logic now lives behind `engine/audio-router.cjs`, which is the boundary for the future native backend. The renderer reads router state from the existing desktop engine IPC API, so native per-deck PCM routing can replace mock meters without changing the app UI contract.
+The routing logic lives behind `engine/audio-router.cjs`, which manages the native persistent router process. The renderer reads router state from the existing desktop engine IPC API, so future virtual-device and plugin-host sources can replace the current bounded capture path without changing the app UI contract.
 
 Build:
 

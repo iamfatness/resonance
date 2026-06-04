@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstring>
 #include <cmath>
+#include <deque>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -478,12 +479,110 @@ double JsonNumberValue(const std::string& line, const std::string& key, double f
   return end == line.c_str() + start ? fallback : value;
 }
 
+int Base64Value(char ch) {
+  if (ch >= 'A' && ch <= 'Z') return ch - 'A';
+  if (ch >= 'a' && ch <= 'z') return ch - 'a' + 26;
+  if (ch >= '0' && ch <= '9') return ch - '0' + 52;
+  if (ch == '+') return 62;
+  if (ch == '/') return 63;
+  return -1;
+}
+
+std::vector<uint8_t> DecodeBase64(const std::string& value) {
+  std::vector<uint8_t> bytes;
+  int accumulator = 0;
+  int bits = -8;
+  for (char ch : value) {
+    if (ch == '=') break;
+    const int decoded = Base64Value(ch);
+    if (decoded < 0) continue;
+    accumulator = (accumulator << 6) | decoded;
+    bits += 6;
+    if (bits >= 0) {
+      bytes.push_back(static_cast<uint8_t>((accumulator >> bits) & 0xff));
+      bits -= 8;
+    }
+  }
+  return bytes;
+}
+
+double SampleAsDouble(const BYTE* bytes, WORD bitsPerSample, WORD blockAlign, WORD channelCount, UINT32 frame, WORD channel, bool isFloat) {
+  const WORD bytesPerSample = std::max<WORD>(1, bitsPerSample / 8);
+  const BYTE* sample = bytes + (frame * blockAlign) + (std::min<WORD>(channel, channelCount - 1) * bytesPerSample);
+  if (isFloat && bitsPerSample == 32) return ClampDouble(*reinterpret_cast<const float*>(sample), -1.0, 1.0);
+  if (bitsPerSample == 16) return ClampDouble(static_cast<double>(*reinterpret_cast<const int16_t*>(sample)) / 32768.0, -1.0, 1.0);
+  if (bitsPerSample == 24) {
+    int32_t packed = sample[0] | (sample[1] << 8) | (sample[2] << 16);
+    if (packed & 0x800000) packed |= ~0xffffff;
+    return ClampDouble(static_cast<double>(packed) / 8388608.0, -1.0, 1.0);
+  }
+  if (bitsPerSample == 32) return ClampDouble(static_cast<double>(*reinterpret_cast<const int32_t*>(sample)) / 2147483648.0, -1.0, 1.0);
+  return 0.0;
+}
+
+void AppendPcm16Base64(std::deque<std::array<double, 2>>& buffer, const std::string& encoded, int channels, size_t maxFrames) {
+  const std::vector<uint8_t> bytes = DecodeBase64(encoded);
+  const int sourceChannels = std::max(1, std::min(2, channels));
+  const size_t bytesPerFrame = static_cast<size_t>(sourceChannels) * 2;
+  if (bytesPerFrame == 0) return;
+
+  const size_t frames = bytes.size() / bytesPerFrame;
+  for (size_t frame = 0; frame < frames; ++frame) {
+    const uint8_t* frameStart = bytes.data() + (frame * bytesPerFrame);
+    int16_t leftPacked = 0;
+    std::memcpy(&leftPacked, frameStart, sizeof(int16_t));
+    int16_t rightPacked = leftPacked;
+    if (sourceChannels > 1) {
+      std::memcpy(&rightPacked, frameStart + 2, sizeof(int16_t));
+    }
+    buffer.push_back({
+      ClampDouble(static_cast<double>(leftPacked) / 32768.0, -1.0, 1.0),
+      ClampDouble(static_cast<double>(rightPacked) / 32768.0, -1.0, 1.0),
+    });
+  }
+
+  while (buffer.size() > maxFrames) buffer.pop_front();
+}
+
+void AppendInterleavedCaptureFrames(
+  std::deque<std::array<double, 2>>& buffer,
+  const BYTE* data,
+  UINT32 frames,
+  const WAVEFORMATEX* format,
+  size_t maxFrames) {
+  if (!data || !format) return;
+  const WORD channels = std::max<WORD>(1, format->nChannels);
+  const WORD bits = format->wBitsPerSample;
+  const bool isFloat = IsFloatFormat(format);
+  for (UINT32 frame = 0; frame < frames; ++frame) {
+    const double left = SampleAsDouble(data, bits, format->nBlockAlign, channels, frame, 0, isFloat);
+    const double right = channels > 1 ? SampleAsDouble(data, bits, format->nBlockAlign, channels, frame, 1, isFloat) : left;
+    buffer.push_back({ left, right });
+  }
+  while (buffer.size() > maxFrames) buffer.pop_front();
+}
+
+struct ServerState;
+void CaptureLoopbackIntoDeck(
+  ServerState& state,
+  char deckId,
+  const std::wstring& deviceId,
+  int durationMs,
+  double renderSampleRate,
+  size_t maxPcmFrames);
+
 struct ServerDeck {
   char id = 'A';
   WavData wav;
+  std::deque<std::array<double, 2>> pcmFrames;
   bool loaded = false;
   bool playing = false;
   uint64_t positionFrames = 0;
+  uint64_t pcmFramesReceived = 0;
+  uint64_t pcmFramesRendered = 0;
+  uint32_t pcmUnderruns = 0;
+  uint32_t captureFramesReceived = 0;
+  std::string sourceType = "empty";
   DeckState processing = MakeDeck("A", 1000.0, 0.12, 0.0, 0.0, 0.0, 0.0);
   PersistentDeckEq eq;
   DeckStats stats;
@@ -508,8 +607,102 @@ ServerDeck& SelectServerDeck(ServerState& state, const std::string& deck) {
 }
 
 double ServerDeckPositionMs(const ServerDeck& deck) {
+  if (deck.sourceType == "pcm" || deck.sourceType == "loopback") return 0.0;
   if (!deck.loaded || deck.wav.sampleRate == 0) return 0.0;
   return static_cast<double>(deck.positionFrames) * 1000.0 / static_cast<double>(deck.wav.sampleRate);
+}
+
+void CaptureLoopbackIntoDeck(
+  ServerState& state,
+  char deckId,
+  const std::wstring& deviceId,
+  int durationMs,
+  double renderSampleRate,
+  size_t maxPcmFrames) {
+  ComPtr<IMMDevice> captureDevice;
+  EDataFlow captureFlow = deviceId.find(L"{0.0.1.") != std::wstring::npos ? eCapture : eRender;
+  DWORD streamFlags = captureFlow == eRender ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0;
+  if (!GetEndpointByIdOrDefault(captureFlow, deviceId, captureDevice)) {
+    captureFlow = captureFlow == eRender ? eCapture : eRender;
+    streamFlags = captureFlow == eRender ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0;
+  }
+  if (!captureDevice) {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    SelectServerDeck(state, deckId == 'B' ? "B" : "A").error = "Capture endpoint unavailable";
+    return;
+  }
+
+  ComPtr<IAudioClient> audioClient;
+  HRESULT hr = captureDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &audioClient);
+  if (FAILED(hr)) {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    SelectServerDeck(state, deckId == 'B' ? "B" : "A").error = "Loopback IAudioClient activation failed";
+    return;
+  }
+
+  WAVEFORMATEX* mixFormat = nullptr;
+  hr = audioClient->GetMixFormat(&mixFormat);
+  if (FAILED(hr) || !mixFormat) {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    SelectServerDeck(state, deckId == 'B' ? "B" : "A").error = "Loopback mix format unavailable";
+    return;
+  }
+
+  const REFERENCE_TIME bufferDuration = 10000000;
+  hr = audioClient->Initialize(
+    AUDCLNT_SHAREMODE_SHARED,
+    streamFlags,
+    bufferDuration,
+    0,
+    mixFormat,
+    nullptr);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::lock_guard<std::mutex> lock(state.mutex);
+    SelectServerDeck(state, deckId == 'B' ? "B" : "A").error = "Loopback capture initialize failed";
+    return;
+  }
+
+  ComPtr<IAudioCaptureClient> captureClient;
+  hr = audioClient->GetService(IID_PPV_ARGS(&captureClient));
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    std::lock_guard<std::mutex> lock(state.mutex);
+    SelectServerDeck(state, deckId == 'B' ? "B" : "A").error = "Loopback capture client unavailable";
+    return;
+  }
+
+  audioClient->Start();
+  const DWORD start = GetTickCount();
+  const DWORD targetMs = static_cast<DWORD>(std::max(50, std::min(5000, durationMs)));
+  while (GetTickCount() - start < targetMs) {
+    UINT32 packetFrames = 0;
+    captureClient->GetNextPacketSize(&packetFrames);
+    while (packetFrames > 0) {
+      BYTE* data = nullptr;
+      UINT32 frames = 0;
+      DWORD flags = 0;
+      hr = captureClient->GetBuffer(&data, &frames, &flags, nullptr, nullptr);
+      if (SUCCEEDED(hr)) {
+        if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT) && data) {
+          std::lock_guard<std::mutex> lock(state.mutex);
+          ServerDeck& deck = SelectServerDeck(state, deckId == 'B' ? "B" : "A");
+          AppendInterleavedCaptureFrames(deck.pcmFrames, data, frames, mixFormat, maxPcmFrames);
+          deck.loaded = true;
+          deck.playing = true;
+          deck.sourceType = "loopback";
+          deck.pcmFramesReceived += frames;
+          deck.captureFramesReceived += frames;
+        }
+        captureClient->ReleaseBuffer(frames);
+      }
+      captureClient->GetNextPacketSize(&packetFrames);
+    }
+    Sleep(10);
+  }
+
+  audioClient->Stop();
+  CoTaskMemFree(mixFormat);
 }
 
 void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, const std::wstring& deviceName, const std::wstring& deviceId, const char* eventType) {
@@ -520,16 +713,23 @@ void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, cons
       << "{\"deck\":\"" << deck.id << "\","
       << "\"loaded\":" << (deck.loaded ? "true" : "false") << ","
       << "\"playing\":" << (deck.playing ? "true" : "false") << ","
+      << "\"sourceType\":\"" << deck.sourceType << "\","
       << "\"positionMs\":" << ServerDeckPositionMs(deck) << ","
       << "\"durationMs\":" << WavDurationMs(deck.wav) << ","
       << "\"sampleRate\":" << deck.wav.sampleRate << ","
       << "\"channels\":" << deck.wav.channels << ","
-      << "\"bitsPerSample\":" << deck.wav.bitsPerSample << "}";
+      << "\"bitsPerSample\":" << deck.wav.bitsPerSample << ","
+      << "\"pcmQueuedFrames\":" << deck.pcmFrames.size() << ","
+      << "\"pcmFramesReceived\":" << deck.pcmFramesReceived << ","
+      << "\"pcmFramesRendered\":" << deck.pcmFramesRendered << ","
+      << "\"pcmUnderruns\":" << deck.pcmUnderruns << ","
+      << "\"captureFramesReceived\":" << deck.captureFramesReceived << "}";
   };
   auto printDeckRoute = [](const ServerDeck& deck) {
     std::cout
       << "{\"deck\":\"" << deck.id << "\","
       << "\"status\":\"" << (deck.playing ? "playing" : deck.loaded ? "loaded" : "empty") << "\","
+      << "\"sourceType\":\"" << deck.sourceType << "\","
       << "\"gain\":" << deck.processing.gain << ","
       << "\"pan\":" << deck.processing.pan << ","
       << "\"eqLowDb\":" << deck.processing.eqLowDb << ","
@@ -600,7 +800,7 @@ void ApplyServerSettings(ServerDeck& deck, const std::string& line, double sampl
 void RunServerCommand(ServerState& state, const std::string& line, double sampleRate) {
   const std::string type = JsonStringValue(line, "type");
   const std::string deckId = JsonStringValue(line, "deck");
-  std::lock_guard<std::mutex> lock(state.mutex);
+  std::unique_lock<std::mutex> lock(state.mutex);
 
   if (type == "exit") {
     state.running = false;
@@ -614,9 +814,15 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
     const std::string path = JsonStringValue(line, "path");
     if (LoadWavFile(Utf8ToWide(path), wav, error)) {
       deck.wav = std::move(wav);
+      deck.pcmFrames.clear();
       deck.loaded = true;
       deck.playing = false;
       deck.positionFrames = 0;
+      deck.pcmFramesReceived = 0;
+      deck.pcmFramesRendered = 0;
+      deck.pcmUnderruns = 0;
+      deck.captureFramesReceived = 0;
+      deck.sourceType = "wav";
       deck.stats = {};
       deck.eq.Reset();
       deck.error.clear();
@@ -625,8 +831,48 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
       deck.loaded = false;
       deck.playing = false;
       deck.positionFrames = 0;
+      deck.sourceType = "empty";
       deck.error = error;
     }
+    return;
+  }
+
+  if (type == "pcm") {
+    const size_t before = deck.pcmFrames.size();
+    AppendPcm16Base64(
+      deck.pcmFrames,
+      JsonStringValue(line, "pcm16Base64"),
+      static_cast<int>(JsonNumberValue(line, "channels", 2.0)),
+      static_cast<size_t>(std::max(48000.0, sampleRate * 8.0)));
+    const size_t appended = deck.pcmFrames.size() >= before ? deck.pcmFrames.size() - before : 0;
+    deck.loaded = true;
+    deck.playing = true;
+    deck.sourceType = "pcm";
+    deck.pcmFramesReceived += appended;
+    deck.wav = {};
+    deck.positionFrames = 0;
+    return;
+  }
+
+  if (type == "captureLoopback") {
+    const int durationMs = static_cast<int>(ClampDouble(JsonNumberValue(line, "durationMs", 500.0), 50.0, 5000.0));
+    const std::wstring deviceId = Utf8ToWide(JsonStringValue(line, "deviceId"));
+    const char captureDeckId = deck.id;
+    deck.loaded = true;
+    deck.playing = true;
+    deck.sourceType = "loopback";
+    deck.wav = {};
+    deck.positionFrames = 0;
+    deck.error.clear();
+    lock.unlock();
+    CaptureLoopbackIntoDeck(
+      state,
+      captureDeckId,
+      deviceId,
+      durationMs,
+      sampleRate,
+      static_cast<size_t>(std::max(48000.0, sampleRate * 8.0)));
+    lock.lock();
     return;
   }
 
@@ -636,8 +882,10 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
   }
 
   if (type == "play" && deck.loaded) {
-    const uint64_t frameCount = deck.wav.channels == 0 ? 0 : deck.wav.samples.size() / deck.wav.channels;
-    if (deck.positionFrames >= frameCount) deck.positionFrames = 0;
+    if (deck.sourceType == "wav") {
+      const uint64_t frameCount = deck.wav.channels == 0 ? 0 : deck.wav.samples.size() / deck.wav.channels;
+      if (deck.positionFrames >= frameCount) deck.positionFrames = 0;
+    }
     deck.playing = true;
     return;
   }
@@ -650,12 +898,13 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
   if (type == "stop") {
     deck.playing = false;
     deck.positionFrames = 0;
+    deck.pcmFrames.clear();
     deck.stats = {};
     deck.eq.Reset();
     return;
   }
 
-  if (type == "seek" && deck.loaded) {
+  if (type == "seek" && deck.loaded && deck.sourceType == "wav") {
     const double positionMs = std::max(0.0, JsonNumberValue(line, "positionMs", 0.0));
     const uint64_t targetFrame = static_cast<uint64_t>(positionMs * deck.wav.sampleRate / 1000.0);
     const uint64_t frameCount = deck.wav.channels == 0 ? 0 : deck.wav.samples.size() / deck.wav.channels;
@@ -785,16 +1034,31 @@ int RunPersistentServer(const std::wstring& outputDeviceId) {
         double left = 0.0;
         double right = 0.0;
         auto mixDeck = [&](ServerDeck& deck) {
-          if (!deck.loaded || !deck.playing || deck.wav.channels == 0) return;
-          const uint64_t frameCount = deck.wav.samples.size() / deck.wav.channels;
-          if (deck.positionFrames + frame >= frameCount) {
-            deck.playing = false;
-            deck.positionFrames = frameCount;
-            return;
+          if (!deck.loaded || !deck.playing) return;
+          double sourceLeft = 0.0;
+          double sourceRight = 0.0;
+          if (deck.sourceType == "pcm" || deck.sourceType == "loopback") {
+            if (deck.pcmFrames.empty()) {
+              deck.pcmUnderruns += 1;
+              return;
+            }
+            const auto sourceFrame = deck.pcmFrames.front();
+            deck.pcmFrames.pop_front();
+            sourceLeft = sourceFrame[0];
+            sourceRight = sourceFrame[1];
+            deck.pcmFramesRendered += 1;
+          } else {
+            if (deck.wav.channels == 0) return;
+            const uint64_t frameCount = deck.wav.samples.size() / deck.wav.channels;
+            if (deck.positionFrames + frame >= frameCount) {
+              deck.playing = false;
+              deck.positionFrames = frameCount;
+              return;
+            }
+            const double renderFrame = static_cast<double>(deck.positionFrames + frame);
+            sourceLeft = WavSample(deck.wav, renderFrame, sampleRate, 0);
+            sourceRight = WavSample(deck.wav, renderFrame, sampleRate, 1);
           }
-          const double renderFrame = static_cast<double>(deck.positionFrames + frame);
-          double sourceLeft = WavSample(deck.wav, renderFrame, sampleRate, 0);
-          double sourceRight = WavSample(deck.wav, renderFrame, sampleRate, 1);
           deck.eq.Process(sourceLeft, sourceRight);
           MixDeckStereoFrameWithoutEq(deck.processing, deck.stats, sourceLeft, sourceRight, left, right);
         };
@@ -807,11 +1071,11 @@ int RunPersistentServer(const std::wstring& outputDeviceId) {
         WriteInterleavedFrame(buffer, mixFormat, frame, left, right);
       }
       if (state.deckA.loaded && state.deckA.playing) {
-        state.deckA.positionFrames += availableFrames;
+        if (state.deckA.sourceType == "wav") state.deckA.positionFrames += availableFrames;
         state.deckA.stats.framesWritten += availableFrames;
       }
       if (state.deckB.loaded && state.deckB.playing) {
-        state.deckB.positionFrames += availableFrames;
+        if (state.deckB.sourceType == "wav") state.deckB.positionFrames += availableFrames;
         state.deckB.stats.framesWritten += availableFrames;
       }
       state.framesWritten += availableFrames;

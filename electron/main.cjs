@@ -96,6 +96,8 @@ function registerIpc() {
   ipcMain.handle('engine:renderSilence', (_event, durationMs) => sendEngineCommand('RENDER_SILENCE', { durationMs }));
   ipcMain.handle('engine:renderTone', (_event, durationMs) => sendEngineCommand('RENDER_TONE', { durationMs }));
   ipcMain.handle('engine:renderWav', (_event, payload) => sendEngineCommand('RENDER_WAV', { payload }));
+  ipcMain.handle('engine:pushDeckPcm', (_event, payload) => sendEngineCommand('PUSH_DECK_PCM', { payload }));
+  ipcMain.handle('engine:captureLoopback', (_event, payload) => sendEngineCommand('CAPTURE_LOOPBACK', { payload }));
   ipcMain.handle('engine:loadDeckWav', (_event, payload) => sendEngineCommand('LOAD_DECK_WAV', { payload }));
   ipcMain.handle('engine:playDeck', (_event, payload) => sendEngineCommand('PLAY_DECK', { payload }));
   ipcMain.handle('engine:pauseDeck', (_event, payload) => sendEngineCommand('PAUSE_DECK', { payload }));

@@ -492,6 +492,9 @@ function handleNativeRouterSnapshot(snapshot) {
       if (source.loaded) {
         deckState.positionMs = Math.max(0, Number(source.positionMs) || 0);
         deckState.durationMs = Math.max(deckState.durationMs || 0, Number(source.durationMs) || 0);
+        deckState.sourceType = source.sourceType || deckState.sourceType || 'wav';
+        if (!deckState.name && source.sourceType === 'pcm') deckState.name = 'Pushed PCM';
+        if (!deckState.name && source.sourceType === 'loopback') deckState.name = 'Loopback capture';
         deckState.status = source.playing ? 'playing' : deckState.path ? deckState.status === 'empty' ? 'loaded' : deckState.status : 'loaded';
         deckState.lastStartedAt = source.playing ? new Date().toISOString() : null;
       }
@@ -937,6 +940,56 @@ function renderWav(requestId, payload = {}) {
   });
 }
 
+function pushDeckPcm(requestId, payload = {}) {
+  if (!hasNativeRouter()) {
+    publishState(requestId);
+    return;
+  }
+
+  ensureNativeRouterStarted();
+  audioRouter.pushDeckPcm(payload);
+  const deckId = payload.deck === 'B' ? 'B' : 'A';
+  engineState.playbackDecks[deckId] = {
+    ...engineState.playbackDecks[deckId],
+    path: null,
+    name: 'Pushed PCM',
+    sourceType: 'pcm',
+    status: 'playing',
+    positionMs: 0,
+    durationMs: 0,
+    lastStartedAt: new Date().toISOString(),
+  };
+  engineState.router = audioRouter.getState();
+  publishState(requestId);
+}
+
+function captureLoopback(requestId, payload = {}) {
+  if (!hasNativeRouter()) {
+    publishState(requestId);
+    return;
+  }
+
+  ensureNativeRouterStarted();
+  const deckId = payload.deck === 'B' ? 'B' : 'A';
+  audioRouter.captureLoopback({
+    deck: deckId,
+    deviceId: payload.deviceId || engineState.outputDeviceId,
+    durationMs: payload.durationMs || 500,
+  });
+  engineState.playbackDecks[deckId] = {
+    ...engineState.playbackDecks[deckId],
+    path: null,
+    name: 'Loopback capture',
+    sourceType: 'loopback',
+    status: 'playing',
+    positionMs: 0,
+    durationMs: 0,
+    lastStartedAt: new Date().toISOString(),
+  };
+  engineState.router = audioRouter.getState();
+  publishState(requestId);
+}
+
 process.on('message', (message = {}) => {
   if (message.type === 'GET_STATE') publishState(message.requestId);
   if (message.type === 'REFRESH_DEVICES') refreshDevices(message.requestId);
@@ -948,6 +1001,8 @@ process.on('message', (message = {}) => {
   if (message.type === 'RENDER_SILENCE') renderSilence(message.requestId, message.durationMs);
   if (message.type === 'RENDER_TONE') renderTone(message.requestId, message.durationMs);
   if (message.type === 'RENDER_WAV') renderWav(message.requestId, message.payload);
+  if (message.type === 'PUSH_DECK_PCM') pushDeckPcm(message.requestId, message.payload);
+  if (message.type === 'CAPTURE_LOOPBACK') captureLoopback(message.requestId, message.payload);
   if (message.type === 'LOAD_DECK_WAV') loadDeckWav(message.requestId, message.payload);
   if (message.type === 'PLAY_DECK') playDeck(message.requestId, message.payload);
   if (message.type === 'PAUSE_DECK') pauseDeck(message.requestId, message.payload);

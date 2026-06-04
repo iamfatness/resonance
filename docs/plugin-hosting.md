@@ -30,13 +30,11 @@ Resonance virtual playback device
 
 ## Native Host Milestones
 
-1. Replace the mock desktop router backend with native per-deck PCM routing.
-2. Capture real PCM from the virtual playback device.
-3. Render processed PCM to the selected Windows output.
-4. Expand VST3/Waves discovery metadata beyond scan-only candidates.
-5. Load one plugin instance in-process or through a sandboxed helper.
-6. Add plugin parameter state, bypass, ordering, and preset persistence.
-7. Validate Waves plugins specifically after the generic VST3 path works.
+1. Promote bounded PCM/loopback capture into continuous virtual-device capture streams.
+2. Expand VST3/Waves discovery metadata beyond scan-only candidates.
+3. Load one plugin instance in-process or through a sandboxed helper.
+4. Add plugin parameter state, bypass, ordering, and preset persistence.
+5. Validate Waves plugins specifically after the generic VST3 path works.
 
 The safest first implementation is a separate native helper process for plugin hosting. If a third-party plugin crashes, Resonance can restart that helper without taking down the Electron UI.
 

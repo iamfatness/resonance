@@ -4,7 +4,7 @@ The desktop audio engine is a user-mode process started by Electron.
 
 ## Current Backend
 
-The current engine is a process boundary, control protocol, native Windows endpoint enumerator, deck router contract, live metering backend, and persistent native WAV playback bridge. When the native router helper is built, Resonance starts a long-running WASAPI router process and can play local WAV files from Deck A and Deck B with per-deck gain, pan, EQ, and selected output routing. Browser YouTube audio still cannot be routed through this native chain until a desktop capture or virtual-device path is connected.
+The current engine is a process boundary, control protocol, native Windows endpoint enumerator, deck router contract, live metering backend, persistent native WAV playback bridge, and first-pass PCM/capture input path. When the native router helper is built, Resonance starts a long-running WASAPI router process and can play local WAV files or pushed PCM blocks from Deck A and Deck B with per-deck gain, pan, EQ, and selected output routing. Browser YouTube audio still cannot be captured directly from an iframe, but the native router can now ingest bounded loopback/capture windows from WASAPI endpoints, including the future Resonance virtual device.
 
 ```text
 Electron main process
@@ -63,11 +63,11 @@ Real audio routing should not run inside the renderer UI. Keeping the engine in 
 - `--render-tone --duration-ms 250` generates two quiet deck test tones, applies per-deck gain, pan, and first-pass native EQ band gain, mixes them into the WASAPI render buffer, and reports per-deck/master peaks.
 - `--render-wav --deck-a C:\path\a.wav --deck-b C:\path\b.wav --deck-a-start-ms 12000 --deck-b-start-ms 0 --duration-ms 1000` decodes one or two PCM/float WAV files, applies per-deck gain, pan, and first-pass native EQ, then mixes them through the same WASAPI render path. Either deck may be omitted for solo playback.
 - `--list-devices` returns active WASAPI render and capture endpoints with MMDevice IDs that can be opened by the native router.
-- `--server --output-id <wasapi-device-id>` starts a persistent WASAPI render process on a selected output endpoint. The engine sends newline-delimited JSON commands on stdin (`load`, `settings`, `play`, `pause`, `stop`, `seek`, `exit`) and receives newline-delimited JSON snapshots on stdout with source state, routes, peaks, render frames, device ID/name, and underrun counts.
+- `--server --output-id <wasapi-device-id>` starts a persistent WASAPI render process on a selected output endpoint. The engine sends newline-delimited JSON commands on stdin (`load`, `pcm`, `captureLoopback`, `settings`, `play`, `pause`, `stop`, `seek`, `exit`) and receives newline-delimited JSON snapshots on stdout with source state, source type, routes, peaks, render frames, PCM queue/capture counts, device ID/name, and underrun counts.
 
 The tone and one-shot WAV render paths use the legacy low/mid/high EQ compatibility path. Persistent `--server` playback uses the deck's full 8-band biquad EQ chain for the 31 Hz, 62 Hz, 125 Hz, 250 Hz, 500 Hz, 1 kHz, 2 kHz, and 4 kHz UI bands before pan and mix.
 
-The Electron desktop shell exposes this path through Deck A and Deck B WAV pickers in the desktop engine panel. Each deck can load a WAV, play, pause, stop, and seek. The Output dropdown now uses native WASAPI endpoint IDs, restarts the persistent router when the selected output changes, reloads loaded decks, and preserves play state where possible. The engine keeps one native router process open while decks play, forwards per-deck settings changes to that process, and uses native snapshots for meters and deck positions.
+The Electron desktop shell exposes this path through Deck A and Deck B WAV pickers in the desktop engine panel. Each deck can load a WAV, play, pause, stop, seek, accept pushed PCM blocks, or capture a bounded WASAPI loopback/capture window into the deck PCM buffer. The Output dropdown now uses native WASAPI endpoint IDs, restarts the persistent router when the selected output changes, reloads loaded decks, and preserves play state where possible. The engine keeps one native router process open while decks play, forwards per-deck settings changes to that process, and uses native snapshots for meters and deck positions.
 
 `engine/plugin-host.cjs` is the desktop plugin-host boundary for the next phase. Today it performs read-only candidate discovery only: it scans common Windows VST3 and Waves install locations, reports supported formats, candidate counts, and a short candidate list to the Electron UI, and exposes a refresh command over IPC. It does not load plugin binaries or execute third-party plugin code.
 
@@ -80,7 +80,6 @@ The native backend should replace the mock meter source without changing the ren
 
 ## Next Milestones
 
-1. Add a native router backend that can accept Deck A/B PCM independently from non-WAV sources.
-2. Capture from a loopback/virtual playback endpoint.
-3. Move the Web Audio EQ model into a shared DSP config shape.
-4. Turn scan-only VST3/Waves discovery into a sandboxed native plugin host for staged plugin chains.
+1. Replace bounded loopback capture windows with continuous virtual-device capture streams.
+2. Move the Web Audio EQ model into a shared DSP config shape.
+3. Turn scan-only VST3/Waves discovery into a sandboxed native plugin host for staged plugin chains.

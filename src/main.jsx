@@ -591,6 +591,8 @@ function useDesktopEngine(settings) {
     renderSilence: (durationMs) => desktopApi?.engine?.renderSilence?.(durationMs),
     renderTone: (durationMs) => desktopApi?.engine?.renderTone?.(durationMs),
     renderWav: (payload) => desktopApi?.engine?.renderWav?.(payload),
+    pushDeckPcm: (payload) => desktopApi?.engine?.pushDeckPcm?.(payload),
+    captureLoopback: (payload) => desktopApi?.engine?.captureLoopback?.(payload),
     selectDeckAWav: async () => {
       const selection = await desktopApi?.selectWavFile?.();
       if (selection) {
@@ -680,16 +682,28 @@ function DesktopEnginePanel({ engine }) {
             const durationMs = deckState.durationMs || 0;
             const positionMs = deckState.positionMs || 0;
             const isPlaying = deckState.status === 'playing';
+            const hasDeckSource = Boolean(deckState.path || deckState.sourceType === 'pcm' || deckState.sourceType === 'loopback');
             return (
               <div className="wav-playback-row" key={deck}>
                 <span>Deck {deck} WAV</span>
                 <strong>{deckState.name || (deck === 'A' ? engine.deckAWav?.name : engine.deckBWav?.name) || 'No file selected'}</strong>
                 <div className="wav-playback-controls">
                   <button type="button" onClick={deck === 'A' ? engine.selectDeckAWav : engine.selectDeckBWav}>Choose {deck}</button>
-                  <button type="button" onClick={() => (isPlaying ? engine.pauseDeck(deck) : engine.playDeck(deck))} disabled={!deckState.path}>
+                  <button type="button" onClick={() => (isPlaying ? engine.pauseDeck(deck) : engine.playDeck(deck))} disabled={!hasDeckSource}>
                     {isPlaying ? 'Pause' : 'Play'}
                   </button>
-                  <button type="button" onClick={() => engine.stopDeck(deck)} disabled={!deckState.path}>Stop</button>
+                  <button type="button" onClick={() => engine.stopDeck(deck)} disabled={!hasDeckSource}>Stop</button>
+                  <button
+                    type="button"
+                    onClick={() => engine.captureLoopback?.({
+                      deck,
+                      deviceId: state.inputDeviceId && state.inputDeviceId !== 'mock-input' ? state.inputDeviceId : state.outputDeviceId,
+                      durationMs: 750,
+                    })}
+                    disabled={state.status !== 'running'}
+                  >
+                    Capture
+                  </button>
                 </div>
                 <label className="wav-playback-seek">
                   <small>{formatPlaybackTime(positionMs)} / {durationMs ? formatPlaybackTime(durationMs) : '--:--'}</small>
