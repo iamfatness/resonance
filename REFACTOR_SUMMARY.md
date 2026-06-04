@@ -2,7 +2,7 @@
 
 **Date**: 2026-06-04  
 **Performed by**: Codex following `CODEX_PROMPT.md`  
-**Phases Completed**: Phase 0, Phase 1 core extraction, Phase 2 UI modularization slices, Phase 3 YouTube loader hardening, Phase 3 direct audio EQ cleanup, browser smoke automation, storage helper extraction
+**Phases Completed**: Phase 0, Phase 1 core extraction, Phase 2 UI modularization slices, Phase 3 YouTube loader hardening, Phase 3 direct audio EQ cleanup, browser smoke automation, storage helper extraction, YouTube API normalizer dedupe
 
 ---
 
@@ -13,6 +13,7 @@ The YouTube iframe API now loads through a singleton platform module instead of 
 Direct audio EQ now has explicit cleanup ownership for its visualizer frame, Web Audio graph, audio context, and local object URLs.
 Browser smoke automation now starts a production preview and checks that the app shell and direct audio input render in Chromium.
 Browser app-state persistence now lives in a tested storage helper module while preserving the `resonance.appState.v1` key and saved shape.
+The local Vite YouTube API middleware and Cloudflare Worker now share one Data API response normalizer module.
 
 ---
 
@@ -21,6 +22,7 @@ Browser app-state persistence now lives in a tested storage helper module while 
 ### Architecture & Structure
 - Added canonical app preset/DSP helpers in `src/lib/presets.js`.
 - Added pure YouTube parsing helpers in `src/lib/youtube.js`.
+- Added shared YouTube Data API normalization helpers in `src/lib/youtubeApi.js`.
 - Added browser app-state storage helpers in `src/lib/storage.js`.
 - Added singleton YouTube iframe API loader in `src/platform/youtubeIframeApi.js`.
 - Added extension preset helper module in `extension/lib/presets.js`.
@@ -75,7 +77,7 @@ Browser app-state persistence now lives in a tested storage helper module while 
 
 - [x] `npm run build` clean
 - [x] `npm run lint` clean
-- [x] `npm test` passes (16 tests)
+- [x] `npm test` passes (20 tests)
 - [x] `npm run smoke:browser` passes
 - [x] `npm run package:extension` passes
 - Manual flows verified:
@@ -97,6 +99,8 @@ Browser app-state persistence now lives in a tested storage helper module while 
 - `src/lib/presets.test.js`
 - `src/lib/youtube.js`
 - `src/lib/youtube.test.js`
+- `src/lib/youtubeApi.js`
+- `src/lib/youtubeApi.test.js`
 - `src/lib/storage.js`
 - `src/lib/storage.test.js`
 - `src/platform/youtubeIframeApi.js`
@@ -139,18 +143,17 @@ Browser app-state persistence now lives in a tested storage helper module while 
 
 ## Remaining Technical Debt & Recommended Follow-ups
 
-1. Dedupe Vite/Worker YouTube API normalizers.
-2. Consider extracting session state into a hook if future feature work keeps growing `PlayerApp`.
-3. Consider TypeScript migration for the new core modules + contracts.
-4. Evaluate `electron-builder` or Forge for desktop releases.
-5. Improve native audio-router to be event-driven.
+1. Consider extracting session state into a hook if future feature work keeps growing `PlayerApp`.
+2. Consider TypeScript migration for the new core modules + contracts.
+3. Evaluate `electron-builder` or Forge for desktop releases.
+4. Improve native audio-router to be event-driven.
 
 ---
 
 ## How an Engineer Should Continue From Here
 
 - Read `src/lib/presets.js` first; it is now the heart of the app DSP model.
-- Continue with YouTube API normalizer dedupe between the Vite middleware and Cloudflare Worker.
+- Continue with session-state cleanup only if future feature work keeps growing `PlayerApp`.
 - Run `npm run lint`, `npm test`, and `npm run build` after each extraction slice.
 - Keep `REFACTOR_PLAN.md` updated as the active checklist.
 

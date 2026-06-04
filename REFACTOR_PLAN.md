@@ -1,13 +1,13 @@
 # Resonance Refactoring Plan
 
-**Status**: Phase 3 persistence cleanup complete / ready for YouTube normalizer dedupe
+**Status**: Phase 3 persistence cleanup complete / YouTube normalizer dedupe complete
 **Owner**: Codex following `CODEX_PROMPT.md`  
 **Last Updated**: 2026-06-04  
 **Related**: `CODEX_PROMPT.md`, `REFACTOR_SUMMARY.md`
 
 This is the living checklist for the refactor. It must be kept current as work proceeds.
 
-**Current checkpoint**: Phase 0, Phase 1 core extraction, five Phase 2 modularization slices, Phase 3 YouTube iframe loader hardening, Phase 3 direct audio EQ lifecycle cleanup, browser smoke automation, and storage helper extraction are complete. Hooks plus `VideoDeck`, `LandingPage`, `DirectSourcePanel`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 731 lines, meeting the primary Phase 2 size target. The YouTube iframe API now loads through a singleton platform module, direct audio EQ now owns visualizer, graph, context, and object URL cleanup explicitly, `src/lib/storage.js` owns app-state persistence, and `npm run smoke:browser` checks real browser rendering before deploy.
+**Current checkpoint**: Phase 0, Phase 1 core extraction, five Phase 2 modularization slices, Phase 3 YouTube iframe loader hardening, Phase 3 direct audio EQ lifecycle cleanup, browser smoke automation, storage helper extraction, and YouTube API normalizer dedupe are complete. Hooks plus `VideoDeck`, `LandingPage`, `DirectSourcePanel`, `DesktopEnginePanel`, `SearchResultsPanel`, `SidebarPanels`, `EqPanel`, and `QueuePanel` are extracted. `src/main.jsx` is down from 2175 lines to 731 lines, meeting the primary Phase 2 size target. The YouTube iframe API now loads through a singleton platform module, direct audio EQ now owns visualizer, graph, context, and object URL cleanup explicitly, `src/lib/storage.js` owns app-state persistence, `src/lib/youtubeApi.js` owns Data API response normalization, and `npm run smoke:browser` checks real browser rendering before deploy.
 
 ---
 
@@ -137,7 +137,7 @@ This is the living checklist for the refactor. It must be kept current as work p
 - [x] Keep `src/styles.css` intact initially to avoid visual regressions; add sections or split later.
 - [x] Touch native C++ only for comments unless a defect is discovered.
 - [ ] Validate the safest extension sharing approach before converting extension scripts to modules.
-- [ ] Decide later whether YouTube Worker/Vite normalizers should be shared now or documented as a follow-up.
+- [x] Share YouTube Worker/Vite normalizers through `src/lib/youtubeApi.js`.
 
 ---
 
@@ -197,7 +197,7 @@ This is the living checklist for the refactor. It must be kept current as work p
 
 **Goal**: One source of truth for presets, curves, bands, and deck-processing shape.
 
-**Status**: Core app + extension extraction complete; YouTube proxy normalizer dedupe deferred.
+**Status**: Core app, extension extraction, and YouTube proxy normalizer dedupe complete.
 
 - [x] Create `src/lib/presets.js`.
   - [x] Export `bands`, `bandFreqs`, `flatCurve`.
@@ -237,7 +237,7 @@ This is the living checklist for the refactor. It must be kept current as work p
 **Phase 1 notes**:
 - `src/lib/presets.js` is canonical for the web app and docs. `extension/lib/presets.js` mirrors the same math because the extension remains an unpacked-source prototype.
 - The extension zip was inspected and includes `lib/presets.js`.
-- YouTube Worker/Vite API normalizer dedupe remains a follow-up because it crosses runtime formats and is lower risk after core app helpers are tested.
+- YouTube Worker/Vite API normalizer dedupe is complete in `src/lib/youtubeApi.js`.
 
 ### Phase 2: Modularize UI and Hooks
 
