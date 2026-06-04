@@ -593,6 +593,8 @@ function useDesktopEngine(settings) {
     renderWav: (payload) => desktopApi?.engine?.renderWav?.(payload),
     pushDeckPcm: (payload) => desktopApi?.engine?.pushDeckPcm?.(payload),
     captureLoopback: (payload) => desktopApi?.engine?.captureLoopback?.(payload),
+    startDeckCapture: (payload) => desktopApi?.engine?.startDeckCapture?.(payload),
+    stopDeckCapture: (payload) => desktopApi?.engine?.stopDeckCapture?.(payload),
     selectDeckAWav: async () => {
       const selection = await desktopApi?.selectWavFile?.();
       if (selection) {
@@ -682,7 +684,9 @@ function DesktopEnginePanel({ engine }) {
             const durationMs = deckState.durationMs || 0;
             const positionMs = deckState.positionMs || 0;
             const isPlaying = deckState.status === 'playing';
-            const hasDeckSource = Boolean(deckState.path || deckState.sourceType === 'pcm' || deckState.sourceType === 'loopback');
+            const isCapturing = Boolean(deckState.captureStreaming);
+            const hasDeckSource = Boolean(deckState.path || deckState.sourceType === 'pcm' || deckState.sourceType === 'loopback' || isCapturing);
+            const captureDeviceId = state.inputDeviceId && state.inputDeviceId !== 'mock-input' ? state.inputDeviceId : state.outputDeviceId;
             return (
               <div className="wav-playback-row" key={deck}>
                 <span>Deck {deck} WAV</span>
@@ -695,14 +699,12 @@ function DesktopEnginePanel({ engine }) {
                   <button type="button" onClick={() => engine.stopDeck(deck)} disabled={!hasDeckSource}>Stop</button>
                   <button
                     type="button"
-                    onClick={() => engine.captureLoopback?.({
-                      deck,
-                      deviceId: state.inputDeviceId && state.inputDeviceId !== 'mock-input' ? state.inputDeviceId : state.outputDeviceId,
-                      durationMs: 750,
-                    })}
+                    onClick={() => (isCapturing
+                      ? engine.stopDeckCapture?.({ deck })
+                      : engine.startDeckCapture?.({ deck, deviceId: captureDeviceId }))}
                     disabled={state.status !== 'running'}
                   >
-                    Capture
+                    {isCapturing ? 'Stop Capture' : 'Start Capture'}
                   </button>
                 </div>
                 <label className="wav-playback-seek">

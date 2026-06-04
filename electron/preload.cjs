@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld('resonanceDesktop', {
     renderWav: (payload) => ipcRenderer.invoke('engine:renderWav', payload),
     pushDeckPcm: (payload) => ipcRenderer.invoke('engine:pushDeckPcm', payload),
     captureLoopback: (payload) => ipcRenderer.invoke('engine:captureLoopback', payload),
+    startDeckCapture: (payload) => ipcRenderer.invoke('engine:startDeckCapture', payload),
+    stopDeckCapture: (payload) => ipcRenderer.invoke('engine:stopDeckCapture', payload),
     loadDeckWav: (payload) => ipcRenderer.invoke('engine:loadDeckWav', payload),
     playDeck: (payload) => ipcRenderer.invoke('engine:playDeck', payload),
     pauseDeck: (payload) => ipcRenderer.invoke('engine:pauseDeck', payload),

@@ -46,14 +46,14 @@ function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_
     routes,
     nativeSnapshot,
     capabilities: {
-      perDeckCapture: false,
+      perDeckCapture: backend === 'native-router',
       perDeckPan: true,
       perDeckEq: true,
       perDeckPlugins: false,
       nativePcmRouting: backend === 'native-router',
     },
     note: isNativeSkeleton
-      ? 'Native router helper is built. Local WAV, pushed PCM, and bounded WASAPI capture sources can use the persistent mixer; continuous virtual-device streams and plugins are still pending.'
+      ? 'Native router helper is built. Local WAV, pushed PCM, bounded WASAPI capture, and continuous per-deck capture streams can use the persistent mixer; plugins are still pending.'
       : backend === 'mock'
         ? 'Deck routing is simulated until native per-source PCM capture is connected.'
         : 'WASAPI metering is active; per-deck PCM routing is still simulated.',
@@ -281,6 +281,25 @@ class DesktopAudioRouter {
     });
     this.sendServerCommand(this.deckCommandSettings(deckId));
     return true;
+  }
+
+  startDeckCapture({ deck = 'A', deviceId } = {}) {
+    if (!this.startPersistentServer()) return false;
+    const deckId = deck === 'B' ? 'B' : 'A';
+    this.sendServerCommand({
+      type: 'startCapture',
+      deck: deckId,
+      deviceId: deviceId || this.inputDeviceId || this.outputDeviceId || 'default-output',
+    });
+    this.sendServerCommand(this.deckCommandSettings(deckId));
+    return true;
+  }
+
+  stopDeckCapture({ deck = 'A' } = {}) {
+    return this.sendServerCommand({
+      type: 'stopCapture',
+      deck: deck === 'B' ? 'B' : 'A',
+    });
   }
 
   playDeck(deck = 'A') {

@@ -82,11 +82,11 @@ The Up next queue supports clearing, loading a queued item, play-next placement,
 
 Search results and imported playlists are enriched with YouTube video metadata, including real durations and live/upcoming status when the YouTube Data API returns it.
 
-Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ bypass, and per-deck plugin-chain state. These settings are sent to the Electron audio engine and persisted. Local WAV decks and pushed PCM/capture buffers can now flow through the native persistent router; actual VST/Waves DSP for YouTube sources still requires the virtual-device path to deliver continuous PCM audio into the engine.
+Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ bypass, and per-deck plugin-chain state. These settings are sent to the Electron audio engine and persisted. Local WAV decks, pushed PCM, bounded capture buffers, and continuous Deck A/B capture streams can now flow through the native persistent router. When Windows reports a Resonance virtual capture endpoint, the desktop engine selects it as the default capture input. Actual VST/Waves DSP for YouTube sources still requires the plugin host to process those continuous PCM streams.
 
-The desktop engine has a native two-bus routing prototype for Deck A and Deck B when the audio router helper is built. The desktop panel shows per-deck input, left, and right meters from native snapshots for local WAV, pushed PCM, and bounded capture sources, with mock meters still available as a fallback.
+The desktop engine has a native two-bus routing prototype for Deck A and Deck B when the audio router helper is built. The desktop panel shows per-deck input, left, and right meters from native snapshots for local WAV, pushed PCM, bounded capture, and continuous capture sources, with mock meters still available as a fallback.
 
-The routing logic lives behind `engine/audio-router.cjs`, which manages the native persistent router process. The renderer reads router state from the existing desktop engine IPC API, so future virtual-device and plugin-host sources can replace the current bounded capture path without changing the app UI contract.
+The routing logic lives behind `engine/audio-router.cjs`, which manages the native persistent router process. The renderer reads router state from the existing desktop engine IPC API, so virtual-device capture and plugin-host sources can keep using the same app UI contract.
 
 Build:
 

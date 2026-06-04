@@ -33,6 +33,7 @@ const defaultPlaybackDeck = {
   status: 'empty',
   positionMs: 0,
   durationMs: 0,
+  captureStreaming: false,
   lastStartedAt: null,
 };
 
@@ -489,12 +490,14 @@ function handleNativeRouterSnapshot(snapshot) {
       const deckId = source.deck === 'B' ? 'B' : 'A';
       const deckState = engineState.playbackDecks[deckId];
       if (!deckState) continue;
+      deckState.captureStreaming = Boolean(source.captureStreaming);
       if (source.loaded) {
         deckState.positionMs = Math.max(0, Number(source.positionMs) || 0);
         deckState.durationMs = Math.max(deckState.durationMs || 0, Number(source.durationMs) || 0);
         deckState.sourceType = source.sourceType || deckState.sourceType || 'wav';
         if (!deckState.name && source.sourceType === 'pcm') deckState.name = 'Pushed PCM';
         if (!deckState.name && source.sourceType === 'loopback') deckState.name = 'Loopback capture';
+        if (source.captureStreaming) deckState.name = 'Continuous capture';
         deckState.status = source.playing ? 'playing' : deckState.path ? deckState.status === 'empty' ? 'loaded' : deckState.status : 'loaded';
         deckState.lastStartedAt = source.playing ? new Date().toISOString() : null;
       }
@@ -617,22 +620,35 @@ function normalizeDevice(device, fallbackRole) {
   };
 }
 
+function isResonanceDevice(device) {
+  return /resonance/i.test(`${device?.name || ''} ${device?.id || ''}`);
+}
+
 function applyEnumeratedDevices(devices) {
   const list = Array.isArray(devices) ? devices : [devices].filter(Boolean);
   const inputs = list.filter((device) => device.role === 'input').map((device) => normalizeDevice(device, 'capture'));
   const outputs = list.filter((device) => device.role === 'output').map((device) => normalizeDevice(device, 'render'));
   const unknown = list.filter((device) => device.role === 'unknown').map((device) => normalizeDevice(device, 'unknown'));
-
-  engineState.devices = {
-    inputs: [
-      {
+  const resonanceInput = inputs.find((device) => device.available && isResonanceDevice(device));
+  const virtualInput = resonanceInput
+    ? {
+        ...resonanceInput,
+        kind: 'loopback',
+        note: 'Resonance virtual audio endpoint detected and selected for deck capture by default.',
+      }
+    : {
         id: 'resonance-virtual-input',
         name: 'Resonance Virtual Playback Device',
         kind: 'loopback',
         available: false,
         note: 'Available after the Windows virtual audio driver is installed.',
-      },
-      ...inputs,
+      };
+  const remainingInputs = resonanceInput ? inputs.filter((device) => device.id !== resonanceInput.id) : inputs;
+
+  engineState.devices = {
+    inputs: [
+      virtualInput,
+      ...remainingInputs,
       ...unknown,
       {
         id: 'mock-input',
@@ -655,7 +671,11 @@ function applyEnumeratedDevices(devices) {
 
   const selectedInputExists = engineState.devices.inputs.some((device) => device.id === engineState.inputDeviceId && device.available);
   const selectedOutputExists = engineState.devices.outputs.some((device) => device.id === engineState.outputDeviceId && device.available);
-  if (!selectedInputExists) engineState.inputDeviceId = engineState.devices.inputs.find((device) => device.available)?.id || null;
+  if (resonanceInput && (!selectedInputExists || engineState.inputDeviceId === 'mock-input' || engineState.inputDeviceId === 'resonance-virtual-input')) {
+    engineState.inputDeviceId = resonanceInput.id;
+  } else if (!selectedInputExists) {
+    engineState.inputDeviceId = engineState.devices.inputs.find((device) => device.available)?.id || null;
+  }
   if (!selectedOutputExists) engineState.outputDeviceId = 'default-output';
   persistEngineState();
 }
@@ -787,6 +807,7 @@ function loadDeckWav(requestId, { deck, filePath, name } = {}) {
   try {
     const info = readWavInfo(filePath);
     engineState.playbackDecks[deckId] = {
+      ...defaultPlaybackDeck,
       path: filePath,
       name: name || path.basename(filePath),
       status: 'loaded',
@@ -811,12 +832,12 @@ function loadDeckWav(requestId, { deck, filePath, name } = {}) {
 function playDeck(requestId, { deck } = {}) {
   const deckId = deck === 'B' ? 'B' : 'A';
   const deckState = engineState.playbackDecks[deckId];
-  if (!deckState.path) {
+  if (!deckState.path && !deckState.sourceType) {
     publishState(requestId);
     return;
   }
 
-  if (deckState.durationMs && deckState.positionMs >= deckState.durationMs) {
+  if (deckState.path && deckState.durationMs && deckState.positionMs >= deckState.durationMs) {
     deckState.positionMs = 0;
   }
   deckState.status = 'playing';
@@ -833,7 +854,7 @@ function pauseDeck(requestId, { deck } = {}) {
   const deckId = deck === 'B' ? 'B' : 'A';
   const deckState = engineState.playbackDecks[deckId];
   deckState.positionMs = currentDeckPosition(deckState);
-  deckState.status = deckState.path ? 'paused' : 'empty';
+  deckState.status = deckState.path || deckState.sourceType ? 'paused' : 'empty';
   deckState.lastStartedAt = null;
   if (hasNativeRouter()) {
     ensureNativeRouterStarted();
@@ -847,6 +868,7 @@ function stopDeck(requestId, { deck } = {}) {
   const deckState = engineState.playbackDecks[deckId];
   deckState.positionMs = 0;
   deckState.status = deckState.path ? 'stopped' : 'empty';
+  deckState.captureStreaming = false;
   deckState.lastStartedAt = null;
   if (hasNativeRouter()) {
     ensureNativeRouterStarted();
@@ -957,6 +979,7 @@ function pushDeckPcm(requestId, payload = {}) {
     status: 'playing',
     positionMs: 0,
     durationMs: 0,
+    captureStreaming: false,
     lastStartedAt: new Date().toISOString(),
   };
   engineState.router = audioRouter.getState();
@@ -984,7 +1007,53 @@ function captureLoopback(requestId, payload = {}) {
     status: 'playing',
     positionMs: 0,
     durationMs: 0,
+    captureStreaming: false,
     lastStartedAt: new Date().toISOString(),
+  };
+  engineState.router = audioRouter.getState();
+  publishState(requestId);
+}
+
+function startDeckCapture(requestId, payload = {}) {
+  if (!hasNativeRouter()) {
+    publishState(requestId);
+    return;
+  }
+
+  ensureNativeRouterStarted();
+  const deckId = payload.deck === 'B' ? 'B' : 'A';
+  audioRouter.startDeckCapture({
+    deck: deckId,
+    deviceId: payload.deviceId || engineState.inputDeviceId || engineState.outputDeviceId,
+  });
+  engineState.playbackDecks[deckId] = {
+    ...engineState.playbackDecks[deckId],
+    path: null,
+    name: 'Continuous capture',
+    sourceType: 'loopback',
+    status: 'playing',
+    positionMs: 0,
+    durationMs: 0,
+    captureStreaming: true,
+    lastStartedAt: new Date().toISOString(),
+  };
+  engineState.router = audioRouter.getState();
+  publishState(requestId);
+}
+
+function stopDeckCapture(requestId, payload = {}) {
+  if (!hasNativeRouter()) {
+    publishState(requestId);
+    return;
+  }
+
+  const deckId = payload.deck === 'B' ? 'B' : 'A';
+  audioRouter.stopDeckCapture({ deck: deckId });
+  engineState.playbackDecks[deckId] = {
+    ...engineState.playbackDecks[deckId],
+    status: 'loaded',
+    captureStreaming: false,
+    lastStartedAt: null,
   };
   engineState.router = audioRouter.getState();
   publishState(requestId);
@@ -1003,6 +1072,8 @@ process.on('message', (message = {}) => {
   if (message.type === 'RENDER_WAV') renderWav(message.requestId, message.payload);
   if (message.type === 'PUSH_DECK_PCM') pushDeckPcm(message.requestId, message.payload);
   if (message.type === 'CAPTURE_LOOPBACK') captureLoopback(message.requestId, message.payload);
+  if (message.type === 'START_DECK_CAPTURE') startDeckCapture(message.requestId, message.payload);
+  if (message.type === 'STOP_DECK_CAPTURE') stopDeckCapture(message.requestId, message.payload);
   if (message.type === 'LOAD_DECK_WAV') loadDeckWav(message.requestId, message.payload);
   if (message.type === 'PLAY_DECK') playDeck(message.requestId, message.payload);
   if (message.type === 'PAUSE_DECK') pauseDeck(message.requestId, message.payload);

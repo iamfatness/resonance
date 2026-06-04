@@ -8,7 +8,7 @@ Resonance can stage plugin-chain settings in the desktop UI now, but third-party
 - The desktop engine receives per-deck `pluginChain` settings over IPC.
 - The app EQ can be bypassed.
 - Direct browser audio uses a flat EQ curve while bypass is enabled.
-- The desktop audio router can play local Deck A/B WAV sources through the persistent native WASAPI router.
+- The desktop audio router can play local Deck A/B WAV sources, pushed PCM, bounded capture buffers, and continuous Deck A/B capture streams through the persistent native WASAPI router.
 - The desktop plugin host runs a safe read-only scan for VST3 and Waves candidates in common Windows install paths.
 - The desktop panel reports scan status, candidate count, supported formats, and a short candidate summary.
 - VST3/Waves plugins are not executed yet.
@@ -30,7 +30,7 @@ Resonance virtual playback device
 
 ## Native Host Milestones
 
-1. Promote bounded PCM/loopback capture into continuous virtual-device capture streams.
+1. Validate continuous virtual-device capture streams against the installed Resonance driver.
 2. Expand VST3/Waves discovery metadata beyond scan-only candidates.
 3. Load one plugin instance in-process or through a sandboxed helper.
 4. Add plugin parameter state, bypass, ordering, and preset persistence.

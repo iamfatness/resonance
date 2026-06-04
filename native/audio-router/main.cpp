@@ -570,6 +570,11 @@ void CaptureLoopbackIntoDeck(
   int durationMs,
   double renderSampleRate,
   size_t maxPcmFrames);
+void ContinuousCaptureIntoDeck(
+  ServerState& state,
+  char deckId,
+  const std::wstring& deviceId,
+  size_t maxPcmFrames);
 
 struct ServerDeck {
   char id = 'A';
@@ -582,6 +587,7 @@ struct ServerDeck {
   uint64_t pcmFramesRendered = 0;
   uint32_t pcmUnderruns = 0;
   uint32_t captureFramesReceived = 0;
+  bool captureStreaming = false;
   std::string sourceType = "empty";
   DeckState processing = MakeDeck("A", 1000.0, 0.12, 0.0, 0.0, 0.0, 0.0);
   PersistentDeckEq eq;
@@ -593,6 +599,8 @@ struct ServerDeck {
 struct ServerState {
   ServerDeck deckA;
   ServerDeck deckB;
+  std::thread captureAThread;
+  std::thread captureBThread;
   bool running = true;
   uint64_t framesWritten = 0;
   uint32_t passes = 0;
@@ -619,6 +627,13 @@ void CaptureLoopbackIntoDeck(
   int durationMs,
   double renderSampleRate,
   size_t maxPcmFrames) {
+  ComInit com;
+  if (FAILED(com.hr) && com.hr != RPC_E_CHANGED_MODE) {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    SelectServerDeck(state, deckId == 'B' ? "B" : "A").error = "COM initialization failed for capture";
+    return;
+  }
+
   ComPtr<IMMDevice> captureDevice;
   EDataFlow captureFlow = deviceId.find(L"{0.0.1.") != std::wstring::npos ? eCapture : eRender;
   DWORD streamFlags = captureFlow == eRender ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0;
@@ -705,6 +720,120 @@ void CaptureLoopbackIntoDeck(
   CoTaskMemFree(mixFormat);
 }
 
+void ContinuousCaptureIntoDeck(
+  ServerState& state,
+  char deckId,
+  const std::wstring& deviceId,
+  size_t maxPcmFrames) {
+  ComInit com;
+  const std::string deckKey = deckId == 'B' ? "B" : "A";
+  auto failDeck = [&](const std::string& message) {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    ServerDeck& deck = SelectServerDeck(state, deckKey);
+    deck.error = message;
+    deck.captureStreaming = false;
+  };
+  if (FAILED(com.hr) && com.hr != RPC_E_CHANGED_MODE) {
+    failDeck("COM initialization failed for capture");
+    return;
+  }
+
+  ComPtr<IMMDevice> captureDevice;
+  EDataFlow captureFlow = deviceId.find(L"{0.0.1.") != std::wstring::npos ? eCapture : eRender;
+  DWORD streamFlags = captureFlow == eRender ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0;
+  if (!GetEndpointByIdOrDefault(captureFlow, deviceId, captureDevice)) {
+    captureFlow = captureFlow == eRender ? eCapture : eRender;
+    streamFlags = captureFlow == eRender ? AUDCLNT_STREAMFLAGS_LOOPBACK : 0;
+  }
+  if (!captureDevice) {
+    failDeck("Capture endpoint unavailable");
+    return;
+  }
+
+  ComPtr<IAudioClient> audioClient;
+  HRESULT hr = captureDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, nullptr, &audioClient);
+  if (FAILED(hr)) {
+    failDeck("Loopback IAudioClient activation failed");
+    return;
+  }
+
+  WAVEFORMATEX* mixFormat = nullptr;
+  hr = audioClient->GetMixFormat(&mixFormat);
+  if (FAILED(hr) || !mixFormat) {
+    failDeck("Loopback mix format unavailable");
+    return;
+  }
+
+  const REFERENCE_TIME bufferDuration = 10000000;
+  hr = audioClient->Initialize(
+    AUDCLNT_SHAREMODE_SHARED,
+    streamFlags,
+    bufferDuration,
+    0,
+    mixFormat,
+    nullptr);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    failDeck("Loopback capture initialize failed");
+    return;
+  }
+
+  ComPtr<IAudioCaptureClient> captureClient;
+  hr = audioClient->GetService(IID_PPV_ARGS(&captureClient));
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    failDeck("Loopback capture client unavailable");
+    return;
+  }
+
+  hr = audioClient->Start();
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    failDeck("Loopback capture start failed");
+    return;
+  }
+
+  while (true) {
+    {
+      std::lock_guard<std::mutex> lock(state.mutex);
+      const ServerDeck& deck = SelectServerDeck(state, deckKey);
+      if (!state.running || !deck.captureStreaming) break;
+    }
+
+    UINT32 packetFrames = 0;
+    captureClient->GetNextPacketSize(&packetFrames);
+    while (packetFrames > 0) {
+      BYTE* data = nullptr;
+      UINT32 frames = 0;
+      DWORD flags = 0;
+      hr = captureClient->GetBuffer(&data, &frames, &flags, nullptr, nullptr);
+      if (SUCCEEDED(hr)) {
+        if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT) && data) {
+          std::lock_guard<std::mutex> lock(state.mutex);
+          ServerDeck& deck = SelectServerDeck(state, deckKey);
+          AppendInterleavedCaptureFrames(deck.pcmFrames, data, frames, mixFormat, maxPcmFrames);
+          deck.loaded = true;
+          deck.playing = true;
+          deck.sourceType = "loopback";
+          deck.pcmFramesReceived += frames;
+          deck.captureFramesReceived += frames;
+          deck.error.clear();
+        }
+        captureClient->ReleaseBuffer(frames);
+      }
+      captureClient->GetNextPacketSize(&packetFrames);
+    }
+    Sleep(10);
+  }
+
+  audioClient->Stop();
+  CoTaskMemFree(mixFormat);
+  {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    SelectServerDeck(state, deckKey).captureStreaming = false;
+  }
+}
+
 void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, const std::wstring& deviceName, const std::wstring& deviceId, const char* eventType) {
   std::lock_guard<std::mutex> lock(state.mutex);
   const double sampleRate = mixFormat ? std::max<DWORD>(1, mixFormat->nSamplesPerSec) : 48000.0;
@@ -723,7 +852,8 @@ void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, cons
       << "\"pcmFramesReceived\":" << deck.pcmFramesReceived << ","
       << "\"pcmFramesRendered\":" << deck.pcmFramesRendered << ","
       << "\"pcmUnderruns\":" << deck.pcmUnderruns << ","
-      << "\"captureFramesReceived\":" << deck.captureFramesReceived << "}";
+      << "\"captureFramesReceived\":" << deck.captureFramesReceived << ","
+      << "\"captureStreaming\":" << (deck.captureStreaming ? "true" : "false") << "}";
   };
   auto printDeckRoute = [](const ServerDeck& deck) {
     std::cout
@@ -804,6 +934,8 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
 
   if (type == "exit") {
     state.running = false;
+    state.deckA.captureStreaming = false;
+    state.deckB.captureStreaming = false;
     return;
   }
 
@@ -876,6 +1008,40 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
     return;
   }
 
+  if (type == "startCapture") {
+    std::thread& captureThread = deck.id == 'B' ? state.captureBThread : state.captureAThread;
+    if (captureThread.joinable()) {
+      deck.captureStreaming = false;
+      lock.unlock();
+      captureThread.join();
+      lock.lock();
+    }
+    const std::wstring deviceId = Utf8ToWide(JsonStringValue(line, "deviceId"));
+    const char captureDeckId = deck.id;
+    deck.loaded = true;
+    deck.playing = true;
+    deck.sourceType = "loopback";
+    deck.wav = {};
+    deck.positionFrames = 0;
+    deck.error.clear();
+    deck.captureStreaming = true;
+    const size_t maxFrames = static_cast<size_t>(std::max(48000.0, sampleRate * 8.0));
+    lock.unlock();
+    captureThread = std::thread(ContinuousCaptureIntoDeck, std::ref(state), captureDeckId, deviceId, maxFrames);
+    lock.lock();
+    return;
+  }
+
+  if (type == "stopCapture") {
+    std::thread& captureThread = deck.id == 'B' ? state.captureBThread : state.captureAThread;
+    deck.captureStreaming = false;
+    deck.playing = false;
+    lock.unlock();
+    if (captureThread.joinable()) captureThread.join();
+    lock.lock();
+    return;
+  }
+
   if (type == "settings") {
     ApplyServerSettings(deck, line, sampleRate);
     return;
@@ -896,11 +1062,16 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
   }
 
   if (type == "stop") {
+    std::thread& captureThread = deck.id == 'B' ? state.captureBThread : state.captureAThread;
     deck.playing = false;
+    deck.captureStreaming = false;
     deck.positionFrames = 0;
     deck.pcmFrames.clear();
     deck.stats = {};
     deck.eq.Reset();
+    lock.unlock();
+    if (captureThread.joinable()) captureThread.join();
+    lock.lock();
     return;
   }
 
@@ -1096,6 +1267,13 @@ int RunPersistentServer(const std::wstring& outputDeviceId) {
   }
 
   audioClient->Stop();
+  {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    state.deckA.captureStreaming = false;
+    state.deckB.captureStreaming = false;
+  }
+  if (state.captureAThread.joinable()) state.captureAThread.join();
+  if (state.captureBThread.joinable()) state.captureBThread.join();
   if (commandThread.joinable()) commandThread.join();
   PrintServerSnapshot(state, mixFormat, deviceName, openedDeviceId, "stopped");
   CoTaskMemFree(mixFormat);
@@ -1139,11 +1317,11 @@ void PrintDescribe() {
     << "\"deckCount\":2,"
     << "\"commands\":[\"--describe\",\"--probe\",\"--run-once\",\"--render-silence\",\"--render-tone\",\"--render-wav\",\"--server\",\"--list-devices\"],"
     << "\"capabilities\":{"
-    << "\"perDeckCapture\":false,"
+    << "\"perDeckCapture\":true,"
     << "\"perDeckPan\":true,"
     << "\"perDeckEq\":true,"
     << "\"perDeckPlugins\":false,"
-    << "\"nativePcmRouting\":false"
+    << "\"nativePcmRouting\":true"
     << "}"
     << "}\n";
 }
