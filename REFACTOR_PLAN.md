@@ -1,13 +1,13 @@
 # Resonance Refactoring Plan
 
-**Status**: Phase 2 partial complete / ready for next modularization slice  
+**Status**: Phase 2 continued / ready for EQ-control extraction
 **Owner**: Codex following `CODEX_PROMPT.md`  
 **Last Updated**: 2026-06-04  
 **Related**: `CODEX_PROMPT.md`, `REFACTOR_SUMMARY.md`
 
 This is the living checklist for the refactor. It must be kept current as work proceeds.
 
-**Current checkpoint**: Phase 0, Phase 1 core extraction, and the first Phase 2 modularization slice are complete. Hooks plus `VideoDeck`, `LandingPage`, and `DesktopEnginePanel` are extracted. `src/main.jsx` is down from 2175 lines to 1279 lines. Ready for the next modularization slice.
+**Current checkpoint**: Phase 0, Phase 1 core extraction, and two Phase 2 modularization slices are complete. Hooks plus `VideoDeck`, `LandingPage`, `DesktopEnginePanel`, `SearchResultsPanel`, and `SidebarPanels` are extracted. `src/main.jsx` is down from 2175 lines to 1055 lines. Ready for EQ/plugin-control extraction.
 
 ---
 
@@ -122,7 +122,9 @@ This is the living checklist for the refactor. It must be kept current as work p
 - `src/components/VideoDeck.jsx`
 - `src/components/DesktopEnginePanel.jsx`
 - `src/components/LandingPage.jsx`
-- Additional components only after the first extraction passes build/tests.
+- `src/components/SearchResultsPanel.jsx`
+- `src/components/SidebarPanels.jsx`
+- Additional components only after the current extraction passes build/tests.
 - Optional `shared/contracts.js` if JSDoc in `src/lib/presets.js` is not enough.
 
 ### Key Decisions
@@ -238,7 +240,7 @@ This is the living checklist for the refactor. It must be kept current as work p
 
 **Goal**: Shrink `src/main.jsx` while preserving UI/UX.
 
-**Status**: First extraction slice complete.
+**Status**: Second extraction slice complete.
 
 - [x] Create `src/hooks/useYouTubePlayer.js` by moving existing hook first.
 - [x] Create `src/hooks/useLocalEq.js` by moving existing hook first.
@@ -247,8 +249,8 @@ This is the living checklist for the refactor. It must be kept current as work p
 - [x] Create `src/components/DesktopEnginePanel.jsx`.
 - [x] Move `formatPlaybackTime` with `DesktopEnginePanel` or into `src/lib/time.js`.
 - [x] Create `src/components/LandingPage.jsx`.
-- [ ] Extract search results panel after initial component extraction is stable.
-- [ ] Extract sidebar panel sections after search extraction is stable.
+- [x] Extract search results panel after initial component extraction is stable.
+- [x] Extract sidebar panel sections after search extraction is stable.
 - [ ] Extract EQ/plugin controls after preset module is stable.
 - [ ] Keep `src/styles.css` unchanged initially.
 - [ ] Add CSS section comments or split only after component extraction passes.
@@ -259,7 +261,8 @@ This is the living checklist for the refactor. It must be kept current as work p
   - [x] `npm run build`
 
 **Phase 2 notes**:
-- `src/main.jsx` now contains app state, session operations, and remaining inline panels rather than hook and large component definitions.
+- `src/main.jsx` now contains app state, session operations, direct-source controls, EQ/plugin controls, queue markup, and the remaining inline app panels rather than hook and large component definitions.
+- Search results and the left sidebar panels now live in extracted components with the same props/state contract as the previous inline JSX.
 - Lint passes with 2 existing hook dependency warnings isolated in `src/hooks/useYouTubePlayer.js`; these are scheduled for Phase 3 singleton loader work.
 
 ### Phase 3: Fix Fragile Runtime Areas
@@ -344,10 +347,10 @@ This is the living checklist for the refactor. It must be kept current as work p
 ## 6. Verification Checklist
 
 - [x] Baseline `npm run build` passes before refactor.
-- [ ] `npm run lint` passes after Phase 0.
-- [ ] `npm test` passes after Phase 0/1.
-- [ ] `npm run build` passes after every significant phase.
-- [ ] `npm run package:extension` passes after extension-affecting changes.
+- [x] `npm run lint` passes after Phase 0 and current Phase 2 slices.
+- [x] `npm test` passes after Phase 0/1 and current Phase 2 slices.
+- [x] `npm run build` passes after every significant phase so far.
+- [x] `npm run package:extension` passes after extension-affecting changes and current Phase 2 slice.
 - [ ] Manual web flows:
   - [ ] Load YouTube video into Deck A.
   - [ ] Load YouTube video into Deck B.

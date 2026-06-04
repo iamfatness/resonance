@@ -2,13 +2,13 @@
 
 **Date**: 2026-06-04  
 **Performed by**: Codex following `CODEX_PROMPT.md`  
-**Phases Completed**: Phase 0, Phase 1 core extraction, Phase 2 first modularization slice
+**Phases Completed**: Phase 0, Phase 1 core extraction, Phase 2 UI modularization slices
 
 ---
 
 ## Executive Summary
 
-The codebase now has real project hygiene, tests, linting, CI scaffolding, and extracted core model modules. `src/main.jsx` has started shrinking from a monolith into an orchestration file: hooks and major UI surfaces have moved into `src/hooks/` and `src/components/`. The app behavior and public Electron bridge contract were preserved.
+The codebase now has real project hygiene, tests, linting, CI scaffolding, and extracted core model modules. `src/main.jsx` has continued shrinking from a monolith into an orchestration file: hooks, major UI surfaces, search results, and the left sidebar have moved into `src/hooks/` and `src/components/`. The app behavior and public Electron bridge contract were preserved.
 
 ---
 
@@ -26,9 +26,11 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
   - `src/components/VideoDeck.jsx`
   - `src/components/LandingPage.jsx`
   - `src/components/DesktopEnginePanel.jsx`
+  - `src/components/SearchResultsPanel.jsx`
+  - `src/components/SidebarPanels.jsx`
 
 ### Size Reductions
-- `src/main.jsx`: 2175 lines -> 1279 lines
+- `src/main.jsx`: 2175 lines -> 1055 lines
 - `src/styles.css`: unchanged in this slice
 - Duplication removed: app-side preset/DSP helpers, app-side YouTube URL parsing helpers, extension popup/offscreen preset math
 
@@ -61,8 +63,9 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 ## Verification Performed
 
 - [x] `npm run build` clean
-- [x] `npm run lint` clean
+- [x] `npm run lint` clean with two existing React hook dependency warnings
 - [x] `npm test` passes (9 tests)
+- [x] `npm run package:extension` passes
 - Manual flows verified:
   - YouTube Deck A + B with mood changes: not manually browser-smoked in this slice
   - Direct audio file + URL EQ + visualizer: not manually browser-smoked in this slice
@@ -86,6 +89,8 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 - `src/components/VideoDeck.jsx`
 - `src/components/LandingPage.jsx`
 - `src/components/DesktopEnginePanel.jsx`
+- `src/components/SearchResultsPanel.jsx`
+- `src/components/SidebarPanels.jsx`
 - `src/hooks/useYouTubePlayer.js`
 - `src/hooks/useLocalEq.js`
 - `src/hooks/useDesktopEngine.js`
@@ -114,7 +119,7 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 
 ## Remaining Technical Debt & Recommended Follow-ups
 
-1. Finish Phase 2 by extracting search results, sidebar panels, EQ/plugin controls, and possibly session state.
+1. Finish Phase 2 by extracting EQ/plugin controls, queue controls, direct-source controls, and possibly session state.
 2. Phase 3: replace the YouTube iframe global callback with a singleton loader.
 3. Phase 3: harden `useLocalEq` cleanup for AudioContext/source changes.
 4. Dedupe Vite/Worker YouTube API normalizers.
@@ -127,7 +132,7 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 ## How an Engineer Should Continue From Here
 
 - Read `src/lib/presets.js` first; it is now the heart of the app DSP model.
-- Continue reducing `src/main.jsx` by extracting the search panel and sidebar panels next.
+- Continue reducing `src/main.jsx` by extracting EQ/plugin controls and queue/direct-source panels next.
 - Run `npm run lint`, `npm test`, and `npm run build` after each extraction slice.
 - Keep `REFACTOR_PLAN.md` updated as the active checklist.
 
