@@ -113,7 +113,7 @@ npm run deploy:worker
 - `src/lib/presets.js` is the canonical source for mood presets, EQ bands, curve math, instrument boosts, and deck-processing defaults.
 - `src/lib/youtube.js` contains pure YouTube URL, playlist, timestamp, and watch URL helpers.
 - `src/hooks/` contains platform hooks for YouTube iframe playback, direct browser EQ, and the desktop engine bridge.
-- `src/components/` contains extracted UI surfaces such as the landing page, YouTube deck, search results, sidebar panels, and desktop engine panel.
+- `src/components/` contains extracted UI surfaces such as the landing page, YouTube deck, search results, sidebar panels, EQ/plugin panel, and desktop engine panel.
 - `extension/lib/presets.js` mirrors the preset math used by the Chrome extension popup and offscreen processor.
 - `engine/` owns the Electron child-process audio engine and keeps its settings payload aligned with the preset/deck-processing contract.
 

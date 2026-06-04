@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-The codebase now has real project hygiene, tests, linting, CI scaffolding, and extracted core model modules. `src/main.jsx` has continued shrinking from a monolith into an orchestration file: hooks, major UI surfaces, search results, and the left sidebar have moved into `src/hooks/` and `src/components/`. The app behavior and public Electron bridge contract were preserved.
+The codebase now has real project hygiene, tests, linting, CI scaffolding, and extracted core model modules. `src/main.jsx` has continued shrinking from a monolith into an orchestration file: hooks, major UI surfaces, search results, the left sidebar, and EQ/plugin controls have moved into `src/hooks/` and `src/components/`. The app behavior and public Electron bridge contract were preserved.
 
 ---
 
@@ -28,9 +28,10 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
   - `src/components/DesktopEnginePanel.jsx`
   - `src/components/SearchResultsPanel.jsx`
   - `src/components/SidebarPanels.jsx`
+  - `src/components/EqPanel.jsx`
 
 ### Size Reductions
-- `src/main.jsx`: 2175 lines -> 1055 lines
+- `src/main.jsx`: 2175 lines -> 873 lines
 - `src/styles.css`: unchanged in this slice
 - Duplication removed: app-side preset/DSP helpers, app-side YouTube URL parsing helpers, extension popup/offscreen preset math
 
@@ -91,6 +92,7 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 - `src/components/DesktopEnginePanel.jsx`
 - `src/components/SearchResultsPanel.jsx`
 - `src/components/SidebarPanels.jsx`
+- `src/components/EqPanel.jsx`
 - `src/hooks/useYouTubePlayer.js`
 - `src/hooks/useLocalEq.js`
 - `src/hooks/useDesktopEngine.js`
@@ -119,7 +121,7 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 
 ## Remaining Technical Debt & Recommended Follow-ups
 
-1. Finish Phase 2 by extracting EQ/plugin controls, queue controls, direct-source controls, and possibly session state.
+1. Finish Phase 2 by extracting queue controls, direct-source controls, and possibly session state.
 2. Phase 3: replace the YouTube iframe global callback with a singleton loader.
 3. Phase 3: harden `useLocalEq` cleanup for AudioContext/source changes.
 4. Dedupe Vite/Worker YouTube API normalizers.
@@ -132,7 +134,7 @@ The codebase now has real project hygiene, tests, linting, CI scaffolding, and e
 ## How an Engineer Should Continue From Here
 
 - Read `src/lib/presets.js` first; it is now the heart of the app DSP model.
-- Continue reducing `src/main.jsx` by extracting EQ/plugin controls and queue/direct-source panels next.
+- Continue reducing `src/main.jsx` by extracting queue and direct-source panels next.
 - Run `npm run lint`, `npm test`, and `npm run build` after each extraction slice.
 - Keep `REFACTOR_PLAN.md` updated as the active checklist.
 
