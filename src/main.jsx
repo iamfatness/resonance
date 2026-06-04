@@ -15,7 +15,6 @@ import {
   Settings,
   SkipBack,
   SkipForward,
-  Upload,
   Volume2,
 } from 'lucide-react';
 import './styles.css';
@@ -36,6 +35,7 @@ import {
 } from './lib/youtube.js';
 import { VideoDeck } from './components/VideoDeck.jsx';
 import { LandingPage } from './components/LandingPage.jsx';
+import { DirectSourcePanel } from './components/DirectSourcePanel.jsx';
 import { DesktopEnginePanel } from './components/DesktopEnginePanel.jsx';
 import { EqPanel } from './components/EqPanel.jsx';
 import { QueuePanel } from './components/QueuePanel.jsx';
@@ -653,36 +653,7 @@ function PlayerApp() {
           </section>
         )}
 
-        <section className="direct-source priority-source player-source">
-          <div className="panel-heading">
-            <h2>Upload / Paste Audio</h2>
-            <BadgeInfo size={16} />
-          </div>
-          <div className="direct-controls">
-            <label className="file-button">
-              <Upload size={16} />
-              <span>Audio File</span>
-              <input
-                type="file"
-                accept="audio/*"
-                onChange={(event) => localEq.setFile(event.target.files?.[0])}
-              />
-            </label>
-            <input
-              value={directUrl}
-              onChange={(event) => setDirectUrl(event.target.value)}
-              placeholder="Paste direct audio URL"
-            />
-          </div>
-          <audio
-            ref={localEq.audioRef}
-            src={localEq.audioSource || undefined}
-            controls
-            crossOrigin="anonymous"
-            onPlay={localEq.activate}
-          />
-          <canvas ref={localEq.graphRef} width="460" height="120" />
-        </section>
+        <DirectSourcePanel directUrl={directUrl} setDirectUrl={setDirectUrl} localEq={localEq} />
 
         <DesktopEnginePanel engine={desktopEngine} />
 
