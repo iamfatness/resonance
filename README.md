@@ -84,6 +84,8 @@ Search results and imported playlists are enriched with YouTube video metadata, 
 
 Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ bypass, and per-deck plugin-chain state. These settings are sent to the Electron audio engine and persisted. Local WAV decks, pushed PCM, bounded capture buffers, and continuous Deck A/B capture streams can now flow through the native persistent router. When Windows reports a Resonance virtual capture endpoint, the desktop engine selects it as the default capture input. Active staged deck plugins now feed a built-in NativeDSP lane in the native router, so Deck A and Deck B can be processed independently before the future VST3/Waves host is connected. A managed sandbox helper process describes plugin-host capabilities and resolves per-deck chain plans without loading third-party binaries.
 
+Desktop VST3/Waves scan results are merged into the app plugin catalog when the Electron engine reports them. Users can stage discovered candidates per deck, but scanned third-party plugins remain execution-blocked until the sandbox host can safely load native binaries.
+
 The desktop engine has a native two-bus routing prototype for Deck A and Deck B when the audio router helper is built. The desktop panel shows per-deck input, left, and right meters from native snapshots for local WAV, pushed PCM, bounded capture, and continuous capture sources, with mock meters still available as a fallback.
 
 The routing logic lives behind `engine/audio-router.cjs`, which manages the native persistent router process. The renderer reads router state from the existing desktop engine IPC API, so virtual-device capture and plugin-host sources can keep using the same app UI contract.

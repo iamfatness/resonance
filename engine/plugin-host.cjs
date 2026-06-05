@@ -32,6 +32,24 @@ const stagedPluginRuntimeProfiles = {
   'waves-vst3': { gainDb: 2.25, drive: 1.16 },
 };
 
+function stablePluginId(filePath) {
+  return `desktop-plugin:${Buffer.from(path.resolve(filePath).toLowerCase()).toString('base64url')}`;
+}
+
+function inferArchitecture(filePath) {
+  const lowerPath = filePath.toLowerCase();
+  if (lowerPath.includes('program files (x86)')) return 'x86';
+  if (lowerPath.includes('program files')) return 'x64';
+  return 'unknown';
+}
+
+function cleanPluginName(entryName) {
+  return entryName
+    .replace(/\.vst3$/i, '')
+    .replace(/\.dll$/i, '')
+    .trim() || entryName;
+}
+
 function uniqueExisting(paths) {
   const seen = new Set();
   const result = [];
@@ -72,12 +90,19 @@ function classifyCandidate(filePath, entryName) {
   if (!isVst3 && !isWavesShell) return null;
 
   return {
-    id: Buffer.from(filePath.toLowerCase()).toString('base64url'),
-    name: entryName,
+    id: stablePluginId(filePath),
+    name: cleanPluginName(entryName),
     vendor: isWaves ? 'Waves' : 'Unknown',
     format: isVst3 ? 'VST3' : 'WavesShell',
+    architecture: inferArchitecture(filePath),
+    shellType: isWavesShell ? 'waves-shell' : 'vst3-bundle',
+    loadStrategy: isWavesShell ? 'waves-shell-candidate' : 'vst3-candidate',
+    source: 'desktop-scan',
     path: filePath,
+    stageable: true,
+    executable: false,
     loadable: false,
+    status: 'Found',
     note: isWavesShell
       ? 'Waves shell candidate detected; Resonance does not load plugin binaries yet.'
       : 'VST3 candidate detected; Resonance scan mode is read-only.',
@@ -160,7 +185,10 @@ function activeDeckPlugins(pluginChain = []) {
 
 function buildNativePluginSettings(pluginChain = []) {
   const activePlugins = activeDeckPlugins(pluginChain);
-  const totals = activePlugins.reduce((settings, plugin) => {
+  const executablePlugins = activePlugins.filter((plugin) => {
+    return plugin.executable === true || stagedPluginRuntimeProfiles[plugin.id];
+  });
+  const totals = executablePlugins.reduce((settings, plugin) => {
     const profile = stagedPluginRuntimeProfiles[plugin.id] || { gainDb: 1, drive: 1.04 };
     return {
       pluginCount: settings.pluginCount + 1,
@@ -183,15 +211,29 @@ function buildNativePluginSettings(pluginChain = []) {
   };
 }
 
+function blockedThirdPartyPlugins(pluginChain = []) {
+  return activeDeckPlugins(pluginChain).filter((plugin) => {
+    const isKnownFallback = Boolean(stagedPluginRuntimeProfiles[plugin.id]);
+    return plugin.executable === false || (!plugin.executable && !isKnownFallback);
+  });
+}
+
 function buildDeckPluginPlan(deckProcessing = {}) {
   const buildDeck = (deck) => {
     const processing = deckProcessing?.[deck] || {};
     const nativeSettings = buildNativePluginSettings(processing.pluginChain);
+    const blockedPlugins = blockedThirdPartyPlugins(processing.pluginChain);
     return {
       deck,
-      hostMode: nativeSettings.pluginCount > 0 ? 'native-dsp-fallback' : 'passthrough',
+      hostMode: nativeSettings.pluginCount > 0
+        ? 'native-dsp-fallback'
+        : blockedPlugins.length > 0
+          ? 'blocked-third-party'
+          : 'passthrough',
       eqBypassed: Boolean(processing.eqBypassed),
-      activePluginIds: nativeSettings.activePluginIds,
+      activePluginIds: activeDeckPlugins(processing.pluginChain).map((plugin) => plugin.id),
+      executablePluginIds: nativeSettings.activePluginIds,
+      blockedPluginIds: blockedPlugins.map((plugin) => plugin.id),
       nativeSettings,
     };
   };
@@ -381,6 +423,7 @@ class PluginHostClient {
 
 module.exports = {
   activeDeckPlugins,
+  blockedThirdPartyPlugins,
   buildDeckPluginPlan,
   buildNativePluginSettings,
   builtInRuntimePlugins,

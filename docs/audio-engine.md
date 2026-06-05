@@ -71,6 +71,8 @@ The Electron desktop shell exposes this path through Deck A and Deck B WAV picke
 
 `engine/plugin-host.cjs` is the desktop plugin-host boundary for the next phase. Today it performs read-only VST3/Waves candidate discovery, reports supported formats, candidate counts, and a short candidate list to the Electron UI, and exposes a refresh command over IPC. It also converts active staged deck plugin chains into bounded native settings for the built-in NativeDSP test processor. `engine/plugin-host-worker.cjs` is the sandbox helper process contract: it can describe capabilities and resolve Deck A/B chain plans, but it does not load plugin binaries or execute third-party plugin code. The desktop engine now manages the helper as a persistent child process while the engine is running and refreshes chain plans through that process when deck processing settings change.
 
+The renderer merges scanned desktop candidates into the plugin catalog so users can stage discovered VST3/Waves candidates on Deck A or Deck B. Those candidates carry `executable: false` and resolve to `blocked-third-party` in the helper plan until a real native plugin loader is implemented.
+
 ```text
 Deck A playback -> deck EQ or EQ bypass -> NativeDSP plugin lane -> master output
 Deck B playback -> deck EQ or EQ bypass -> NativeDSP plugin lane -> master output

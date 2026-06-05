@@ -166,7 +166,11 @@ export function EqPanel({
                   />
                   <span>
                     <strong>{plugin.name}</strong>
-                    <small>{plugin.vendor}</small>
+                    <small>
+                      {plugin.vendor} | {plugin.format || 'Plugin'}
+                      {plugin.architecture ? ` | ${plugin.architecture}` : ''}
+                      {plugin.executable === false ? ' | staged only' : ''}
+                    </small>
                   </span>
                 </label>
                 <button
@@ -174,7 +178,11 @@ export function EqPanel({
                   disabled={!selectedPlugin}
                   onClick={() => toggleDeckPluginBypass(activeInputDeck, plugin.id)}
                 >
-                  {selectedPlugin?.bypassed ? 'Bypassed' : selectedPlugin ? 'Active' : plugin.status}
+                  {selectedPlugin?.bypassed
+                    ? 'Bypassed'
+                    : selectedPlugin
+                      ? selectedPlugin.executable === false ? 'Staged' : 'Active'
+                      : plugin.status}
                 </button>
               </article>
             );

@@ -92,10 +92,43 @@ const playlistCatalog = [
   },
 ];
 
-const pluginCatalog = [
-  { id: 'waves-vst3', name: 'Waves VST3', vendor: 'Waves', status: 'Planned' },
-  { id: 'vst3-generic', name: 'VST3 Plugin', vendor: 'Desktop host', status: 'Planned' },
+const basePluginCatalog = [
+  {
+    id: 'waves-vst3',
+    name: 'Waves VST3',
+    vendor: 'Waves',
+    format: 'NativeDSP',
+    loadStrategy: 'native-dsp',
+    executable: true,
+    status: 'NativeDSP',
+  },
+  {
+    id: 'vst3-generic',
+    name: 'VST3 Plugin',
+    vendor: 'Desktop host',
+    format: 'NativeDSP',
+    loadStrategy: 'native-dsp',
+    executable: true,
+    status: 'NativeDSP',
+  },
 ];
+
+function normalizeDesktopPluginCandidate(candidate) {
+  return {
+    id: candidate.id,
+    name: candidate.name || 'Unknown plugin',
+    vendor: candidate.vendor || 'Unknown',
+    format: candidate.format || 'Unknown',
+    architecture: candidate.architecture || 'unknown',
+    shellType: candidate.shellType || 'unknown',
+    loadStrategy: candidate.loadStrategy || 'third-party-candidate',
+    path: candidate.path,
+    executable: Boolean(candidate.executable),
+    stageable: candidate.stageable !== false,
+    status: candidate.executable ? 'Ready' : 'Blocked',
+    note: candidate.note,
+  };
+}
 
 async function searchYoutubeVideos(query) {
   const response = await fetch(`/api/youtube/search?q=${encodeURIComponent(query)}&limit=8`);
@@ -186,6 +219,17 @@ function PlayerApp() {
     outputGain: deckVolumes.A / 100,
   }), [activePreset, appEqBypassed, deckProcessing, deckVolumes, eqMode, processedCurve]);
   const desktopEngine = useDesktopEngine(desktopEngineSettings);
+  const desktopPluginCatalog = useMemo(() => {
+    const discoveredPlugins = (desktopEngine.state?.pluginHost?.candidates || [])
+      .map(normalizeDesktopPluginCandidate)
+      .filter((plugin) => plugin.id);
+    const seen = new Set();
+    return [...basePluginCatalog, ...discoveredPlugins].filter((plugin) => {
+      if (seen.has(plugin.id)) return false;
+      seen.add(plugin.id);
+      return true;
+    });
+  }, [desktopEngine.state?.pluginHost?.candidates]);
   const localEq = useLocalEq(activePreset, processedCurve, directUrl);
   const eqPanelRef = useRef(null);
 
@@ -364,7 +408,7 @@ function PlayerApp() {
       if (settings.pluginChain.some((plugin) => plugin.id === pluginId)) {
         return { ...settings, pluginChain: settings.pluginChain.filter((plugin) => plugin.id !== pluginId) };
       }
-      const plugin = pluginCatalog.find((item) => item.id === pluginId);
+      const plugin = desktopPluginCatalog.find((item) => item.id === pluginId);
       return plugin ? { ...settings, pluginChain: [...settings.pluginChain, { ...plugin, bypassed: false }] } : settings;
     });
   }
@@ -724,7 +768,7 @@ function PlayerApp() {
         resetDeckEq={resetDeckEq}
         toggleDeckEqBypass={toggleDeckEqBypass}
         setDeckEqBand={setDeckEqBand}
-        pluginCatalog={pluginCatalog}
+        pluginCatalog={desktopPluginCatalog}
         toggleDeckPlugin={toggleDeckPlugin}
         toggleDeckPluginBypass={toggleDeckPluginBypass}
         instrumentBoosts={instrumentBoosts}
