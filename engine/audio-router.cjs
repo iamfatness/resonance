@@ -1,5 +1,6 @@
 const { execFile, spawn } = require('node:child_process');
 const readline = require('node:readline');
+const { buildNativePluginSettings } = require('./plugin-host.cjs');
 
 const DEFAULT_DECKS = ['A', 'B'];
 
@@ -49,11 +50,11 @@ function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_
       perDeckCapture: backend === 'native-router',
       perDeckPan: true,
       perDeckEq: true,
-      perDeckPlugins: false,
+      perDeckPlugins: backend === 'native-router',
       nativePcmRouting: backend === 'native-router',
     },
     note: isNativeSkeleton
-      ? 'Native router helper is built. Local WAV, pushed PCM, bounded WASAPI capture, and continuous per-deck capture streams can use the persistent mixer; plugins are still pending.'
+      ? 'Native router helper is built. Local WAV, pushed PCM, bounded WASAPI capture, and continuous per-deck capture streams can use the persistent mixer with per-deck EQ, pan, and built-in plugin-lane DSP.'
       : backend === 'mock'
         ? 'Deck routing is simulated until native per-source PCM capture is connected.'
         : 'WASAPI metering is active; per-deck PCM routing is still simulated.',
@@ -222,11 +223,15 @@ class DesktopAudioRouter {
     const volumes = this.settings?.deckVolumes || {};
     const eq = eqBands(processing);
     const eqGains = eqBandGains(processing);
+    const pluginSettings = buildNativePluginSettings(processing.pluginChain);
     return {
       type: 'settings',
       deck,
       gain: clamp((volumes[deck] || 0) / 100 * 0.2, 0, 0.35),
       pan: clamp(processing.pan, -50, 50),
+      pluginCount: pluginSettings.pluginCount,
+      pluginGainDb: pluginSettings.pluginGainDb,
+      pluginDrive: pluginSettings.pluginDrive,
       eqLowDb: eq.low,
       eqMidDb: eq.mid,
       eqHighDb: eq.high,

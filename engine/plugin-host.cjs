@@ -4,6 +4,21 @@ const path = require('node:path');
 const supportedFormats = ['VST3'];
 const plannedVendors = ['Waves'];
 const maxCandidates = 120;
+const builtInRuntimePlugins = [
+  {
+    id: 'resonance-native-drive',
+    name: 'Resonance Native Drive',
+    vendor: 'Resonance',
+    format: 'NativeDSP',
+    loadable: true,
+    note: 'Built-in per-deck DSP used to validate the plugin processing lane before VST3/Waves loading.',
+  },
+];
+
+const stagedPluginRuntimeProfiles = {
+  'vst3-generic': { gainDb: 1.5, drive: 1.08 },
+  'waves-vst3': { gainDb: 2.25, drive: 1.16 },
+};
 
 function uniqueExisting(paths) {
   const seen = new Set();
@@ -115,15 +130,50 @@ function scanPluginCandidates(options = {}) {
     plannedVendors,
     roots,
     count: candidates.length,
+    runtimePlugins: builtInRuntimePlugins,
     candidates,
     summary,
     errors,
-    note: 'Read-only discovery only. Resonance does not load or execute VST3, Waves shells, or plugin DLLs yet.',
-    plannedRouting: 'Deck PCM -> native EQ or plugin-chain bypass lane -> future sandboxed VST3/Waves host -> master bus.',
+    note: 'VST3/Waves discovery is read-only. Resonance can execute the built-in NativeDSP test processor for staged deck chains.',
+    plannedRouting: 'Deck PCM -> native EQ or EQ bypass -> built-in NativeDSP plugin lane -> future sandboxed VST3/Waves host -> master bus.',
+  };
+}
+
+function activeDeckPlugins(pluginChain = []) {
+  return Array.isArray(pluginChain)
+    ? pluginChain.filter((plugin) => plugin && !plugin.bypassed)
+    : [];
+}
+
+function buildNativePluginSettings(pluginChain = []) {
+  const activePlugins = activeDeckPlugins(pluginChain);
+  const totals = activePlugins.reduce((settings, plugin) => {
+    const profile = stagedPluginRuntimeProfiles[plugin.id] || { gainDb: 1, drive: 1.04 };
+    return {
+      pluginCount: settings.pluginCount + 1,
+      pluginGainDb: settings.pluginGainDb + profile.gainDb,
+      pluginDrive: Math.max(settings.pluginDrive, profile.drive),
+      activePluginIds: [...settings.activePluginIds, plugin.id],
+    };
+  }, {
+    pluginCount: 0,
+    pluginGainDb: 0,
+    pluginDrive: 1,
+    activePluginIds: [],
+  });
+
+  return {
+    pluginCount: totals.pluginCount,
+    pluginGainDb: Math.max(-12, Math.min(12, Number(totals.pluginGainDb.toFixed(2)))),
+    pluginDrive: Math.max(1, Math.min(3, Number(totals.pluginDrive.toFixed(2)))),
+    activePluginIds: totals.activePluginIds,
   };
 }
 
 module.exports = {
+  activeDeckPlugins,
+  buildNativePluginSettings,
+  builtInRuntimePlugins,
   defaultScanRoots,
   scanPluginCandidates,
   supportedFormats,

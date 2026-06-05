@@ -1,6 +1,6 @@
 # Plugin Hosting
 
-Resonance can stage plugin-chain settings in the desktop UI now, but third-party plugins such as Waves require a native desktop audio host.
+Resonance can stage plugin-chain settings in the desktop UI now, and the native router has a built-in NativeDSP lane for validating per-deck plugin processing. Third-party plugins such as Waves still require a native desktop plugin host.
 
 ## Current Behavior
 
@@ -9,9 +9,10 @@ Resonance can stage plugin-chain settings in the desktop UI now, but third-party
 - The app EQ can be bypassed.
 - Direct browser audio uses a flat EQ curve while bypass is enabled.
 - The desktop audio router can play local Deck A/B WAV sources, pushed PCM, bounded capture buffers, and continuous Deck A/B capture streams through the persistent native WASAPI router.
+- Active staged deck plugins are converted into bounded native settings (`pluginCount`, `pluginGainDb`, `pluginDrive`) and applied independently to Deck A/B PCM through the built-in NativeDSP processor.
 - The desktop plugin host runs a safe read-only scan for VST3 and Waves candidates in common Windows install paths.
 - The desktop panel reports scan status, candidate count, supported formats, and a short candidate summary.
-- VST3/Waves plugins are not executed yet.
+- VST3/Waves plugins are not executed yet; the current executable processor is the built-in NativeDSP test lane.
 
 The scanner only enumerates files and directories. It does not load plugin DLLs, instantiate VST3 bundles, execute Waves shells, or inspect plugin parameters.
 
@@ -23,7 +24,8 @@ Waves plugins are native audio plugins. They cannot be loaded by the web app or 
 Resonance virtual playback device
   -> Deck A/B PCM router
   -> Per-deck pan and EQ, if not bypassed
-  -> Per-deck VST3/Waves plugin chain
+  -> Per-deck built-in NativeDSP plugin lane
+  -> Future per-deck VST3/Waves plugin chain
   -> Master summing bus
   -> WASAPI render output
 ```
@@ -32,7 +34,7 @@ Resonance virtual playback device
 
 1. Validate continuous virtual-device capture streams against the installed Resonance driver.
 2. Expand VST3/Waves discovery metadata beyond scan-only candidates.
-3. Load one plugin instance in-process or through a sandboxed helper.
+3. Replace or augment the built-in NativeDSP lane with one real VST3 instance in-process or through a sandboxed helper.
 4. Add plugin parameter state, bypass, ordering, and preset persistence.
 5. Validate Waves plugins specifically after the generic VST3 path works.
 

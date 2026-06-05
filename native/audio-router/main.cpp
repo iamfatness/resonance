@@ -591,6 +591,9 @@ struct ServerDeck {
   std::string sourceType = "empty";
   DeckState processing = MakeDeck("A", 1000.0, 0.12, 0.0, 0.0, 0.0, 0.0);
   PersistentDeckEq eq;
+  uint32_t pluginCount = 0;
+  double pluginGainDb = 0.0;
+  double pluginDrive = 1.0;
   DeckStats stats;
   std::wstring name;
   std::string error;
@@ -618,6 +621,16 @@ double ServerDeckPositionMs(const ServerDeck& deck) {
   if (deck.sourceType == "pcm" || deck.sourceType == "loopback") return 0.0;
   if (!deck.loaded || deck.wav.sampleRate == 0) return 0.0;
   return static_cast<double>(deck.positionFrames) * 1000.0 / static_cast<double>(deck.wav.sampleRate);
+}
+
+void ApplyDeckPluginLane(ServerDeck& deck, double& left, double& right) {
+  if (deck.pluginCount == 0) return;
+  const double gain = std::pow(10.0, ClampDouble(deck.pluginGainDb, -12.0, 12.0) / 20.0);
+  const double drive = ClampDouble(deck.pluginDrive, 1.0, 3.0);
+  const double normalize = std::tanh(drive);
+  const double denominator = std::abs(normalize) > 0.0001 ? normalize : 1.0;
+  left = std::tanh(left * gain * drive) / denominator;
+  right = std::tanh(right * gain * drive) / denominator;
 }
 
 void CaptureLoopbackIntoDeck(
@@ -866,6 +879,9 @@ void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, cons
       << "\"eqMidDb\":" << deck.processing.eqMidDb << ","
       << "\"eqHighDb\":" << deck.processing.eqHighDb << ","
       << "\"eqLinear\":" << EqGainForFrequency(deck.processing) << ","
+      << "\"pluginCount\":" << deck.pluginCount << ","
+      << "\"pluginGainDb\":" << deck.pluginGainDb << ","
+      << "\"pluginDrive\":" << deck.pluginDrive << ","
       << "\"eqBandsDb\":[";
     for (size_t index = 0; index < kPersistentEqBandCount; ++index) {
       if (index > 0) std::cout << ",";
@@ -924,6 +940,9 @@ void ApplyServerSettings(ServerDeck& deck, const std::string& line, double sampl
     const std::string key = "eq" + std::to_string(static_cast<int>(kPersistentEqFrequencies[index])) + "Db";
     deck.eq.gainsDb[index] = ClampDouble(JsonNumberValue(line, key, deck.eq.gainsDb[index]), -18.0, 18.0);
   }
+  deck.pluginCount = static_cast<uint32_t>(ClampDouble(JsonNumberValue(line, "pluginCount", deck.pluginCount), 0.0, 16.0));
+  deck.pluginGainDb = ClampDouble(JsonNumberValue(line, "pluginGainDb", deck.pluginGainDb), -12.0, 12.0);
+  deck.pluginDrive = ClampDouble(JsonNumberValue(line, "pluginDrive", deck.pluginDrive), 1.0, 3.0);
   deck.eq.Configure(sampleRate);
 }
 
@@ -1231,6 +1250,7 @@ int RunPersistentServer(const std::wstring& outputDeviceId) {
             sourceRight = WavSample(deck.wav, renderFrame, sampleRate, 1);
           }
           deck.eq.Process(sourceLeft, sourceRight);
+          ApplyDeckPluginLane(deck, sourceLeft, sourceRight);
           MixDeckStereoFrameWithoutEq(deck.processing, deck.stats, sourceLeft, sourceRight, left, right);
         };
         mixDeck(state.deckA);
@@ -1320,7 +1340,7 @@ void PrintDescribe() {
     << "\"perDeckCapture\":true,"
     << "\"perDeckPan\":true,"
     << "\"perDeckEq\":true,"
-    << "\"perDeckPlugins\":false,"
+    << "\"perDeckPlugins\":true,"
     << "\"nativePcmRouting\":true"
     << "}"
     << "}\n";

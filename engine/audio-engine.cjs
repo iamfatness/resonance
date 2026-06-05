@@ -2,7 +2,7 @@ const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { DesktopAudioRouter } = require('./audio-router.cjs');
-const { scanPluginCandidates, supportedFormats, plannedVendors } = require('./plugin-host.cjs');
+const { builtInRuntimePlugins, scanPluginCandidates, supportedFormats, plannedVendors } = require('./plugin-host.cjs');
 
 const rootDir = path.resolve(__dirname, '..');
 const listAudioDevicesScript = path.join(rootDir, 'scripts', 'list-audio-devices.ps1');
@@ -66,9 +66,10 @@ const engineState = {
     summary: { byFormat: {}, byVendor: {} },
     supportedFormats,
     plannedVendors,
+    runtimePlugins: builtInRuntimePlugins,
     roots: [],
-    note: 'Native plugin hosting is scan-only; plugins are not loaded or executed yet.',
-    plannedRouting: 'Deck PCM -> native EQ or plugin-chain bypass lane -> future sandboxed VST3/Waves host -> master bus.',
+    note: 'Built-in NativeDSP plugin processing is available for staged deck chains; VST3/Waves loading is still scan-only.',
+    plannedRouting: 'Deck PCM -> native EQ or EQ bypass -> built-in NativeDSP plugin lane -> future sandboxed VST3/Waves host -> master bus.',
   },
   playbackDecks: {
     A: { ...defaultPlaybackDeck },
@@ -252,9 +253,9 @@ function buildDiagnostics() {
       {
         id: 'plugin-host',
         label: 'Plugin host',
-        status: pluginScanReady ? 'pending' : engineState.pluginHost.scanStatus === 'error' ? 'blocked' : 'pending',
+        status: pluginScanReady ? 'ready' : engineState.pluginHost.scanStatus === 'error' ? 'blocked' : 'pending',
         detail: pluginScanReady
-          ? `Scan-only mode found ${engineState.pluginHost.pluginCount || 0} candidate plugins.`
+          ? `NativeDSP lane ready; scan found ${engineState.pluginHost.pluginCount || 0} VST3/Waves candidates.`
           : engineState.pluginHost.error || 'VST3/Waves scan is pending.',
       },
     ],
@@ -282,6 +283,7 @@ function refreshPlugins(requestId) {
       summary: result.summary,
       supportedFormats: result.supportedFormats,
       plannedVendors: result.plannedVendors,
+      runtimePlugins: result.runtimePlugins,
       roots: result.roots,
       errors: result.errors,
       note: result.note,
@@ -466,7 +468,7 @@ function updateMetersFromNativeRoutes(snapshot) {
       leftPeak,
       rightPeak,
       pan: Number(route.pan) || 0,
-      pluginCount: decks[deck]?.pluginCount || 0,
+      pluginCount: Number(route.pluginCount) || 0,
       eqActivity: Math.min(1, Math.abs((Number(route.eqLinear) || 1) - 1)),
     };
   }
