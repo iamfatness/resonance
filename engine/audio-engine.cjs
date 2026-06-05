@@ -5,7 +5,7 @@ const { DesktopAudioRouter } = require('./audio-router.cjs');
 const {
   buildDeckPluginPlan,
   builtInRuntimePlugins,
-  describePluginHostHelper,
+  PluginHostClient,
   scanPluginCandidates,
   supportedFormats,
   plannedVendors,
@@ -140,6 +140,17 @@ let nativeMeterBusy = false;
 let nativeRouterBusy = false;
 let livePlaybackBusy = false;
 let lastRouterStatePublish = 0;
+const pluginHostClient = new PluginHostClient({
+  onStatus: (status) => {
+    engineState.pluginHost = {
+      ...engineState.pluginHost,
+      helper: {
+        ...engineState.pluginHost.helper,
+        ...status,
+      },
+    };
+  },
+});
 const audioRouter = new DesktopAudioRouter({
   settings: engineState.settings,
   hasNativeMeter,
@@ -294,7 +305,7 @@ function refreshPlugins(requestId) {
       supportedFormats: result.supportedFormats,
       plannedVendors: result.plannedVendors,
       runtimePlugins: result.runtimePlugins,
-      helper: describePluginHostHelper(),
+      helper: pluginHostClient.getStatus(),
       chainPlan: buildDeckPluginPlan(engineState.settings.deckProcessing),
       roots: result.roots,
       errors: result.errors,
@@ -441,6 +452,70 @@ function publishState(requestId) {
 
 function publishMeters() {
   send({ type: 'METERS', meters: engineState.meters });
+}
+
+function applyPluginChainPlan(plan) {
+  if (!plan) return;
+  engineState.pluginHost = {
+    ...engineState.pluginHost,
+    chainPlan: plan,
+    helper: {
+      ...engineState.pluginHost.helper,
+      lastResolvedAt: new Date().toISOString(),
+    },
+  };
+}
+
+function resolvePluginChains({ publish = false } = {}) {
+  applyPluginChainPlan(buildDeckPluginPlan(engineState.settings.deckProcessing));
+
+  pluginHostClient.resolveChain(engineState.settings.deckProcessing)
+    .then((plan) => {
+      applyPluginChainPlan(plan);
+      if (publish) publishState();
+    })
+    .catch((error) => {
+      engineState.pluginHost = {
+        ...engineState.pluginHost,
+        helper: {
+          ...pluginHostClient.getStatus(),
+          status: 'error',
+          error: error.message,
+        },
+      };
+      if (publish) publishState();
+    });
+}
+
+function startPluginHost({ publish = false } = {}) {
+  pluginHostClient.start();
+  pluginHostClient.describe()
+    .then((helper) => {
+      engineState.pluginHost = {
+        ...engineState.pluginHost,
+        helper,
+      };
+      resolvePluginChains({ publish });
+    })
+    .catch((error) => {
+      engineState.pluginHost = {
+        ...engineState.pluginHost,
+        helper: {
+          ...pluginHostClient.getStatus(),
+          status: 'error',
+          error: error.message,
+        },
+      };
+      if (publish) publishState();
+    });
+}
+
+function stopPluginHost() {
+  pluginHostClient.stop();
+  engineState.pluginHost = {
+    ...engineState.pluginHost,
+    helper: pluginHostClient.getStatus(),
+  };
 }
 
 function normalizeMeterPayload(payload) {
@@ -776,6 +851,7 @@ function start(requestId) {
   syncEngineMode();
   engineState.status = 'running';
   engineState.lastStartedAt = new Date().toISOString();
+  startPluginHost({ publish: true });
   audioRouter.start();
   if (hasNativeRouter()) {
     syncPlaybackDecksToNativeRouter();
@@ -790,6 +866,7 @@ function start(requestId) {
 function stop(requestId) {
   engineState.status = 'idle';
   stopMetering();
+  stopPluginHost();
   audioRouter.stop();
   snapshotDeckPlayback();
   for (const deck of ['A', 'B']) {
@@ -916,10 +993,7 @@ function updateSettings(requestId, settings = {}) {
     deckVolumes: settings.deckVolumes || engineState.settings.deckVolumes || defaultSettings.deckVolumes,
   };
   audioRouter.updateSettings(engineState.settings);
-  engineState.pluginHost = {
-    ...engineState.pluginHost,
-    chainPlan: buildDeckPluginPlan(engineState.settings.deckProcessing),
-  };
+  resolvePluginChains({ publish: true });
   engineState.router = audioRouter.getState();
   if (engineState.status === 'running' && !hasNativeMeter()) {
     nextMockMeters();

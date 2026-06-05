@@ -1,6 +1,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
-const { execFileSync } = require('node:child_process');
+const { execFileSync, spawn } = require('node:child_process');
+const readline = require('node:readline');
 
 const supportedFormats = ['VST3'];
 const plannedVendors = ['Waves'];
@@ -228,6 +229,156 @@ function describePluginHostHelper(options = {}) {
   }
 }
 
+class PluginHostClient {
+  constructor({ nodePath = process.execPath, workerPath = pluginHostWorkerPath, onStatus } = {}) {
+    this.nodePath = nodePath;
+    this.workerPath = workerPath;
+    this.onStatus = onStatus || null;
+    this.process = null;
+    this.pending = new Map();
+    this.nextRequestId = 1;
+    this.status = {
+      status: 'idle',
+      path: this.workerPath,
+      protocolVersion: pluginHostProtocolVersion,
+    };
+  }
+
+  getStatus() {
+    return this.status;
+  }
+
+  setStatus(update = {}) {
+    this.status = {
+      ...this.status,
+      ...update,
+      path: this.workerPath,
+      updatedAt: new Date().toISOString(),
+    };
+    this.onStatus?.(this.status);
+  }
+
+  start() {
+    if (this.process) return true;
+
+    const child = spawn(this.nodePath, [this.workerPath], {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    this.process = child;
+    this.setStatus({ status: 'starting', error: null });
+
+    const stdout = readline.createInterface({ input: child.stdout });
+    stdout.on('line', (line) => this.handleLine(line));
+
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('exit', (code, signal) => {
+      if (this.process !== child) return;
+      this.process = null;
+      for (const { reject, timer } of this.pending.values()) {
+        clearTimeout(timer);
+        reject(new Error(`Plugin host exited before responding (${code ?? signal ?? 'unknown'}).`));
+      }
+      this.pending.clear();
+      this.setStatus({
+        status: 'stopped',
+        code,
+        signal,
+        error: stderr.trim() || null,
+      });
+    });
+
+    child.on('error', (error) => {
+      if (this.process !== child) return;
+      this.setStatus({ status: 'error', error: error.message });
+    });
+
+    return true;
+  }
+
+  stop() {
+    if (!this.process) {
+      this.setStatus({ status: 'idle' });
+      return;
+    }
+    const child = this.process;
+    this.request('exit', {}, { timeoutMs: 500 }).catch(() => {});
+    setTimeout(() => {
+      if (!child.killed) child.kill();
+    }, 800).unref?.();
+    this.setStatus({ status: 'stopping' });
+  }
+
+  handleLine(line) {
+    if (!line.trim()) return;
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch (error) {
+      this.setStatus({ status: 'error', error: error.message, raw: line });
+      return;
+    }
+
+    if (message.type === 'describe' && message.status === 'ready') {
+      this.setStatus({
+        status: 'ready',
+        name: message.name,
+        mode: message.mode,
+        protocolVersion: message.protocolVersion,
+        capabilities: message.capabilities,
+        runtimePlugins: message.runtimePlugins,
+        note: message.note,
+      });
+    }
+
+    const pending = this.pending.get(message.requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pending.delete(message.requestId);
+    if (message.status === 'error' || message.type === 'error') {
+      pending.reject(new Error(message.error || 'Plugin host command failed.'));
+      return;
+    }
+    pending.resolve(message);
+  }
+
+  request(type, payload = {}, { timeoutMs = 1500 } = {}) {
+    this.start();
+    if (!this.process?.stdin?.writable) {
+      return Promise.reject(new Error('Plugin host process is not writable.'));
+    }
+
+    const requestId = `plugin-${this.nextRequestId++}`;
+    const message = { ...payload, type, requestId };
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(requestId);
+        reject(new Error(`Plugin host ${type} timed out.`));
+      }, timeoutMs);
+      this.pending.set(requestId, { resolve, reject, timer });
+      this.process.stdin.write(`${JSON.stringify(message)}\n`);
+    });
+  }
+
+  async describe() {
+    const response = await this.request('describe');
+    return {
+      status: 'ready',
+      path: this.workerPath,
+      ...response,
+    };
+  }
+
+  async resolveChain(deckProcessing = {}) {
+    const response = await this.request('resolveChain', { deckProcessing });
+    return response.plan;
+  }
+}
+
 module.exports = {
   activeDeckPlugins,
   buildDeckPluginPlan,
@@ -235,6 +386,7 @@ module.exports = {
   builtInRuntimePlugins,
   defaultScanRoots,
   describePluginHostHelper,
+  PluginHostClient,
   pluginHostCapabilities,
   pluginHostProtocolVersion,
   pluginHostWorkerPath,

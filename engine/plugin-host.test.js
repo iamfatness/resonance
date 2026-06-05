@@ -7,6 +7,7 @@ const {
   buildDeckPluginPlan,
   buildNativePluginSettings,
   describePluginHostHelper,
+  PluginHostClient,
   scanPluginCandidates,
 } = require('./plugin-host.cjs');
 
@@ -76,5 +77,27 @@ describe('plugin host runtime settings', () => {
         thirdPartyPluginLoading: false,
       },
     });
+  });
+
+  it('keeps the sandbox helper alive for multiple requests', async () => {
+    const client = new PluginHostClient();
+    try {
+      await expect(client.describe()).resolves.toMatchObject({
+        status: 'ready',
+        name: 'resonance-plugin-host',
+        protocolVersion: 1,
+      });
+      await expect(client.resolveChain({
+        A: { pluginChain: [{ id: 'waves-vst3', bypassed: false }] },
+        B: { pluginChain: [{ id: 'vst3-generic', bypassed: true }] },
+      })).resolves.toMatchObject({
+        decks: {
+          A: { hostMode: 'native-dsp-fallback', activePluginIds: ['waves-vst3'] },
+          B: { hostMode: 'passthrough', activePluginIds: [] },
+        },
+      });
+    } finally {
+      client.stop();
+    }
   });
 });

@@ -11,6 +11,7 @@ Resonance can stage plugin-chain settings in the desktop UI now, and the native 
 - The desktop audio router can play local Deck A/B WAV sources, pushed PCM, bounded capture buffers, and continuous Deck A/B capture streams through the persistent native WASAPI router.
 - Active staged deck plugins are converted into bounded native settings (`pluginCount`, `pluginGainDb`, `pluginDrive`) and applied independently to Deck A/B PCM through the built-in NativeDSP processor.
 - `engine/plugin-host-worker.cjs` provides the sandbox helper protocol for describing host capabilities and resolving Deck A/B plugin-chain plans.
+- `PluginHostClient` keeps that helper alive while the desktop engine is running, correlates JSON-line responses by request ID, and marks the helper degraded if it exits or times out.
 - The desktop plugin host runs a safe read-only scan for VST3 and Waves candidates in common Windows install paths.
 - The desktop panel reports scan status, candidate count, supported formats, and a short candidate summary.
 - VST3/Waves plugins are not executed yet; the current executable processor is the built-in NativeDSP test lane.
