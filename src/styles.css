@@ -510,7 +510,7 @@ button {
 .app-shell {
   display: grid;
   grid-template-columns: 260px minmax(560px, 1fr) 530px;
-  grid-template-rows: 72px minmax(0, 1fr) 100px;
+  grid-template-rows: 72px auto minmax(0, 1fr) 100px;
   height: 100vh;
   border: 1px solid #171c1e;
   background: rgba(7, 10, 11, 0.94);
@@ -587,20 +587,18 @@ button {
 }
 
 .youtube-search-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 0;
-  right: 0;
-  z-index: 20;
+  grid-column: 2 / 4;
+  grid-row: 2;
   display: grid;
   gap: 8px;
-  max-height: min(520px, calc(100vh - 118px));
+  max-height: min(360px, calc(100vh - 240px));
   overflow: auto;
+  margin: 10px 18px 0 0;
   padding: 10px;
   border: 1px solid var(--line-strong);
   border-radius: 7px;
   background: #0b0f10;
-  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.48);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.34);
 }
 
 .youtube-search-panel.error {
@@ -789,7 +787,7 @@ button {
 }
 
 .sidebar {
-  grid-row: 2;
+  grid-row: 3;
   padding: 10px 12px 14px;
   border-right: 1px solid var(--line);
   background: linear-gradient(180deg, #0b0f10, #090c0d);
@@ -957,7 +955,7 @@ button {
 }
 
 .player-panel {
-  grid-row: 2;
+  grid-row: 3;
   min-width: 0;
   padding: 12px 16px 18px;
   overflow: auto;
@@ -1293,7 +1291,7 @@ button {
 }
 
 .eq-panel {
-  grid-row: 2;
+  grid-row: 3;
   display: grid;
   align-content: start;
   gap: 18px;
@@ -2227,7 +2225,7 @@ canvas {
 
 .transport {
   grid-column: 1 / -1;
-  grid-row: 3;
+  grid-row: 4;
   display: grid;
   grid-template-columns: 40px 40px 58px 40px 40px minmax(250px, 430px) 1fr 24px 160px 28px;
   gap: 12px;

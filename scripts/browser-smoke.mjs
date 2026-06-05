@@ -108,6 +108,48 @@ async function runSmoke(url) {
     timeout: 10000,
   });
 
+  await page.evaluate(() => {
+    window.__resonanceSetSearchResults = () => {
+      window.dispatchEvent(new CustomEvent('resonance-smoke-search-results', {
+        detail: {
+          message: 'Smoke search results',
+          results: [
+            {
+              id: 'JD-kMIpDfnY',
+              title: 'Smoke Result One',
+              channel: 'Smoke Channel',
+              duration: '3:21',
+              thumbnail: 'https://i.ytimg.com/vi/JD-kMIpDfnY/mqdefault.jpg',
+            },
+            {
+              id: 'wH2Nd8oHixo',
+              title: 'Smoke Result Two',
+              channel: 'Smoke Channel',
+              duration: '4:56',
+              thumbnail: 'https://i.ytimg.com/vi/wH2Nd8oHixo/mqdefault.jpg',
+            },
+          ],
+        },
+      }));
+    };
+  });
+  await page.evaluate(() => window.__resonanceSetSearchResults());
+  await page.waitForSelector('.youtube-search-panel.ready', { timeout: 10000 });
+  const searchLayout = await page.evaluate(() => {
+    const panel = document.querySelector('.youtube-search-panel');
+    const upload = document.querySelector('.direct-source');
+    const panelRect = panel.getBoundingClientRect();
+    const uploadRect = upload.getBoundingClientRect();
+    return {
+      panelBottom: panelRect.bottom,
+      uploadTop: uploadRect.top,
+      overlap: panelRect.bottom > uploadRect.top,
+    };
+  });
+  if (searchLayout.overlap) {
+    throw new Error(`Search results overlap direct upload panel: ${JSON.stringify(searchLayout)}`);
+  }
+
   if (pageErrors.length) {
     throw new Error(`Browser page errors:\n${pageErrors.join('\n')}`);
   }

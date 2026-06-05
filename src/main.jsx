@@ -266,6 +266,21 @@ function PlayerApp() {
     setActiveDeck('A');
   }, [activeDeck, isSingleDeck]);
 
+  useEffect(() => {
+    function handleSmokeSearchResults(event) {
+      const results = Array.isArray(event.detail?.results) ? event.detail.results : [];
+      setYoutubeSearchDeck(activeInputDeck);
+      setYoutubeResults(results);
+      setYoutubeSearchState({
+        status: results.length ? 'ready' : 'empty',
+        message: event.detail?.message || 'Smoke search results',
+      });
+    }
+
+    window.addEventListener('resonance-smoke-search-results', handleSmokeSearchResults);
+    return () => window.removeEventListener('resonance-smoke-search-results', handleSmokeSearchResults);
+  }, [activeInputDeck]);
+
   function setInstrumentBoost(name, value) {
     setInstrumentBoosts((current) => ({ ...current, [name]: value }));
   }
@@ -543,17 +558,6 @@ function PlayerApp() {
               {parseYoutubePlaylistId(activeInputDeck === 'A' ? queryA : queryB) ? 'Import' : (isYoutubeLoadInput(activeInputDeck === 'A' ? queryA : queryB) ? 'Load' : 'Search')}
             </button>
           </form>
-          <SearchResultsPanel
-            searchState={youtubeSearchState}
-            results={youtubeResults}
-            targetDeck={youtubeSearchDeck}
-            onClear={() => {
-              setYoutubeResults([]);
-              setYoutubeSearchState({ status: 'idle', message: '' });
-            }}
-            onLoadVideo={loadVideo}
-            onQueueVideo={queueVideo}
-          />
         </div>
         <div className="deck-count-control" aria-label="Deck count">
           <button
@@ -580,6 +584,18 @@ function PlayerApp() {
         </div>
         <button className="icon-button" aria-label="Open EQ and plugin settings" onClick={openSettingsPanel} type="button"><Settings size={18} /></button>
       </header>
+
+      <SearchResultsPanel
+        searchState={youtubeSearchState}
+        results={youtubeResults}
+        targetDeck={youtubeSearchDeck}
+        onClear={() => {
+          setYoutubeResults([]);
+          setYoutubeSearchState({ status: 'idle', message: '' });
+        }}
+        onLoadVideo={loadVideo}
+        onQueueVideo={queueVideo}
+      />
 
       <SidebarPanels
         activeSidePanel={activeSidePanel}
