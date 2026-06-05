@@ -2,7 +2,14 @@ const { execFile } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { DesktopAudioRouter } = require('./audio-router.cjs');
-const { builtInRuntimePlugins, scanPluginCandidates, supportedFormats, plannedVendors } = require('./plugin-host.cjs');
+const {
+  buildDeckPluginPlan,
+  builtInRuntimePlugins,
+  describePluginHostHelper,
+  scanPluginCandidates,
+  supportedFormats,
+  plannedVendors,
+} = require('./plugin-host.cjs');
 
 const rootDir = path.resolve(__dirname, '..');
 const listAudioDevicesScript = path.join(rootDir, 'scripts', 'list-audio-devices.ps1');
@@ -67,6 +74,8 @@ const engineState = {
     supportedFormats,
     plannedVendors,
     runtimePlugins: builtInRuntimePlugins,
+    helper: { status: 'pending' },
+    chainPlan: buildDeckPluginPlan(defaultSettings.deckProcessing),
     roots: [],
     note: 'Built-in NativeDSP plugin processing is available for staged deck chains; VST3/Waves loading is still scan-only.',
     plannedRouting: 'Deck PCM -> native EQ or EQ bypass -> built-in NativeDSP plugin lane -> future sandboxed VST3/Waves host -> master bus.',
@@ -189,6 +198,7 @@ function buildDiagnostics() {
   const hasVirtualDevice = engineState.devices.inputs.some((device) => (
     device.id === 'resonance-virtual-input' && device.available
   ));
+  const pluginHelperReady = engineState.pluginHost.helper?.status === 'ready';
 
   engineState.diagnostics = {
     updatedAt: new Date().toISOString(),
@@ -253,9 +263,9 @@ function buildDiagnostics() {
       {
         id: 'plugin-host',
         label: 'Plugin host',
-        status: pluginScanReady ? 'ready' : engineState.pluginHost.scanStatus === 'error' ? 'blocked' : 'pending',
-        detail: pluginScanReady
-          ? `NativeDSP lane ready; scan found ${engineState.pluginHost.pluginCount || 0} VST3/Waves candidates.`
+        status: pluginHelperReady ? 'ready' : engineState.pluginHost.scanStatus === 'error' || engineState.pluginHost.helper?.status === 'error' ? 'blocked' : 'pending',
+        detail: pluginHelperReady
+          ? `Sandbox helper ready; scan found ${engineState.pluginHost.pluginCount || 0} VST3/Waves candidates.`
           : engineState.pluginHost.error || 'VST3/Waves scan is pending.',
       },
     ],
@@ -284,6 +294,8 @@ function refreshPlugins(requestId) {
       supportedFormats: result.supportedFormats,
       plannedVendors: result.plannedVendors,
       runtimePlugins: result.runtimePlugins,
+      helper: describePluginHostHelper(),
+      chainPlan: buildDeckPluginPlan(engineState.settings.deckProcessing),
       roots: result.roots,
       errors: result.errors,
       note: result.note,
@@ -904,6 +916,10 @@ function updateSettings(requestId, settings = {}) {
     deckVolumes: settings.deckVolumes || engineState.settings.deckVolumes || defaultSettings.deckVolumes,
   };
   audioRouter.updateSettings(engineState.settings);
+  engineState.pluginHost = {
+    ...engineState.pluginHost,
+    chainPlan: buildDeckPluginPlan(engineState.settings.deckProcessing),
+  };
   engineState.router = audioRouter.getState();
   if (engineState.status === 'running' && !hasNativeMeter()) {
     nextMockMeters();

@@ -2,7 +2,13 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 
 const require = createRequire(import.meta.url);
-const { activeDeckPlugins, buildNativePluginSettings, scanPluginCandidates } = require('./plugin-host.cjs');
+const {
+  activeDeckPlugins,
+  buildDeckPluginPlan,
+  buildNativePluginSettings,
+  describePluginHostHelper,
+  scanPluginCandidates,
+} = require('./plugin-host.cjs');
 
 describe('plugin host runtime settings', () => {
   it('ignores bypassed plugins', () => {
@@ -34,5 +40,41 @@ describe('plugin host runtime settings', () => {
       loadable: true,
     }));
     expect(result.status).toBe('scan-only');
+  });
+
+  it('builds a per-deck helper plan from deck processing', () => {
+    expect(buildDeckPluginPlan({
+      A: { eqBypassed: true, pluginChain: [{ id: 'waves-vst3', bypassed: false }] },
+      B: { eqBypassed: false, pluginChain: [] },
+    })).toMatchObject({
+      protocolVersion: 1,
+      host: 'resonance-plugin-host',
+      decks: {
+        A: {
+          hostMode: 'native-dsp-fallback',
+          eqBypassed: true,
+          activePluginIds: ['waves-vst3'],
+          nativeSettings: { pluginCount: 1, pluginGainDb: 2.25, pluginDrive: 1.16 },
+        },
+        B: {
+          hostMode: 'passthrough',
+          eqBypassed: false,
+          activePluginIds: [],
+          nativeSettings: { pluginCount: 0, pluginGainDb: 0, pluginDrive: 1 },
+        },
+      },
+    });
+  });
+
+  it('describes the sandbox helper process', () => {
+    expect(describePluginHostHelper()).toMatchObject({
+      status: 'ready',
+      name: 'resonance-plugin-host',
+      protocolVersion: 1,
+      capabilities: {
+        sandboxProcess: true,
+        thirdPartyPluginLoading: false,
+      },
+    });
   });
 });

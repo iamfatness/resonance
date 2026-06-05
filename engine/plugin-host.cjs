@@ -1,9 +1,20 @@
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 
 const supportedFormats = ['VST3'];
 const plannedVendors = ['Waves'];
 const maxCandidates = 120;
+const pluginHostProtocolVersion = 1;
+const pluginHostWorkerPath = path.join(__dirname, 'plugin-host-worker.cjs');
+const pluginHostCapabilities = {
+  sandboxProcess: true,
+  perDeckChains: true,
+  nativeDspFallback: true,
+  thirdPartyPluginLoading: false,
+  vst3Discovery: true,
+  wavesDiscovery: true,
+};
 const builtInRuntimePlugins = [
   {
     id: 'resonance-native-drive',
@@ -124,6 +135,7 @@ function scanPluginCandidates(options = {}) {
   const summary = summarizeCandidates(candidates);
   return {
     status: 'scan-only',
+    protocolVersion: pluginHostProtocolVersion,
     scannedAt: endedAt.toISOString(),
     durationMs: endedAt.getTime() - startedAt.getTime(),
     supportedFormats,
@@ -170,11 +182,62 @@ function buildNativePluginSettings(pluginChain = []) {
   };
 }
 
+function buildDeckPluginPlan(deckProcessing = {}) {
+  const buildDeck = (deck) => {
+    const processing = deckProcessing?.[deck] || {};
+    const nativeSettings = buildNativePluginSettings(processing.pluginChain);
+    return {
+      deck,
+      hostMode: nativeSettings.pluginCount > 0 ? 'native-dsp-fallback' : 'passthrough',
+      eqBypassed: Boolean(processing.eqBypassed),
+      activePluginIds: nativeSettings.activePluginIds,
+      nativeSettings,
+    };
+  };
+
+  return {
+    protocolVersion: pluginHostProtocolVersion,
+    host: 'resonance-plugin-host',
+    decks: {
+      A: buildDeck('A'),
+      B: buildDeck('B'),
+    },
+  };
+}
+
+function describePluginHostHelper(options = {}) {
+  const nodePath = options.nodePath || process.execPath;
+  const workerPath = options.workerPath || pluginHostWorkerPath;
+  try {
+    const stdout = execFileSync(nodePath, [workerPath, '--describe'], {
+      encoding: 'utf8',
+      timeout: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 1500,
+      windowsHide: true,
+    });
+    return {
+      status: 'ready',
+      path: workerPath,
+      ...JSON.parse(stdout.trim()),
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      path: workerPath,
+      error: error.message,
+    };
+  }
+}
+
 module.exports = {
   activeDeckPlugins,
+  buildDeckPluginPlan,
   buildNativePluginSettings,
   builtInRuntimePlugins,
   defaultScanRoots,
+  describePluginHostHelper,
+  pluginHostCapabilities,
+  pluginHostProtocolVersion,
+  pluginHostWorkerPath,
   scanPluginCandidates,
   supportedFormats,
   plannedVendors,

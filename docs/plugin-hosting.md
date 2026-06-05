@@ -10,11 +10,23 @@ Resonance can stage plugin-chain settings in the desktop UI now, and the native 
 - Direct browser audio uses a flat EQ curve while bypass is enabled.
 - The desktop audio router can play local Deck A/B WAV sources, pushed PCM, bounded capture buffers, and continuous Deck A/B capture streams through the persistent native WASAPI router.
 - Active staged deck plugins are converted into bounded native settings (`pluginCount`, `pluginGainDb`, `pluginDrive`) and applied independently to Deck A/B PCM through the built-in NativeDSP processor.
+- `engine/plugin-host-worker.cjs` provides the sandbox helper protocol for describing host capabilities and resolving Deck A/B plugin-chain plans.
 - The desktop plugin host runs a safe read-only scan for VST3 and Waves candidates in common Windows install paths.
 - The desktop panel reports scan status, candidate count, supported formats, and a short candidate summary.
 - VST3/Waves plugins are not executed yet; the current executable processor is the built-in NativeDSP test lane.
 
 The scanner only enumerates files and directories. It does not load plugin DLLs, instantiate VST3 bundles, execute Waves shells, or inspect plugin parameters.
+
+The helper process currently supports:
+
+```text
+--describe
+stdin JSON: {"type":"describe"}
+stdin JSON: {"type":"resolveChain","deckProcessing":{...}}
+stdin JSON: {"type":"exit"}
+```
+
+`resolveChain` returns a per-deck plan with `hostMode`, active plugin IDs, EQ bypass state, and the bounded NativeDSP fallback settings that are forwarded to the native audio router.
 
 ## Why Waves Requires Desktop Hosting
 
@@ -34,7 +46,7 @@ Resonance virtual playback device
 
 1. Validate continuous virtual-device capture streams against the installed Resonance driver.
 2. Expand VST3/Waves discovery metadata beyond scan-only candidates.
-3. Replace or augment the built-in NativeDSP lane with one real VST3 instance in-process or through a sandboxed helper.
+3. Replace or augment the built-in NativeDSP lane with one real VST3 instance through the sandboxed helper.
 4. Add plugin parameter state, bypass, ordering, and preset persistence.
 5. Validate Waves plugins specifically after the generic VST3 path works.
 

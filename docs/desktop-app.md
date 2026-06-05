@@ -58,6 +58,7 @@ release/Resonance-local/Resonance.exe
 - When Windows reports an available Resonance virtual capture endpoint, the engine selects it as the default input for Deck A/B capture.
 - The UI can stage plugin chain settings and bypass the app EQ.
 - Active staged deck plugins drive a built-in NativeDSP lane in the native router, with Deck A and Deck B processed independently before the master bus.
+- The plugin host helper process reports its protocol and resolves staged Deck A/B plugin-chain plans without loading third-party binaries yet.
 - The engine persists selected devices, EQ bypass, and plugin-chain settings under the user's app data folder.
 - The desktop panel shows readiness diagnostics for native metering, SysVAD source, WDK toolsets, virtual device status, and plugin host status.
 - The left sidebar switches between functional Now Playing, Library, Playlist, History, Liked Videos, and Radio panels.

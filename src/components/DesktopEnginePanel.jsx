@@ -209,6 +209,13 @@ export function DesktopEnginePanel({ engine }) {
           <small>
             {state.pluginHost.pluginCount || 0} candidates | NativeDSP active, {(state.pluginHost.supportedFormats || []).join(', ') || 'VST3'} scan-only | {state.settings?.appEqBypassed ? 'App EQ bypassed' : `${Object.values(state.settings?.deckProcessing || {}).reduce((count, deck) => count + (deck.pluginChain?.length || 0), 0)} deck plugins staged`}
           </small>
+          {state.pluginHost.helper && (
+            <small>
+              Helper {state.pluginHost.helper.status}
+              {state.pluginHost.helper.protocolVersion ? ` | protocol v${state.pluginHost.helper.protocolVersion}` : ''}
+              {state.pluginHost.chainPlan?.decks ? ` | A ${state.pluginHost.chainPlan.decks.A.hostMode}, B ${state.pluginHost.chainPlan.decks.B.hostMode}` : ''}
+            </small>
+          )}
           {state.pluginHost.candidates?.length > 0 && (
             <small>
               Found: {state.pluginHost.candidates.slice(0, 3).map((plugin) => plugin.name).join(', ')}
