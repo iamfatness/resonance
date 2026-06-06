@@ -114,6 +114,53 @@ describe('plugin host runtime settings', () => {
     });
   });
 
+  it('discovers VST2 DLL candidates in VST plugin folders', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'resonance-vst2-scan-'));
+    const vst2Root = path.join(root, 'VstPlugins');
+    fs.mkdirSync(vst2Root, { recursive: true });
+    fs.writeFileSync(path.join(vst2Root, 'AcmeComp.dll'), '');
+
+    const result = scanPluginCandidates({
+      roots: [vst2Root],
+    });
+
+    expect(result.supportedFormats).toEqual(['VST2', 'VST3']);
+    expect(result.candidates[0]).toMatchObject({
+      name: 'AcmeComp',
+      vendor: 'Unknown',
+      format: 'VST2',
+      shellType: 'vst2-dll',
+      loadStrategy: 'vst2-candidate',
+      executable: false,
+      loaderStatus: 'scan-only',
+    });
+  });
+
+  it('classifies Waves shells by vendor while preserving the VST format', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'resonance-waves-scan-'));
+    const wavesRoot = path.join(root, 'Waves');
+    fs.mkdirSync(wavesRoot, { recursive: true });
+    fs.writeFileSync(path.join(wavesRoot, 'WaveShell1-VST 14.0_x64.dll'), '');
+    fs.mkdirSync(path.join(wavesRoot, 'WaveShell1-VST3 14.0_x64.vst3'));
+
+    const result = scanPluginCandidates({
+      roots: [wavesRoot],
+    });
+
+    expect(result.candidates).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        vendor: 'Waves',
+        format: 'VST2',
+        shellType: 'vst2-waves-shell',
+      }),
+      expect.objectContaining({
+        vendor: 'Waves',
+        format: 'VST3',
+        shellType: 'vst3-waves-shell',
+      }),
+    ]));
+  });
+
   it('builds a per-deck helper plan from deck processing', () => {
     expect(buildDeckPluginPlan({
       A: { eqBypassed: true, pluginChain: [{ id: 'waves-vst3', bypassed: false }] },

@@ -94,25 +94,9 @@ const playlistCatalog = [
 
 const basePluginCatalog = [
   {
-    id: 'waves-vst3',
-    name: 'Waves VST3',
-    vendor: 'Waves',
-    format: 'NativeDSP',
-    loadStrategy: 'native-dsp',
-    executable: true,
-    status: 'NativeDSP',
-    parameters: {
-      enabled: true,
-      wetDry: 100,
-      inputGainDb: 0,
-      outputGainDb: 0,
-      presetName: 'Default',
-    },
-  },
-  {
-    id: 'vst3-generic',
-    name: 'VST3 Plugin',
-    vendor: 'Desktop host',
+    id: 'resonance-native-drive',
+    name: 'Resonance Native Drive',
+    vendor: 'Resonance',
     format: 'NativeDSP',
     loadStrategy: 'native-dsp',
     executable: true,
@@ -168,7 +152,7 @@ function normalizeDesktopPluginCandidate(candidate) {
     path: candidate.path,
     executable: Boolean(candidate.executable),
     stageable: candidate.stageable !== false,
-    status: candidate.executable ? 'Ready' : 'Blocked',
+    status: candidate.executable ? 'Ready' : 'Scan only',
     note: candidate.note,
     parameters: normalizePluginParameters(candidate.parameters),
   };
@@ -921,6 +905,12 @@ function PlayerApp() {
         toggleDeckEqBypass={toggleDeckEqBypass}
         setDeckEqBand={setDeckEqBand}
         pluginCatalog={desktopPluginCatalog}
+        pluginScan={desktopEngine.isDesktop ? {
+          status: desktopEngine.state?.pluginHost?.scanStatus || desktopEngine.state?.pluginHost?.status || 'pending',
+          count: desktopEngine.state?.pluginHost?.pluginCount || 0,
+          formats: (desktopEngine.state?.pluginHost?.supportedFormats || []).join(', ') || 'VST2, VST3',
+          onRefresh: desktopEngine.refreshPlugins,
+        } : null}
         addDeckPlugin={addDeckPlugin}
         removeDeckPlugin={removeDeckPlugin}
         moveDeckPlugin={moveDeckPlugin}

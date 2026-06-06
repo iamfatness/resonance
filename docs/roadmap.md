@@ -156,7 +156,7 @@ Depends on:
 Goal: Turn the current plugin list into a usable deck plugin rack.
 
 Deliverables:
-- Filter/sort plugin catalog by built-in, VST3, Waves, blocked, active.
+- Filter/sort plugin catalog by built-in, VST2, VST3, Waves vendor, blocked, active.
 - Add move up/down controls for chain order.
 - Add remove, duplicate, reset parameters, and rename preset controls.
 - Persist per-plugin preset names and parameters.
@@ -169,7 +169,7 @@ Acceptance criteria:
 Progress:
 
 - The EQ panel now has an active plugin rack for the selected deck with move up/down, duplicate, reset parameters, remove, bypass, and preset-name editing.
-- The plugin catalog can be filtered by all, active, built-in, VST3, Waves, and blocked candidates, then sorted by status, name, or vendor.
+- The plugin catalog can be filtered by all, active, built-in, VST2, VST3, Waves vendor, and blocked candidates, then sorted by status, name, or vendor.
 - Chain entries use per-instance IDs while retaining the original plugin ID for NativeDSP fallback and future VST3 routing.
 
 Depends on:

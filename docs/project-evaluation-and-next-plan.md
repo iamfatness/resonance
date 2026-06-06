@@ -12,7 +12,7 @@ Resonance is now a functional web app, Electron desktop prototype, Chrome extens
 - Browser smoke: upload/direct audio path, search result layout, queue de-duplication, playlist import de-duplication, mobile playlist rendering, and live deploy smoke.
 - Desktop app: Electron shell, native helper IPC, persistent native Deck A/B router, latency controls, per-deck pan/EQ/plugin settings, beta diagnostics export, and local package script.
 - Native audio: local WAV, pushed PCM, bounded capture, continuous capture state, latency profiles, source normalization, queue/underrun status, and helper tests.
-- Plugin host: persistent helper process, NativeDSP fallback lane, scanned VST3/Waves candidates, sandbox metadata-load lifecycle, parameter enumeration contract, and plugin rack UI.
+- Plugin host: persistent helper process, NativeDSP fallback lane, scanned VST2/VST3 candidates, Waves vendor classification, sandbox metadata-load lifecycle, parameter enumeration contract, and plugin rack UI.
 - Chrome extension: tab-capture EQ beta package, versioned download artifact, metadata manifest, tester docs, permissions/privacy notes, and Web Store beta checklist.
 - Docs/release: release checklist, known limitations, beta issue template, driver readiness docs, extension docs, plugin hosting docs, roadmap progress, and Cloudflare deploy smoke command.
 
@@ -42,7 +42,7 @@ Resonance is now a functional web app, Electron desktop prototype, Chrome extens
 3. Define PCM block exchange between `native/audio-router` and the plugin helper.
 4. Route Deck A and Deck B through independent plugin instances.
 5. Add fallback/degraded behavior if processing misses timing budget or the helper crashes.
-6. Validate Waves shell behavior only after generic VST3 is stable.
+6. Validate Waves VST3 shell behavior only after generic VST3 is stable.
 
 ### Track C: Beta Packaging
 

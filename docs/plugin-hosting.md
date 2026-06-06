@@ -12,14 +12,16 @@ Resonance can stage plugin-chain settings in the desktop UI now, and the native 
 - Active staged deck plugins are converted into bounded native settings (`pluginCount`, `pluginGainDb`, `pluginDrive`) and applied independently to Deck A/B PCM through the built-in NativeDSP processor.
 - `engine/plugin-host-worker.cjs` provides the sandbox helper protocol for describing host capabilities and resolving Deck A/B plugin-chain plans.
 - `PluginHostClient` keeps that helper alive while the desktop engine is running, correlates JSON-line responses by request ID, and marks the helper degraded if it exits or times out.
-- The desktop plugin host runs a safe read-only scan for VST3 and Waves candidates in common Windows install paths and enriches candidates with stable IDs, vendor, format, architecture guess, shell type, and load strategy.
+- The desktop plugin host runs a safe read-only scan for VST2 `.dll` and VST3 `.vst3` candidates in common Windows install paths and enriches candidates with stable IDs, vendor, format, architecture guess, shell type, and load strategy.
 - The helper has a VST3 loader prototype that can create a sandbox metadata handle, enumerate Resonance's initial host-side parameter contract, and unload the handle without executing third-party plugin audio code.
 - `native/vst3-bridge` builds `resonance-vst3-bridge.exe`, the native bridge scaffold for future Steinberg SDK integration. It reports SDK/test-plugin readiness and returns explicit degraded states until binary instantiation is implemented.
-- Scanned VST3/Waves candidates can be staged in Deck A/B plugin chains, but they are marked blocked for execution until the native host can safely load third-party binaries.
+- Scanned VST2/VST3 candidates can be staged in Deck A/B plugin chains, but they are marked blocked for execution until the native host can safely load third-party binaries.
 - Plugin entries carry editable session parameters: enabled state, wet/dry, input gain, output gain, and preset name.
-- The EQ panel includes an active deck plugin rack with chain order controls, duplicate, remove, reset-parameter, and preset-name editing. The catalog can be filtered by all, active, built-in, VST3, Waves, or blocked candidates.
+- The EQ panel includes an active deck plugin rack with chain order controls, duplicate, remove, reset-parameter, and preset-name editing. The catalog can be filtered by all, active, built-in, VST2, VST3, Waves vendor, or blocked candidates.
 - The desktop panel reports scan status, candidate count, supported formats, a short candidate summary, and the VST3 loader prototype status.
-- VST3/Waves plugins are not executed yet; the current executable processor is the built-in NativeDSP test lane.
+- VST2/VST3 plugins are not executed yet; the current executable processor is the built-in NativeDSP test lane.
+
+Waves is treated as a vendor/shell classification, not a separate plugin format. A Waves candidate can still be VST2 or VST3 depending on the discovered shell/bundle.
 
 The scanner only enumerates files and directories. The loader prototype validates the helper protocol and metadata lifecycle, but it does not load plugin DLLs, instantiate VST3 processors, execute Waves shells, or process PCM through a third-party binary.
 
@@ -65,7 +67,7 @@ $env:RESONANCE_TEST_VST3_PLUGIN='C:\Program Files\Common Files\VST3\SomePlugin.v
 
 The VST3 SDK is distributed by Steinberg through the official `steinbergmedia/vst3sdk` repository and VST developer portal. As of Steinberg's VST 3.8 announcement, the SDK is available under the MIT license, while the VST name/logo remain Steinberg trademarks.
 
-NativeDSP parameters are applied today through the router's plugin lane: input gain drives the saturation input, output gain trims the processed signal, and wet/dry blends processed and dry deck audio. VST3/Waves candidates keep the same parameter state in `deckProcessing.pluginChain`, but execution stays blocked until a native loader exists.
+NativeDSP parameters are applied today through the router's plugin lane: input gain drives the saturation input, output gain trims the processed signal, and wet/dry blends processed and dry deck audio. VST2/VST3 candidates keep the same parameter state in `deckProcessing.pluginChain`, but execution stays blocked until a native loader exists.
 
 ## Why Waves Requires Desktop Hosting
 
@@ -76,7 +78,7 @@ Resonance virtual playback device
   -> Deck A/B PCM router
   -> Per-deck pan and EQ, if not bypassed
   -> Per-deck built-in NativeDSP plugin lane
-  -> Future per-deck VST3/Waves plugin chain
+  -> Future per-deck VST2/VST3 plugin chain
   -> Master summing bus
   -> WASAPI render output
 ```
@@ -87,7 +89,7 @@ Resonance virtual playback device
 2. Connect the native bridge scaffold to the Steinberg VST3 SDK so it can instantiate one test plugin.
 3. Replace or augment the built-in NativeDSP lane with one real VST3 instance through the sandboxed helper.
 4. Add plugin parameter state, bypass, ordering, and preset persistence.
-5. Validate Waves plugins specifically after the generic VST3 path works.
+5. Validate Waves VST3 shells specifically after the generic VST3 path works.
 
 The safest first implementation is a separate native helper process for plugin hosting. If a third-party plugin crashes, Resonance can restart that helper without taking down the Electron UI.
 
@@ -98,6 +100,12 @@ The desktop engine scans these common Windows locations when they exist:
 ```text
 C:\Program Files\Common Files\VST3
 C:\Program Files (x86)\Common Files\VST3
+C:\Program Files\Common Files\VST2
+C:\Program Files (x86)\Common Files\VST2
+C:\Program Files\VstPlugins
+C:\Program Files (x86)\VstPlugins
+C:\Program Files\Steinberg\VstPlugins
+C:\Program Files (x86)\Steinberg\VstPlugins
 C:\Program Files\Waves
 C:\Program Files (x86)\Waves
 C:\ProgramData\Waves Audio

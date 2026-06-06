@@ -265,7 +265,7 @@ export function DesktopEnginePanel({
             {state.pluginHost.scanStatus === 'scanning' ? 'Scanning' : 'Rescan'}
           </button>
           <small>
-            {state.pluginHost.pluginCount || 0} candidates | NativeDSP active, {(state.pluginHost.supportedFormats || []).join(', ') || 'VST3'} scan-only | {state.settings?.appEqBypassed ? 'App EQ bypassed' : `${Object.values(state.settings?.deckProcessing || {}).reduce((count, deck) => count + (deck.pluginChain?.length || 0), 0)} deck plugins staged`}
+            {state.pluginHost.pluginCount || 0} candidates | NativeDSP active, {(state.pluginHost.supportedFormats || []).join(', ') || 'VST2, VST3'} scan-only | {state.settings?.appEqBypassed ? 'App EQ bypassed' : `${Object.values(state.settings?.deckProcessing || {}).reduce((count, deck) => count + (deck.pluginChain?.length || 0), 0)} deck plugins staged`}
           </small>
           {state.pluginHost.helper && (
             <small>

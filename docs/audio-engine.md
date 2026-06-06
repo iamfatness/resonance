@@ -23,7 +23,7 @@ The engine reports:
 - desktop audio router backend and Deck A/B route state
 - active EQ settings
 - app EQ bypass state
-- staged plugin-chain settings, built-in NativeDSP deck processing, and scan-only VST3/Waves candidate discovery
+- staged plugin-chain settings, built-in NativeDSP deck processing, and scan-only VST2/VST3 candidate discovery
 - desktop readiness diagnostics
 - live input/output peak meters
 - clipping status
@@ -69,11 +69,11 @@ The tone and one-shot WAV render paths use the legacy low/mid/high EQ compatibil
 
 The Electron desktop shell exposes this path through Deck A and Deck B WAV pickers in the desktop engine panel. Each deck can load a WAV, play, pause, stop, seek, accept pushed PCM blocks, capture a bounded WASAPI loopback/capture window, or run a continuous capture stream into the deck PCM buffer. When a Windows input endpoint with Resonance in its name is detected, the engine selects it as the default capture source. The Output dropdown uses native WASAPI endpoint IDs, restarts the persistent router when the selected output changes, reloads loaded decks, and preserves play state where possible. The engine keeps one native router process open while decks play, forwards per-deck settings changes to that process, and uses native snapshots for meters, capture status, and deck positions.
 
-`engine/plugin-host.cjs` is the desktop plugin-host boundary for the next phase. Today it performs read-only VST3/Waves candidate discovery, reports supported formats, candidate counts, and a short candidate list to the Electron UI, and exposes a refresh command over IPC. It also converts active staged deck plugin chains into bounded native settings for the built-in NativeDSP test processor. `engine/plugin-host-worker.cjs` is the sandbox helper process contract: it can describe capabilities and resolve Deck A/B chain plans, but it does not load plugin binaries or execute third-party plugin code. The desktop engine now manages the helper as a persistent child process while the engine is running and refreshes chain plans through that process when deck processing settings change.
+`engine/plugin-host.cjs` is the desktop plugin-host boundary for the next phase. Today it performs read-only VST2/VST3 candidate discovery, reports supported formats, candidate counts, and a short candidate list to the Electron UI, and exposes a refresh command over IPC. Waves candidates are classified by vendor while preserving their actual VST format. It also converts active staged deck plugin chains into bounded native settings for the built-in NativeDSP test processor. `engine/plugin-host-worker.cjs` is the sandbox helper process contract: it can describe capabilities and resolve Deck A/B chain plans, but it does not load plugin binaries or execute third-party plugin code. The desktop engine now manages the helper as a persistent child process while the engine is running and refreshes chain plans through that process when deck processing settings change.
 
-The renderer merges scanned desktop candidates into the plugin catalog so users can stage discovered VST3/Waves candidates on Deck A or Deck B. Those candidates carry `executable: false` and resolve to `blocked-third-party` in the helper plan until a real native plugin loader is implemented.
+The renderer merges scanned desktop candidates into the plugin catalog so users can stage discovered VST2/VST3 candidates on Deck A or Deck B. Those candidates carry `executable: false` and resolve to `blocked-third-party` in the helper plan until a real native plugin loader is implemented.
 
-Each staged plugin also persists parameter state in `deckProcessing.pluginChain`: enabled, wet/dry, input gain, output gain, and preset name. NativeDSP entries use those values in the current router plugin lane; blocked VST3/Waves entries store them for the future host without executing.
+Each staged plugin also persists parameter state in `deckProcessing.pluginChain`: enabled, wet/dry, input gain, output gain, and preset name. NativeDSP entries use those values in the current router plugin lane; blocked VST2/VST3 entries store them for the future host without executing.
 
 ```text
 Deck A playback -> deck EQ or EQ bypass -> NativeDSP plugin lane -> master output
@@ -86,4 +86,4 @@ The native backend should replace the mock meter source without changing the ren
 
 1. Validate the installed Resonance virtual driver against continuous Deck A/B capture on a Secure Boot machine.
 2. Keep extending the shared DSP config shape in `src/lib/presets.js` and the extension mirror in `extension/lib/presets.js`.
-3. Turn scan-only VST3/Waves discovery into a sandboxed native plugin host for staged plugin chains, using the NativeDSP lane as the contract to replace.
+3. Turn scan-only VST2/VST3 discovery into a sandboxed native plugin host for staged plugin chains, using the NativeDSP lane as the contract to replace.

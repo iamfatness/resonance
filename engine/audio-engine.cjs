@@ -163,8 +163,8 @@ const engineState = {
     },
     chainPlan: buildDeckPluginPlan(defaultSettings.deckProcessing),
     roots: [],
-    note: 'Built-in NativeDSP plugin processing is available for staged deck chains; VST3/Waves loading is still scan-only.',
-    plannedRouting: 'Deck PCM -> native EQ or EQ bypass -> built-in NativeDSP plugin lane -> future sandboxed VST3/Waves host -> master bus.',
+    note: 'Built-in NativeDSP plugin processing is available for staged deck chains; VST2/VST3 loading is still scan-only.',
+    plannedRouting: 'Deck PCM -> native EQ or EQ bypass -> built-in NativeDSP plugin lane -> future sandboxed VST2/VST3 host -> master bus.',
   },
   playbackDecks: {
     A: { ...defaultPlaybackDeck },
@@ -363,8 +363,8 @@ function buildDiagnostics() {
         label: 'Plugin host',
         status: pluginHelperReady ? 'ready' : engineState.pluginHost.scanStatus === 'error' || engineState.pluginHost.helper?.status === 'error' ? 'blocked' : 'pending',
         detail: pluginHelperReady
-          ? `Sandbox helper ready; scan found ${engineState.pluginHost.pluginCount || 0} VST3/Waves candidates.`
-          : engineState.pluginHost.error || 'VST3/Waves scan is pending.',
+          ? `Sandbox helper ready; scan found ${engineState.pluginHost.pluginCount || 0} VST2/VST3 candidates.`
+          : engineState.pluginHost.error || 'VST2/VST3 scan is pending.',
       },
     ],
   };

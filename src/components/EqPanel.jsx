@@ -55,6 +55,7 @@ export function EqPanel({
   toggleDeckEqBypass,
   setDeckEqBand,
   pluginCatalog,
+  pluginScan,
   addDeckPlugin,
   removeDeckPlugin,
   moveDeckPlugin,
@@ -77,7 +78,7 @@ export function EqPanel({
   const pluginChain = useMemo(() => activeDeckProcessing.pluginChain || [], [activeDeckProcessing.pluginChain]);
   const pluginStatus = (plugin) => {
     if (plugin.executable === true || plugin.format === 'NativeDSP') return 'ready';
-    if (plugin.sandboxLoad?.status || plugin.loaderStatus === 'metadata-loaded') return 'sandbox';
+    if (plugin.sandboxLoad?.status || plugin.loaderStatus === 'metadata-loaded' || plugin.loaderStatus === 'metadata-ready') return 'sandbox';
     if (plugin.executable === false) return 'blocked';
     return 'ready';
   };
@@ -88,8 +89,9 @@ export function EqPanel({
       .filter((plugin) => {
         if (pluginFilter === 'active') return selectedIds.has(plugin.id);
         if (pluginFilter === 'built-in') return plugin.format === 'NativeDSP';
+        if (pluginFilter === 'vst2') return plugin.format === 'VST2';
         if (pluginFilter === 'vst3') return plugin.format === 'VST3';
-        if (pluginFilter === 'waves') return plugin.vendor === 'Waves' || plugin.format === 'WavesShell';
+        if (pluginFilter === 'waves') return plugin.vendor === 'Waves';
         if (pluginFilter === 'blocked') return plugin.executable === false;
         return true;
       })
@@ -208,8 +210,20 @@ export function EqPanel({
       <section>
         <div className="panel-heading">
           <h2>Deck {activeInputDeck} Plugins</h2>
-          <SlidersHorizontal size={16} />
+          {pluginScan?.onRefresh ? (
+            <button className="panel-action-button" type="button" onClick={pluginScan.onRefresh} disabled={pluginScan.status === 'scanning'}>
+              {pluginScan.status === 'scanning' ? 'Scanning' : 'Scan'}
+            </button>
+          ) : (
+            <SlidersHorizontal size={16} />
+          )}
         </div>
+        {pluginScan && (
+          <div className="plugin-scan-summary">
+            <span>{pluginScan.count || 0} scanned plugins</span>
+            <small>{pluginScan.formats || 'NativeDSP'} | {pluginScan.status || 'idle'}</small>
+          </div>
+        )}
         <div className="plugin-rack">
           <div className="plugin-rack-header">
             <span>Active Chain</span>
@@ -310,8 +324,9 @@ export function EqPanel({
               <option value="all">All</option>
               <option value="active">Active</option>
               <option value="built-in">Built-in</option>
+              <option value="vst2">VST2</option>
               <option value="vst3">VST3</option>
-              <option value="waves">Waves</option>
+              <option value="waves">Waves vendor</option>
               <option value="blocked">Blocked</option>
             </select>
           </label>
@@ -335,12 +350,12 @@ export function EqPanel({
                     <small>
                       {plugin.vendor} | {plugin.format || 'Plugin'}
                       {plugin.architecture ? ` | ${plugin.architecture}` : ''}
-                      {plugin.executable === false ? ' | staged only' : ''}
+                      {plugin.executable === false ? ' | scan only' : ''}
                       {stagedCount ? ` | ${stagedCount} staged` : ''}
                     </small>
                   </span>
                   <button type="button" onClick={() => (addDeckPlugin ? addDeckPlugin(activeInputDeck, plugin.id) : toggleDeckPlugin(activeInputDeck, plugin.id))}>
-                    Add
+                    {plugin.executable === false ? 'Stage' : 'Add'}
                   </button>
                 </div>
               </article>

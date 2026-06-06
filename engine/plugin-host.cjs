@@ -3,7 +3,7 @@ const path = require('node:path');
 const { execFileSync, spawn } = require('node:child_process');
 const readline = require('node:readline');
 
-const supportedFormats = ['VST3'];
+const supportedFormats = ['VST2', 'VST3'];
 const plannedVendors = ['Waves'];
 const maxCandidates = 120;
 const pluginHostProtocolVersion = 1;
@@ -17,6 +17,7 @@ const pluginHostCapabilities = {
   vst3LoaderPrototype: true,
   vst3MetadataLoad: true,
   vst3ParameterEnumeration: true,
+  vst2Discovery: true,
   pluginBinaryExecution: false,
   vst3Discovery: true,
   wavesDiscovery: true,
@@ -28,11 +29,12 @@ const builtInRuntimePlugins = [
     vendor: 'Resonance',
     format: 'NativeDSP',
     loadable: true,
-    note: 'Built-in per-deck DSP used to validate the plugin processing lane before VST3/Waves loading.',
+    note: 'Built-in per-deck DSP used to validate the plugin processing lane before VST2/VST3 loading.',
   },
 ];
 
 const stagedPluginRuntimeProfiles = {
+  'resonance-native-drive': { gainDb: 1.5, drive: 1.12 },
   'vst3-generic': { gainDb: 1.5, drive: 1.08 },
   'waves-vst3': { gainDb: 2.25, drive: 1.16 },
 };
@@ -104,6 +106,13 @@ function defaultScanRoots(env = process.env) {
     path.join(env.ProgramFiles || 'C:\\Program Files', 'Common Files', 'VST3'),
     path.join(env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Common Files', 'VST3'),
     path.join(env.CommonProgramW6432 || 'C:\\Program Files\\Common Files', 'VST3'),
+    path.join(env.ProgramFiles || 'C:\\Program Files', 'Common Files', 'VST2'),
+    path.join(env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Common Files', 'VST2'),
+    path.join(env.CommonProgramW6432 || 'C:\\Program Files\\Common Files', 'VST2'),
+    path.join(env.ProgramFiles || 'C:\\Program Files', 'VstPlugins'),
+    path.join(env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'VstPlugins'),
+    path.join(env.ProgramFiles || 'C:\\Program Files', 'Steinberg', 'VstPlugins'),
+    path.join(env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Steinberg', 'VstPlugins'),
     path.join(env.ProgramFiles || 'C:\\Program Files', 'Waves'),
     path.join(env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)', 'Waves'),
     path.join(env.ProgramData || 'C:\\ProgramData', 'Waves Audio'),
@@ -120,19 +129,26 @@ function classifyCandidate(filePath, entryName) {
   const lowerName = entryName.toLowerCase();
   const lowerPath = filePath.toLowerCase();
   const isVst3 = lowerName.endsWith('.vst3');
+  const isDll = lowerName.endsWith('.dll');
+  const isLikelyVst2Path = lowerPath.includes(`${path.sep.toLowerCase()}vst2${path.sep.toLowerCase()}`)
+    || lowerPath.includes(`${path.sep.toLowerCase()}vstplugins${path.sep.toLowerCase()}`)
+    || lowerPath.includes(`${path.sep.toLowerCase()}steinberg${path.sep.toLowerCase()}vstplugins${path.sep.toLowerCase()}`);
   const isWaves = lowerName.includes('waves') || lowerPath.includes(`${path.sep.toLowerCase()}waves`);
-  const isWavesShell = lowerName.includes('wavesshell');
+  const isWavesShell = lowerName.includes('waveshell');
+  const isVst2 = isDll && (isLikelyVst2Path || isWavesShell);
 
-  if (!isVst3 && !isWavesShell) return null;
+  if (!isVst3 && !isVst2) return null;
+
+  const format = isVst3 ? 'VST3' : 'VST2';
 
   return {
     id: stablePluginId(filePath),
     name: cleanPluginName(entryName),
     vendor: isWaves ? 'Waves' : 'Unknown',
-    format: isVst3 ? 'VST3' : 'WavesShell',
+    format,
     architecture: inferArchitecture(filePath),
-    shellType: isWavesShell ? 'waves-shell' : 'vst3-bundle',
-    loadStrategy: isWavesShell ? 'waves-shell-candidate' : 'vst3-candidate',
+    shellType: isWavesShell ? `${format.toLowerCase()}-waves-shell` : isVst3 ? 'vst3-bundle' : 'vst2-dll',
+    loadStrategy: isWavesShell ? `${format.toLowerCase()}-waves-shell-candidate` : `${format.toLowerCase()}-candidate`,
     source: 'desktop-scan',
     path: filePath,
     stageable: true,
@@ -140,11 +156,11 @@ function classifyCandidate(filePath, entryName) {
     parameters: { ...defaultPluginParameters },
     loadable: false,
     sandboxLoadable: isVst3 && !isWavesShell,
-    loaderStatus: isVst3 && !isWavesShell ? 'metadata-ready' : 'blocked',
+    loaderStatus: isVst3 && !isWavesShell ? 'metadata-ready' : 'scan-only',
     status: 'Found',
     note: isWavesShell
-      ? 'Waves shell candidate detected; Resonance does not load plugin binaries yet.'
-      : 'VST3 candidate detected; sandbox prototype can load metadata, but plugin binary execution remains disabled.',
+      ? `${format} Waves shell candidate detected; Resonance does not load plugin binaries yet.`
+      : `${format} candidate detected; plugin binary execution remains disabled until the native host is connected.`,
   };
 }
 
@@ -287,8 +303,8 @@ function scanPluginCandidates(options = {}) {
     candidates,
     summary,
     errors,
-    note: 'VST3/Waves discovery is read-only. Resonance can execute the built-in NativeDSP test processor for staged deck chains.',
-    plannedRouting: 'Deck PCM -> native EQ or EQ bypass -> built-in NativeDSP plugin lane -> future sandboxed VST3/Waves host -> master bus.',
+    note: 'VST2/VST3 discovery is read-only. Waves plugins are classified by vendor while keeping their actual VST format. Resonance can execute the built-in NativeDSP test processor for staged deck chains.',
+    plannedRouting: 'Deck PCM -> native EQ or EQ bypass -> built-in NativeDSP plugin lane -> future sandboxed VST2/VST3 host -> master bus.',
   };
 }
 

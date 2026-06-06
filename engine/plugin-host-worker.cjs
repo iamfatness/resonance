@@ -21,7 +21,7 @@ function describe() {
     runtimePlugins: builtInRuntimePlugins,
     supportedFormats,
     plannedVendors,
-    note: 'Helper process is ready for chain planning. Third-party VST3/Waves binaries are not loaded yet.',
+    note: 'Helper process is ready for chain planning. Third-party VST2/VST3 binaries are not loaded yet.',
     loadedPluginCount: loadedPlugins.size,
   };
 }

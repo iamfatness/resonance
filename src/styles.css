@@ -1402,6 +1402,46 @@ button {
   color: var(--muted);
 }
 
+.panel-action-button {
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #181d1f;
+  color: var(--teal);
+  cursor: pointer;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.panel-action-button:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+.plugin-scan-summary {
+  display: grid;
+  gap: 3px;
+  margin-bottom: 10px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #0d1112;
+}
+
+.plugin-scan-summary span {
+  color: var(--teal);
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.plugin-scan-summary small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
 .preset-grid {
   display: grid;
   grid-template-columns: repeat(5, 1fr);
