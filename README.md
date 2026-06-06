@@ -176,6 +176,12 @@ Plugin hosting notes live in:
 docs/plugin-hosting.md
 ```
 
+Project roadmap and open work live in:
+
+```text
+docs/roadmap.md
+```
+
 Current desktop backend status:
 
 - Windows audio endpoint enumeration.
