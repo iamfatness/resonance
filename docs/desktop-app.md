@@ -46,6 +46,12 @@ The package is created at:
 release/Resonance-local/Resonance.exe
 ```
 
+The local package includes the Electron shell, built web bundle, audio engine, plugin host helper, WASAPI meter helper, and native Deck A/B audio router helper. A package manifest is written to:
+
+```text
+release/Resonance-local/resonance-package.json
+```
+
 ## Current Scope
 
 - Desktop shell opens the app view by default.
@@ -61,7 +67,18 @@ release/Resonance-local/Resonance.exe
 - The plugin host helper process reports its protocol and resolves staged Deck A/B plugin-chain plans without loading third-party binaries yet.
 - The engine persists selected devices, EQ bypass, and plugin-chain settings under the user's app data folder.
 - The desktop panel shows readiness diagnostics for native metering, SysVAD source, WDK toolsets, virtual device status, and plugin host status.
+- The desktop panel can export a beta diagnostics bundle with engine state, device scan, router snapshot, plugin scan, diagnostics checks, and recent export status.
 - The left sidebar switches between functional Now Playing, Library, Playlist, History, Liked Videos, and Radio panels.
+
+## Beta Diagnostics
+
+Click **Export Diagnostics** in the desktop engine panel to write a redacted JSON bundle under:
+
+```text
+%APPDATA%\Resonance\diagnostics
+```
+
+The bundle includes app version, platform, engine state, device scan, router state, plugin host state, diagnostics checks, playback deck state, and selected settings. Keys that look like secrets, tokens, authorization values, or API keys are redacted before writing.
 
 ## Driver/Capture Readiness
 

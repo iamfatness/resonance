@@ -190,6 +190,11 @@ Acceptance criteria:
 - Native helper binaries are available at runtime.
 - Version and build date are visible in docs or app diagnostics.
 
+Progress:
+
+- `npm run desktop:package` now builds and copies both native helper binaries: WASAPI meter and Deck A/B audio router.
+- The local package writes `release/Resonance-local/resonance-package.json` with version, build time, and included components.
+
 Depends on:
 - Native helper build scripts.
 - Desktop engine startup path.
@@ -207,6 +212,11 @@ Acceptance criteria:
 - A tester can generate one file for support.
 - The bundle includes enough detail to debug audio device, plugin, and capture issues.
 - Secrets are excluded.
+
+Progress:
+
+- The desktop panel now exposes **Export Diagnostics**.
+- The engine writes redacted JSON bundles to `%APPDATA%\Resonance\diagnostics` with app version, platform, engine state, device/router/plugin state, readiness checks, and selected settings.
 
 Depends on:
 - Engine state shape.

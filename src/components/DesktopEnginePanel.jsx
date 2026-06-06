@@ -32,8 +32,18 @@ export function DesktopEnginePanel({
       </div>
       <div className="engine-scan">
         <span>Devices: {state.deviceScan?.status || 'pending'}</span>
-        <button type="button" onClick={engine.refreshDevices}>Rescan</button>
+        <div>
+          <button type="button" onClick={engine.refreshDevices}>Rescan</button>
+          <button type="button" onClick={() => engine.exportDiagnostics?.()}>Export Diagnostics</button>
+        </div>
       </div>
+      {state.lastDiagnosticsExport && (
+        <small className={`engine-export-status ${state.lastDiagnosticsExport.status}`}>
+          Diagnostics {state.lastDiagnosticsExport.status}
+          {state.lastDiagnosticsExport.path ? `: ${state.lastDiagnosticsExport.path}` : ''}
+          {state.lastDiagnosticsExport.error ? `: ${state.lastDiagnosticsExport.error}` : ''}
+        </small>
+      )}
       <div className="engine-grid">
         <label>
           <span>Input</span>

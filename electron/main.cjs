@@ -89,6 +89,7 @@ function registerIpc() {
   ipcMain.handle('engine:getState', () => sendEngineCommand('GET_STATE'));
   ipcMain.handle('engine:refreshDevices', () => sendEngineCommand('REFRESH_DEVICES'));
   ipcMain.handle('engine:refreshPlugins', () => sendEngineCommand('REFRESH_PLUGINS'));
+  ipcMain.handle('engine:exportDiagnostics', () => sendEngineCommand('EXPORT_DIAGNOSTICS'));
   ipcMain.handle('engine:start', () => sendEngineCommand('START'));
   ipcMain.handle('engine:stop', () => sendEngineCommand('STOP'));
   ipcMain.handle('engine:updateSettings', (_event, settings) => sendEngineCommand('UPDATE_SETTINGS', { settings }));

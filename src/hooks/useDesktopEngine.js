@@ -83,6 +83,7 @@ export function useDesktopEngine(settings) {
     deckBWav,
     refreshDevices: () => desktopApi?.engine?.refreshDevices?.(),
     refreshPlugins: () => desktopApi?.engine?.refreshPlugins?.(),
+    exportDiagnostics: () => desktopApi?.engine?.exportDiagnostics?.(),
     selectDevices: (devices) => desktopApi?.engine?.selectDevices?.(devices),
   };
 }

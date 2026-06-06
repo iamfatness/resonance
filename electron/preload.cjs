@@ -8,6 +8,7 @@ contextBridge.exposeInMainWorld('resonanceDesktop', {
     getState: () => ipcRenderer.invoke('engine:getState'),
     refreshDevices: () => ipcRenderer.invoke('engine:refreshDevices'),
     refreshPlugins: () => ipcRenderer.invoke('engine:refreshPlugins'),
+    exportDiagnostics: () => ipcRenderer.invoke('engine:exportDiagnostics'),
     start: () => ipcRenderer.invoke('engine:start'),
     stop: () => ipcRenderer.invoke('engine:stop'),
     renderSilence: (durationMs) => ipcRenderer.invoke('engine:renderSilence', durationMs),

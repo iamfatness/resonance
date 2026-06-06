@@ -9,6 +9,7 @@ const {
   isStoppedContinuousCapture,
   normalizeDeckSource,
   normalizeSnapshotSourceType,
+  sanitizeDiagnosticsState,
   withDeckSource,
 } = require('./audio-engine.cjs');
 
@@ -109,5 +110,21 @@ describe('audio engine deck source state', () => {
 
     expect(normalizeSnapshotSourceType('loopback', deck)).toBe('virtual-device');
     expect(normalizeSnapshotSourceType('pcm', deck)).toBe('pcm');
+  });
+
+  it('redacts secret-like values from diagnostics exports', () => {
+    expect(sanitizeDiagnosticsState({
+      youtubeApiKey: 'key',
+      nested: {
+        authToken: 'token',
+        safeValue: 'visible',
+      },
+    })).toEqual({
+      youtubeApiKey: '[redacted]',
+      nested: {
+        authToken: '[redacted]',
+        safeValue: 'visible',
+      },
+    });
   });
 });

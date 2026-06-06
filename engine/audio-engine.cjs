@@ -20,6 +20,8 @@ const buildToolsPlatforms = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2
 const windowsKitsRoot = 'C:\\Program Files (x86)\\Windows Kits\\10';
 const settingsDir = path.join(process.env.APPDATA || rootDir, 'Resonance');
 const settingsPath = path.join(settingsDir, 'engine-settings.json');
+const diagnosticsDir = path.join(settingsDir, 'diagnostics');
+const packageInfo = require(path.join(rootDir, 'package.json'));
 
 // Keep this shape aligned with the canonical JSDoc/contracts in src/lib/presets.js.
 const defaultSettings = {
@@ -202,6 +204,7 @@ const engineState = {
     updatedAt: null,
     checks: [],
   },
+  lastDiagnosticsExport: null,
   lastStartedAt: null,
   meters: {
     inputPeak: 0,
@@ -538,6 +541,54 @@ function send(message) {
 function publishState(requestId) {
   buildDiagnostics();
   send({ type: 'STATE', requestId, state: engineState });
+}
+
+function sanitizeDiagnosticsState(state) {
+  return JSON.parse(JSON.stringify(state, (key, value) => {
+    if (/api[-_]?key|secret|token|authorization/i.test(key)) return '[redacted]';
+    return value;
+  }));
+}
+
+function exportDiagnostics(requestId) {
+  snapshotDeckPlayback();
+  buildDiagnostics();
+  const exportedAt = new Date();
+  const fileName = `resonance-diagnostics-${exportedAt.toISOString().replace(/[:.]/g, '-')}.json`;
+  const filePath = path.join(diagnosticsDir, fileName);
+  const payload = {
+    schemaVersion: 1,
+    exportedAt: exportedAt.toISOString(),
+    app: {
+      name: packageInfo.name,
+      version: packageInfo.version,
+      platform: process.platform,
+      arch: process.arch,
+    },
+    paths: {
+      settingsPath,
+      diagnosticsPath: filePath,
+    },
+    engine: sanitizeDiagnosticsState(engineState),
+  };
+
+  try {
+    fs.mkdirSync(diagnosticsDir, { recursive: true });
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
+    engineState.lastDiagnosticsExport = {
+      status: 'ready',
+      path: filePath,
+      exportedAt: exportedAt.toISOString(),
+    };
+  } catch (error) {
+    engineState.lastDiagnosticsExport = {
+      status: 'error',
+      error: error.message,
+      exportedAt: exportedAt.toISOString(),
+    };
+  }
+
+  publishState(requestId);
 }
 
 function publishMeters() {
@@ -1372,6 +1423,7 @@ function handleEngineMessage(message = {}) {
   if (message.type === 'GET_STATE') publishState(message.requestId);
   if (message.type === 'REFRESH_DEVICES') refreshDevices(message.requestId);
   if (message.type === 'REFRESH_PLUGINS') refreshPlugins(message.requestId);
+  if (message.type === 'EXPORT_DIAGNOSTICS') exportDiagnostics(message.requestId);
   if (message.type === 'START') start(message.requestId);
   if (message.type === 'STOP') stop(message.requestId);
   if (message.type === 'UPDATE_SETTINGS') updateSettings(message.requestId, message.settings);
@@ -1410,5 +1462,6 @@ module.exports = {
   isStoppedContinuousCapture,
   normalizeSnapshotSourceType,
   normalizeDeckSource,
+  sanitizeDiagnosticsState,
   withDeckSource,
 };

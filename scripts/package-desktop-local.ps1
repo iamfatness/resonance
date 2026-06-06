@@ -12,6 +12,7 @@ if (-not (Test-Path -LiteralPath $electronDist)) {
 
 & npm run build
 & npm run native:wasapi-meter
+& npm run native:audio-router
 
 New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
 if (Test-Path -LiteralPath $packageRoot) {
@@ -48,7 +49,8 @@ $copyItems = @(
   'electron',
   'engine',
   'scripts\list-audio-devices.ps1',
-  'native\wasapi-meter\build\Release\resonance-wasapi-meter.exe'
+  'native\wasapi-meter\build\Release\resonance-wasapi-meter.exe',
+  'native\audio-router\build\Release\resonance-audio-router.exe'
 )
 
 foreach ($item in $copyItems) {
@@ -69,6 +71,21 @@ setlocal
 start "" "%~dp0Resonance.exe"
 "@
 $launcher | Set-Content -Path (Join-Path $packageRoot 'Launch Resonance.cmd') -Encoding ASCII
+
+$manifest = [pscustomobject]@{
+  name = 'Resonance'
+  version = (Get-Content -Raw -LiteralPath (Join-Path $root 'package.json') | ConvertFrom-Json).version
+  builtAt = (Get-Date).ToString('o')
+  includes = @(
+    'Electron desktop shell',
+    'Vite web app bundle',
+    'Resonance audio engine',
+    'WASAPI meter helper',
+    'Native Deck A/B audio router helper',
+    'Plugin host helper'
+  )
+}
+$manifest | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path $packageRoot 'resonance-package.json') -Encoding UTF8
 
 Write-Host "Packaged Resonance desktop app at: $packageRoot"
 Write-Host "Launch: $resonanceExe"

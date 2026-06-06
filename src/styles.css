@@ -1904,6 +1904,13 @@ button {
   text-transform: uppercase;
 }
 
+.engine-scan > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
 .engine-scan button {
   height: 28px;
   border: 1px solid var(--line);
@@ -1914,6 +1921,20 @@ button {
   padding: 0 9px;
   font-size: 12px;
   font-weight: 850;
+}
+
+.engine-export-status {
+  overflow-wrap: anywhere;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.engine-export-status.ready {
+  color: var(--teal);
+}
+
+.engine-export-status.error {
+  color: #ff9f88;
 }
 
 .engine-actions button {
