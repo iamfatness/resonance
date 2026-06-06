@@ -18,6 +18,7 @@ const pluginHostCapabilities = {
   nativeVst3BridgeClient: true,
   vst3MetadataLoad: true,
   vst3ParameterEnumeration: true,
+  vst3BridgePcmTest: true,
   vst2Discovery: true,
   pluginBinaryExecution: false,
   vst3Discovery: true,
@@ -447,6 +448,7 @@ function describeNativeVst3Bridge(options = {}) {
         metadataLifecycle: false,
         binaryInstantiation: false,
         pcmProcessing: false,
+        bridgePcmProcessing: false,
       },
       note: 'Native VST3 bridge is not built. Run npm run native:vst3-bridge.',
     };
@@ -640,6 +642,19 @@ class NativeVst3BridgeClient {
       timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 1500,
     });
     return response.parameters || [];
+  }
+
+  async processTone(pluginId, options = {}) {
+    return this.request('processTone', {
+      id: pluginId,
+      pluginId,
+      frames: Number.isFinite(options.frames) ? options.frames : 512,
+      sampleRate: Number.isFinite(options.sampleRate) ? options.sampleRate : 48000,
+      frequency: Number.isFinite(options.frequency) ? options.frequency : 440,
+      amplitude: Number.isFinite(options.amplitude) ? options.amplitude : 0.2,
+    }, {
+      timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 2500,
+    });
   }
 }
 

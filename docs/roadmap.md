@@ -107,7 +107,8 @@ Progress:
 - Helper commands are in place for `loadPlugin`, `enumerateParameters`, and `unloadPlugin`.
 - The prototype can load VST3 bundle metadata in the sandbox process and expose the initial host-side parameter contract.
 - Native VST3 bridge scaffold is in `native/vst3-bridge`, builds with `npm run native:vst3-bridge`, and reports SDK/test-plugin readiness to the desktop panel.
-- Third-party binary execution remains disabled; the next step is a native VST3 SDK bridge for one real test plugin instance.
+- Native VST3 bridge builds against the Steinberg SDK submodule, loads real VST3 modules, enumerates real parameters, and processes an internal 32-bit float test block through a loaded processor.
+- Live third-party deck execution remains disabled; the next step is routing Deck A/B PCM blocks into the verified bridge processor lifecycle.
 
 Depends on:
 - Persistent `PluginHostClient`.
@@ -119,6 +120,7 @@ Goal: Route Deck A/B PCM through one sandboxed VST3 plugin chain.
 
 Deliverables:
 - Define PCM block exchange between native router and plugin helper.
+- Reuse the verified bridge `processTone` lifecycle for external PCM buffers.
 - Add process callback timing/latency budget.
 - Route Deck A and Deck B through independent plugin instances.
 - Keep NativeDSP fallback available when VST3 processing is disabled or fails.
@@ -350,6 +352,7 @@ Progress:
 - Added `npm run smoke:deploy` for live hosted smoke checks against `https://resonance.iamfatness.us/app`.
 - Added `docs/release-checklist.md` with local verification, Cloudflare deploy, beta artifact, and manual beta checks.
 - Current repeated deploys have passed through `npm run deploy:worker` and live route checks.
+- Current Cloudflare Worker version after the VST3 bridge test-processing deploy: `c00c19c1-3dfb-4d12-a1f5-ee5db50fbae0`.
 
 Depends on:
 - Current Worker deploy script.

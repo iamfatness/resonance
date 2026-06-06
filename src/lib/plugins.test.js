@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   deletePluginPreset,
   normalizePluginParameters,
+  pluginStatus,
   savePluginPreset,
 } from './plugins.js';
 
@@ -31,5 +32,17 @@ describe('plugin preset helpers', () => {
     });
 
     expect(deletePluginPreset(overwritten, 'plugin:test', 'Wide')['plugin:test']).toEqual([]);
+  });
+
+  it('classifies bridge-tested VST3 candidates as sandbox state until deck routing is live', () => {
+    expect(pluginStatus({
+      executable: false,
+      format: 'VST3',
+      nativeLoad: {
+        status: 'loaded',
+        bridgePcmProcessing: true,
+        processingEnabled: false,
+      },
+    })).toBe('sandbox');
   });
 });

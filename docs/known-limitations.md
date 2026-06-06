@@ -23,8 +23,9 @@
 ## Plugin Hosting
 
 - Built-in NativeDSP processing is active for staged deck plugin chains.
-- VST3 metadata can be loaded in the sandbox helper, but third-party plugin binary execution is disabled.
-- Waves candidates are detected as VST2/VST3 vendor shells for planning, but Waves loading remains blocked until generic VST3 processing is reliable.
+- VST3 metadata can be loaded in the sandbox helper, and the native bridge can process an internal test block through a loaded VST3 processor.
+- Third-party VST3 processing is not routed into live Deck A/B playback yet.
+- Waves candidates are detected as VST2/VST3 vendor shells for planning, but Waves deck playback remains blocked until generic VST3 deck routing is reliable.
 - Plugin failures must stay contained in the helper process before third-party execution is enabled.
 
 ## Chrome Extension

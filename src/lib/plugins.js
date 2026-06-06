@@ -90,6 +90,7 @@ export function buildPluginCatalog(candidates = []) {
 export function pluginStatus(plugin) {
   if (plugin.nativeLoad?.processingEnabled) return 'ready';
   if (plugin.nativeLoad?.status === 'probing') return 'probing';
+  if (plugin.nativeLoad?.bridgePcmProcessing || plugin.nativeLoad?.status === 'loaded') return 'sandbox';
   if (plugin.executable === true || plugin.format === 'NativeDSP') return 'ready';
   if (plugin.sandboxLoad?.status || plugin.loaderStatus === 'metadata-loaded' || plugin.loaderStatus === 'metadata-ready') return 'sandbox';
   if (plugin.executable === false) return 'blocked';

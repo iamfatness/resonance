@@ -84,6 +84,13 @@ export function PluginChainPanel({
             pluginParameters: {},
           };
           const nativeLoad = plugin.nativeLoad || {};
+          const runtimeLabel = nativeLoad.processingEnabled
+            ? 'native loaded'
+            : nativeLoad.bridgePcmProcessing
+              ? 'bridge tested'
+              : plugin.executable === false
+                ? 'scan only'
+                : 'active DSP';
           const exposedParameters = Array.isArray(plugin.exposedParameters) ? plugin.exposedParameters : [];
           return (
             <article className={`plugin-item active ${plugin.executable === false ? 'blocked-plugin' : ''}`} key={key}>
@@ -91,12 +98,13 @@ export function PluginChainPanel({
                 <span>
                   <strong>{index + 1}. {plugin.name}</strong>
                   <small>
-                    {plugin.vendor} | {plugin.format || 'Plugin'} | {nativeLoad.processingEnabled ? 'native loaded' : plugin.executable === false ? 'scan only' : 'active DSP'} | {parameters.presetName}
+                    {plugin.vendor} | {plugin.format || 'Plugin'} | {runtimeLabel} | {parameters.presetName}
                   </small>
                   {nativeLoad.status && (
                     <small>
                       Bridge status: {nativeLoad.status}
                       {Number.isFinite(nativeLoad.parameterCount) ? ` | ${nativeLoad.parameterCount} params` : ''}
+                      {nativeLoad.bridgePcmProcessing ? ' | PCM test passed' : ''}
                       {nativeLoad.error ? ` | ${nativeLoad.error}` : ''}
                     </small>
                   )}
@@ -245,6 +253,13 @@ export function PluginChainPanel({
       <div className="plugin-list">
         {filteredPlugins.map((plugin) => {
           const stagedCount = pluginChain.filter((item) => item.id === plugin.id).length;
+          const nativeStatus = plugin.nativeLoad?.processingEnabled
+            ? 'native loaded'
+            : plugin.nativeLoad?.bridgePcmProcessing
+              ? 'bridge tested'
+              : plugin.executable === false
+                ? 'scan only'
+                : '';
           return (
             <article className={`plugin-item ${stagedCount ? 'active' : ''} ${plugin.executable === false ? 'blocked-plugin' : ''}`} key={plugin.id}>
               <div className="plugin-item-header">
@@ -253,7 +268,7 @@ export function PluginChainPanel({
                   <small>
                     {plugin.vendor} | {plugin.format || 'Plugin'}
                     {plugin.architecture ? ` | ${plugin.architecture}` : ''}
-                    {plugin.nativeLoad?.processingEnabled ? ' | native loaded' : plugin.executable === false ? ' | scan only' : ''}
+                    {nativeStatus ? ` | ${nativeStatus}` : ''}
                     {plugin.nativeLoad?.status && !plugin.nativeLoad?.processingEnabled ? ` | ${plugin.nativeLoad.status}` : ''}
                     {stagedCount ? ` | ${stagedCount} staged` : ''}
                   </small>

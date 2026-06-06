@@ -235,14 +235,15 @@ describe('plugin host runtime settings', () => {
       const readline = require('node:readline');
       function send(message) { process.stdout.write(JSON.stringify(message) + '\\n'); }
       if (process.argv.includes('--describe')) {
-        send({ type: 'describe', status: 'ready', protocolVersion: 1, capabilities: { binaryInstantiation: true } });
+        send({ type: 'describe', status: 'ready', protocolVersion: 1, capabilities: { binaryInstantiation: true, pcmProcessing: true } });
         process.exit(0);
       }
       readline.createInterface({ input: process.stdin }).on('line', (line) => {
         const message = JSON.parse(line);
         if (message.type === 'describe') send({ type: 'describe', requestId: message.requestId, status: 'ready', protocolVersion: 1 });
-        if (message.type === 'loadPlugin') send({ type: 'loadPlugin', requestId: message.requestId, status: 'loaded', pluginId: message.id, processingEnabled: true });
+        if (message.type === 'loadPlugin') send({ type: 'loadPlugin', requestId: message.requestId, status: 'loaded', pluginId: message.id, processingEnabled: false, bridgePcmProcessing: true });
         if (message.type === 'enumerateParameters') send({ type: 'enumerateParameters', requestId: message.requestId, status: 'ready', parameters: [{ id: 'mix', name: 'Mix', minimum: 0, maximum: 1, defaultValue: 0.5 }] });
+        if (message.type === 'processTone') send({ type: 'processTone', requestId: message.requestId, status: 'processed', pluginId: message.pluginId, frames: message.frames, sampleRate: message.sampleRate, inputPeak: 0.2, outputPeak: 0.18, maxDelta: 0.02, changed: true, bridgePcmProcessing: true, processingEnabled: false });
         if (message.type === 'unloadPlugin') send({ type: 'unloadPlugin', requestId: message.requestId, status: 'unloaded', pluginId: message.pluginId });
         if (message.type === 'exit') {
           send({ type: 'exit', requestId: message.requestId, status: 'ok' });
@@ -261,11 +262,17 @@ describe('plugin host runtime settings', () => {
       await expect(client.describe()).resolves.toMatchObject({ status: 'ready', protocolVersion: 1 });
       await expect(client.loadPlugin({ id: 'desktop-plugin:test', path: 'Test.vst3', name: 'Test' })).resolves.toMatchObject({
         status: 'loaded',
-        processingEnabled: true,
+        processingEnabled: false,
+        bridgePcmProcessing: true,
       });
       await expect(client.enumerateParameters('desktop-plugin:test')).resolves.toEqual([
         expect.objectContaining({ id: 'mix' }),
       ]);
+      await expect(client.processTone('desktop-plugin:test')).resolves.toMatchObject({
+        status: 'processed',
+        bridgePcmProcessing: true,
+        processingEnabled: false,
+      });
       await expect(client.unloadPlugin('desktop-plugin:test')).resolves.toMatchObject({
         status: 'unloaded',
       });

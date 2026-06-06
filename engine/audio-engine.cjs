@@ -745,17 +745,32 @@ function nativeBridgeLoadError(error) {
 async function probeNativeVst3Candidate(candidate) {
   const loaded = await nativeVst3BridgeClient.loadPlugin(candidate);
   let parameters = [];
+  let processProbe = null;
   if (loaded.processingEnabled || loaded.status === 'loaded' || loaded.status === 'bridge-ready') {
     try {
       parameters = await nativeVst3BridgeClient.enumerateParameters(candidate.id);
     } catch {
       parameters = [];
     }
+    if (loaded.bridgePcmProcessing) {
+      try {
+        processProbe = await nativeVst3BridgeClient.processTone(candidate.id, { timeoutMs: 3000 });
+      } catch (error) {
+        processProbe = {
+          status: 'process-failed',
+          bridgePcmProcessing: false,
+          error: nativeBridgeLoadError(error),
+        };
+      }
+    }
   }
   nativeVst3BridgeClient.unloadPlugin(candidate.id).catch(() => {});
+  const bridgePcmProcessing = Boolean(processProbe?.bridgePcmProcessing || loaded.bridgePcmProcessing);
   return {
     status: loaded.status || 'unknown',
     processingEnabled: Boolean(loaded.processingEnabled),
+    bridgePcmProcessing,
+    processProbe,
     parameterCount: parameters.length,
     parameters,
     error: loaded.error || null,
@@ -784,6 +799,7 @@ function probeNativeVst3Candidates({ publish = false } = {}) {
             nativeLoad: {
               status: 'probing',
               processingEnabled: false,
+              bridgePcmProcessing: false,
               parameters: [],
               parameterCount: 0,
               updatedAt: new Date().toISOString(),
@@ -802,6 +818,7 @@ function probeNativeVst3Candidates({ publish = false } = {}) {
         nativeLoad: {
           status: 'error',
           processingEnabled: false,
+          bridgePcmProcessing: false,
           parameters: [],
           parameterCount: 0,
           error: nativeBridgeLoadError(error),
@@ -818,6 +835,7 @@ function probeNativeVst3Candidates({ publish = false } = {}) {
           status: 'ready',
           probedCount: results.length,
           loadedCount: results.filter((result) => result.nativeLoad.processingEnabled).length,
+          bridgePcmReadyCount: results.filter((result) => result.nativeLoad.bridgePcmProcessing).length,
           parameterLoadedCount: results.filter((result) => result.nativeLoad.status === 'loaded' && result.nativeLoad.parameterCount > 0).length,
           updatedAt: new Date().toISOString(),
         },
@@ -833,7 +851,9 @@ function probeNativeVst3Candidates({ publish = false } = {}) {
             note: nativeLoad.processingEnabled
               ? 'Native VST3 bridge loaded this plugin and exposed parameters.'
               : nativeLoad.status === 'loaded'
-                ? 'Native VST3 bridge loaded this plugin and exposed parameters; PCM processing is not connected yet.'
+                ? nativeLoad.bridgePcmProcessing
+                  ? 'Native VST3 bridge loaded this plugin, exposed parameters, and processed an internal test block; Deck A/B routing is not connected yet.'
+                  : 'Native VST3 bridge loaded this plugin and exposed parameters; Deck A/B PCM processing is not connected yet.'
               : nativeLoad.error || 'Native VST3 bridge could not execute this plugin.',
             nativeLoad,
           };
