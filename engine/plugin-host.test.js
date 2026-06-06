@@ -13,6 +13,7 @@ const {
   createSandboxPluginInstance,
   describeNativeVst3Bridge,
   describePluginHostHelper,
+  NativeVst3BridgeClient,
   PluginHostClient,
   normalizePluginParameters,
   scanPluginCandidates,
@@ -45,6 +46,7 @@ describe('plugin host runtime settings', () => {
           inputGainDb: 1,
           outputGainDb: -2,
           presetName: 'Default',
+          pluginParameters: {},
         },
         'vst3-generic': {
           enabled: true,
@@ -52,6 +54,7 @@ describe('plugin host runtime settings', () => {
           inputGainDb: -0.5,
           outputGainDb: 1,
           presetName: 'Default',
+          pluginParameters: {},
         },
       },
     });
@@ -70,6 +73,7 @@ describe('plugin host runtime settings', () => {
       inputGainDb: -24,
       outputGainDb: 24,
       presetName: 'Wide Mix',
+      pluginParameters: {},
     });
   });
 
@@ -110,6 +114,7 @@ describe('plugin host runtime settings', () => {
         inputGainDb: 0,
         outputGainDb: 0,
         presetName: 'Default',
+        pluginParameters: {},
       },
     });
   });
@@ -182,6 +187,7 @@ describe('plugin host runtime settings', () => {
               inputGainDb: 0,
               outputGainDb: 0,
               presetName: 'Default',
+              pluginParameters: {},
             },
           },
           nativeSettings: { pluginCount: 1, pluginGainDb: 2.25, pluginOutputGainDb: 0, pluginDrive: 1.16, pluginWetDry: 100 },
@@ -219,6 +225,52 @@ describe('plugin host runtime settings', () => {
         pcmProcessing: false,
       },
     });
+  });
+
+  it('loads, enumerates, and unloads through the native VST3 bridge client protocol', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'resonance-native-vst3-client-'));
+    const bridgeScript = path.join(root, 'fake-bridge.cjs');
+    fs.writeFileSync(bridgeScript, `
+      const readline = require('node:readline');
+      function send(message) { process.stdout.write(JSON.stringify(message) + '\\n'); }
+      if (process.argv.includes('--describe')) {
+        send({ type: 'describe', status: 'ready', protocolVersion: 1, capabilities: { binaryInstantiation: true } });
+        process.exit(0);
+      }
+      readline.createInterface({ input: process.stdin }).on('line', (line) => {
+        const message = JSON.parse(line);
+        if (message.type === 'describe') send({ type: 'describe', requestId: message.requestId, status: 'ready', protocolVersion: 1 });
+        if (message.type === 'loadPlugin') send({ type: 'loadPlugin', requestId: message.requestId, status: 'loaded', pluginId: message.id, processingEnabled: true });
+        if (message.type === 'enumerateParameters') send({ type: 'enumerateParameters', requestId: message.requestId, status: 'ready', parameters: [{ id: 'mix', name: 'Mix', minimum: 0, maximum: 1, defaultValue: 0.5 }] });
+        if (message.type === 'unloadPlugin') send({ type: 'unloadPlugin', requestId: message.requestId, status: 'unloaded', pluginId: message.pluginId });
+        if (message.type === 'exit') {
+          send({ type: 'exit', requestId: message.requestId, status: 'ok' });
+          process.exit(0);
+        }
+      });
+    `);
+
+    expect(describeNativeVst3Bridge({ bridgePath: process.execPath, bridgeArgs: [bridgeScript] })).toMatchObject({
+      status: 'ready',
+      capabilities: { binaryInstantiation: true },
+    });
+
+    const client = new NativeVst3BridgeClient({ bridgePath: process.execPath, bridgeArgs: [bridgeScript] });
+    try {
+      await expect(client.describe()).resolves.toMatchObject({ status: 'ready', protocolVersion: 1 });
+      await expect(client.loadPlugin({ id: 'desktop-plugin:test', path: 'Test.vst3', name: 'Test' })).resolves.toMatchObject({
+        status: 'loaded',
+        processingEnabled: true,
+      });
+      await expect(client.enumerateParameters('desktop-plugin:test')).resolves.toEqual([
+        expect.objectContaining({ id: 'mix' }),
+      ]);
+      await expect(client.unloadPlugin('desktop-plugin:test')).resolves.toMatchObject({
+        status: 'unloaded',
+      });
+    } finally {
+      client.stop();
+    }
   });
 
   it('keeps the sandbox helper alive for multiple requests', async () => {

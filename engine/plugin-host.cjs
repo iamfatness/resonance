@@ -15,6 +15,7 @@ const pluginHostCapabilities = {
   nativeDspFallback: true,
   thirdPartyPluginLoading: false,
   vst3LoaderPrototype: true,
+  nativeVst3BridgeClient: true,
   vst3MetadataLoad: true,
   vst3ParameterEnumeration: true,
   vst2Discovery: true,
@@ -44,6 +45,7 @@ const defaultPluginParameters = {
   inputGainDb: 0,
   outputGainDb: 0,
   presetName: 'Default',
+  pluginParameters: {},
 };
 const vst3PrototypeParameters = [
   { id: 'bypass', name: 'Bypass', kind: 'boolean', defaultValue: 0, minimum: 0, maximum: 1, automatable: true },
@@ -67,6 +69,12 @@ function normalizePluginParameters(parameters = {}) {
     presetName: typeof parameters.presetName === 'string' && parameters.presetName.trim()
       ? parameters.presetName.trim().slice(0, 80)
       : defaultPluginParameters.presetName,
+    pluginParameters: parameters.pluginParameters && typeof parameters.pluginParameters === 'object'
+      ? Object.fromEntries(Object.entries(parameters.pluginParameters).map(([key, value]) => [
+          key,
+          clampNumber(value, 0, 1, 0),
+        ]))
+      : {},
   };
 }
 
@@ -426,6 +434,7 @@ function describePluginHostHelper(options = {}) {
 
 function describeNativeVst3Bridge(options = {}) {
   const bridgePath = options.bridgePath || nativeVst3BridgePath;
+  const bridgeArgs = Array.isArray(options.bridgeArgs) ? options.bridgeArgs : [];
   if (!fs.existsSync(bridgePath)) {
     return {
       status: 'not-built',
@@ -444,7 +453,7 @@ function describeNativeVst3Bridge(options = {}) {
   }
 
   try {
-    const stdout = execFileSync(bridgePath, ['--describe'], {
+    const stdout = execFileSync(bridgePath, [...bridgeArgs, '--describe'], {
       encoding: 'utf8',
       timeout: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 1500,
       windowsHide: true,
@@ -459,6 +468,178 @@ function describeNativeVst3Bridge(options = {}) {
       path: bridgePath,
       error: error.message,
     };
+  }
+}
+
+class NativeVst3BridgeClient {
+  constructor({ bridgePath = nativeVst3BridgePath, bridgeArgs = [], onStatus } = {}) {
+    this.bridgePath = bridgePath;
+    this.bridgeArgs = bridgeArgs;
+    this.onStatus = onStatus || null;
+    this.process = null;
+    this.pending = new Map();
+    this.nextRequestId = 1;
+    this.status = {
+      status: fs.existsSync(this.bridgePath) ? 'idle' : 'not-built',
+      path: this.bridgePath,
+      protocolVersion: pluginHostProtocolVersion,
+    };
+  }
+
+  getStatus() {
+    return this.status;
+  }
+
+  setStatus(update = {}) {
+    this.status = {
+      ...this.status,
+      ...update,
+      path: this.bridgePath,
+      updatedAt: new Date().toISOString(),
+    };
+    this.onStatus?.(this.status);
+  }
+
+  start() {
+    if (this.process) return true;
+    if (!fs.existsSync(this.bridgePath)) {
+      this.setStatus({ status: 'not-built', error: 'Native VST3 bridge executable was not found.' });
+      return false;
+    }
+
+    const child = spawn(this.bridgePath, this.bridgeArgs, {
+      windowsHide: true,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+    this.process = child;
+    this.setStatus({ status: 'starting', error: null });
+
+    const stdout = readline.createInterface({ input: child.stdout });
+    stdout.on('line', (line) => this.handleLine(line));
+
+    let stderr = '';
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
+    });
+
+    child.on('exit', (code, signal) => {
+      if (this.process !== child) return;
+      this.process = null;
+      for (const { reject, timer } of this.pending.values()) {
+        clearTimeout(timer);
+        reject(new Error(`Native VST3 bridge exited before responding (${code ?? signal ?? 'unknown'}).`));
+      }
+      this.pending.clear();
+      this.setStatus({
+        status: 'stopped',
+        code,
+        signal,
+        error: stderr.trim() || null,
+      });
+    });
+
+    child.on('error', (error) => {
+      if (this.process !== child) return;
+      this.setStatus({ status: 'error', error: error.message });
+    });
+
+    return true;
+  }
+
+  stop() {
+    if (!this.process) {
+      this.setStatus({ status: fs.existsSync(this.bridgePath) ? 'idle' : 'not-built' });
+      return;
+    }
+    const child = this.process;
+    this.request('exit', {}, { timeoutMs: 500 }).catch(() => {});
+    setTimeout(() => {
+      if (!child.killed) child.kill();
+    }, 800).unref?.();
+    this.setStatus({ status: 'stopping' });
+  }
+
+  handleLine(line) {
+    if (!line.trim()) return;
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch (error) {
+      this.setStatus({ status: 'error', error: error.message, raw: line });
+      return;
+    }
+
+    if (message.type === 'describe') {
+      this.setStatus({
+        status: message.status || 'ready',
+        name: message.name,
+        protocolVersion: message.protocolVersion,
+        capabilities: message.capabilities,
+        sdk: message.sdk,
+        note: message.note,
+      });
+    }
+
+    const pending = this.pending.get(message.requestId);
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    this.pending.delete(message.requestId);
+    if (message.status === 'error' || message.type === 'error') {
+      pending.reject(new Error(message.error || 'Native VST3 bridge command failed.'));
+      return;
+    }
+    pending.resolve(message);
+  }
+
+  request(type, payload = {}, { timeoutMs = 2500 } = {}) {
+    if (!this.start() || !this.process?.stdin?.writable) {
+      return Promise.reject(new Error('Native VST3 bridge process is not writable.'));
+    }
+
+    const requestId = `vst3-${this.nextRequestId++}`;
+    const message = { ...payload, type, requestId };
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(requestId);
+        reject(new Error(`Native VST3 bridge ${type} timed out.`));
+      }, timeoutMs);
+      this.pending.set(requestId, { resolve, reject, timer });
+      this.process.stdin.write(`${JSON.stringify(message)}\n`);
+    });
+  }
+
+  async describe() {
+    const response = await this.request('describe', {}, { timeoutMs: 1500 });
+    return {
+      status: response.status || 'ready',
+      path: this.bridgePath,
+      ...response,
+    };
+  }
+
+  async loadPlugin(candidate = {}, options = {}) {
+    return this.request('loadPlugin', {
+      id: candidate.id,
+      path: candidate.path,
+      name: candidate.name,
+      vendor: candidate.vendor,
+      format: candidate.format,
+    }, {
+      timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 2500,
+    });
+  }
+
+  async unloadPlugin(pluginId, options = {}) {
+    return this.request('unloadPlugin', { id: pluginId, pluginId }, {
+      timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 1000,
+    });
+  }
+
+  async enumerateParameters(pluginId, options = {}) {
+    const response = await this.request('enumerateParameters', { id: pluginId, pluginId }, {
+      timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 1500,
+    });
+    return response.parameters || [];
   }
 }
 
@@ -643,6 +824,7 @@ module.exports = {
   defaultPluginParameters,
   describeNativeVst3Bridge,
   describePluginHostHelper,
+  NativeVst3BridgeClient,
   PluginHostClient,
   normalizePluginParameters,
   normalizePluginCandidate,

@@ -23,6 +23,7 @@ export const defaultPluginParameters = {
   inputGainDb: 0,
   outputGainDb: 0,
   presetName: 'Default',
+  pluginParameters: {},
 };
 
 export const PLUGIN_PRESET_STORAGE_KEY = 'resonance.pluginPresets.v1';
@@ -41,6 +42,12 @@ export function normalizePluginParameters(parameters = {}) {
     presetName: typeof parameters.presetName === 'string' && parameters.presetName.trim()
       ? parameters.presetName.trim().slice(0, 80)
       : defaultPluginParameters.presetName,
+    pluginParameters: parameters.pluginParameters && typeof parameters.pluginParameters === 'object'
+      ? Object.fromEntries(Object.entries(parameters.pluginParameters).map(([key, value]) => {
+          const number = Number(value);
+          return [key, Number.isFinite(number) ? number : 0];
+        }))
+      : {},
   };
 }
 
@@ -60,8 +67,10 @@ export function normalizeDesktopPluginCandidate(candidate) {
     path: candidate.path,
     executable: Boolean(candidate.executable),
     stageable: candidate.stageable !== false,
-    status: candidate.executable ? 'Ready' : 'Scan only',
+    status: candidate.nativeLoad?.status || (candidate.executable ? 'Ready' : 'Scan only'),
     note: candidate.note,
+    nativeLoad: candidate.nativeLoad || null,
+    exposedParameters: Array.isArray(candidate.nativeLoad?.parameters) ? candidate.nativeLoad.parameters : [],
     parameters: normalizePluginParameters(candidate.parameters),
   };
 }
@@ -79,6 +88,8 @@ export function buildPluginCatalog(candidates = []) {
 }
 
 export function pluginStatus(plugin) {
+  if (plugin.nativeLoad?.processingEnabled) return 'ready';
+  if (plugin.nativeLoad?.status === 'probing') return 'probing';
   if (plugin.executable === true || plugin.format === 'NativeDSP') return 'ready';
   if (plugin.sandboxLoad?.status || plugin.loaderStatus === 'metadata-loaded' || plugin.loaderStatus === 'metadata-ready') return 'sandbox';
   if (plugin.executable === false) return 'blocked';
@@ -87,7 +98,7 @@ export function pluginStatus(plugin) {
 
 export function filterPluginCatalog(pluginCatalog = [], pluginChain = [], pluginFilter = 'all', pluginSort = 'status') {
   const selectedIds = new Set(pluginChain.map((plugin) => plugin.id));
-  const statusWeight = { ready: 0, sandbox: 1, blocked: 2 };
+  const statusWeight = { ready: 0, probing: 1, sandbox: 2, blocked: 3 };
   return pluginCatalog
     .filter((plugin) => {
       if (pluginFilter === 'active') return selectedIds.has(plugin.id);

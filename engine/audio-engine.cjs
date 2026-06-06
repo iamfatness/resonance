@@ -6,6 +6,7 @@ const {
   buildDeckPluginPlan,
   builtInRuntimePlugins,
   describeNativeVst3Bridge,
+  NativeVst3BridgeClient,
   PluginHostClient,
   scanPluginCandidates,
   supportedFormats,
@@ -154,6 +155,7 @@ const engineState = {
     plannedVendors,
     runtimePlugins: builtInRuntimePlugins,
     helper: { status: 'pending' },
+    nativeBridgeClient: { status: 'pending' },
     nativeBridge: describeNativeVst3Bridge(),
     loaderPrototype: {
       status: 'pending',
@@ -233,6 +235,17 @@ const pluginHostClient = new PluginHostClient({
       ...engineState.pluginHost,
       helper: {
         ...engineState.pluginHost.helper,
+        ...status,
+      },
+    };
+  },
+});
+const nativeVst3BridgeClient = new NativeVst3BridgeClient({
+  onStatus: (status) => {
+    engineState.pluginHost = {
+      ...engineState.pluginHost,
+      nativeBridgeClient: {
+        ...engineState.pluginHost.nativeBridgeClient,
         ...status,
       },
     };
@@ -393,6 +406,7 @@ function refreshPlugins(requestId) {
       plannedVendors: result.plannedVendors,
       runtimePlugins: result.runtimePlugins,
       helper: pluginHostClient.getStatus(),
+      nativeBridgeClient: nativeVst3BridgeClient.getStatus(),
       nativeBridge: describeNativeVst3Bridge(),
       loaderPrototype: {
         ...engineState.pluginHost.loaderPrototype,
@@ -418,6 +432,7 @@ function refreshPlugins(requestId) {
 
   publishState(requestId);
   probeVst3LoaderPrototype({ publish: true });
+  probeNativeVst3Candidates({ publish: true });
 }
 
 function persistEngineState() {
@@ -718,11 +733,132 @@ function probeVst3LoaderPrototype({ publish = false } = {}) {
     });
 }
 
+function bridgeCandidateLimit() {
+  const configured = Number(process.env.RESONANCE_VST3_PROBE_LIMIT);
+  return Number.isFinite(configured) && configured > 0 ? Math.min(24, configured) : 8;
+}
+
+function nativeBridgeLoadError(error) {
+  return error?.message || 'Native VST3 bridge load failed.';
+}
+
+async function probeNativeVst3Candidate(candidate) {
+  const loaded = await nativeVst3BridgeClient.loadPlugin(candidate);
+  let parameters = [];
+  if (loaded.processingEnabled || loaded.status === 'loaded' || loaded.status === 'bridge-ready') {
+    try {
+      parameters = await nativeVst3BridgeClient.enumerateParameters(candidate.id);
+    } catch {
+      parameters = [];
+    }
+  }
+  nativeVst3BridgeClient.unloadPlugin(candidate.id).catch(() => {});
+  return {
+    status: loaded.status || 'unknown',
+    processingEnabled: Boolean(loaded.processingEnabled),
+    parameterCount: parameters.length,
+    parameters,
+    error: loaded.error || null,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function probeNativeVst3Candidates({ publish = false } = {}) {
+  const candidates = (engineState.pluginHost.candidates || [])
+    .filter((plugin) => plugin.format === 'VST3' && plugin.sandboxLoadable)
+    .slice(0, bridgeCandidateLimit());
+  if (candidates.length === 0) return;
+
+  engineState.pluginHost = {
+    ...engineState.pluginHost,
+    nativeBridgeClient: {
+      ...nativeVst3BridgeClient.getStatus(),
+      status: 'probing',
+      candidateCount: candidates.length,
+      updatedAt: new Date().toISOString(),
+    },
+    candidates: (engineState.pluginHost.candidates || []).map((candidate) => (
+      candidates.some((item) => item.id === candidate.id)
+        ? {
+            ...candidate,
+            nativeLoad: {
+              status: 'probing',
+              processingEnabled: false,
+              parameters: [],
+              parameterCount: 0,
+              updatedAt: new Date().toISOString(),
+            },
+          }
+        : candidate
+    )),
+  };
+  if (publish) publishState();
+
+  Promise.all(candidates.map((candidate) => (
+    probeNativeVst3Candidate(candidate)
+      .then((nativeLoad) => ({ candidateId: candidate.id, nativeLoad }))
+      .catch((error) => ({
+        candidateId: candidate.id,
+        nativeLoad: {
+          status: 'error',
+          processingEnabled: false,
+          parameters: [],
+          parameterCount: 0,
+          error: nativeBridgeLoadError(error),
+          updatedAt: new Date().toISOString(),
+        },
+      }))
+  )))
+    .then((results) => {
+      const byId = new Map(results.map((result) => [result.candidateId, result.nativeLoad]));
+      engineState.pluginHost = {
+        ...engineState.pluginHost,
+        nativeBridgeClient: {
+          ...nativeVst3BridgeClient.getStatus(),
+          status: 'ready',
+          probedCount: results.length,
+          loadedCount: results.filter((result) => result.nativeLoad.processingEnabled).length,
+          updatedAt: new Date().toISOString(),
+        },
+        candidates: (engineState.pluginHost.candidates || []).map((candidate) => {
+          const nativeLoad = byId.get(candidate.id);
+          if (!nativeLoad) return candidate;
+          return {
+            ...candidate,
+            executable: nativeLoad.processingEnabled,
+            loadable: nativeLoad.processingEnabled,
+            loaderStatus: nativeLoad.status,
+            status: nativeLoad.processingEnabled ? 'Loaded' : 'Blocked',
+            note: nativeLoad.processingEnabled
+              ? 'Native VST3 bridge loaded this plugin and exposed parameters.'
+              : nativeLoad.error || 'Native VST3 bridge could not execute this plugin.',
+            nativeLoad,
+          };
+        }),
+      };
+      if (publish) publishState();
+    })
+    .catch((error) => {
+      engineState.pluginHost = {
+        ...engineState.pluginHost,
+        nativeBridgeClient: {
+          ...nativeVst3BridgeClient.getStatus(),
+          status: 'error',
+          error: nativeBridgeLoadError(error),
+          updatedAt: new Date().toISOString(),
+        },
+      };
+      if (publish) publishState();
+    });
+}
+
 function stopPluginHost() {
   pluginHostClient.stop();
+  nativeVst3BridgeClient.stop();
   engineState.pluginHost = {
     ...engineState.pluginHost,
     helper: pluginHostClient.getStatus(),
+    nativeBridgeClient: nativeVst3BridgeClient.getStatus(),
   };
 }
 

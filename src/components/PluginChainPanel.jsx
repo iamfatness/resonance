@@ -25,6 +25,23 @@ export function PluginChainPanel({
 }) {
   const pluginChain = activeDeckProcessing.pluginChain || [];
   const pluginKey = (plugin) => plugin.instanceId || plugin.id;
+  const parameterValue = (parameters, parameter) => {
+    const current = parameters.pluginParameters?.[parameter.id];
+    if (Number.isFinite(Number(current))) return Number(current);
+    if (Number.isFinite(Number(parameter.defaultValue))) return Number(parameter.defaultValue);
+    return Number.isFinite(Number(parameter.minimum)) ? Number(parameter.minimum) : 0;
+  };
+  const parameterBounds = (parameter) => {
+    const min = Number.isFinite(Number(parameter.minimum)) ? Number(parameter.minimum) : 0;
+    const max = Number.isFinite(Number(parameter.maximum)) ? Number(parameter.maximum) : 1;
+    return { min, max: max > min ? max : min + 1 };
+  };
+  const setPluginExposedParameter = (deck, key, parameters, parameter, value) => {
+    setDeckPluginParameter(deck, key, 'pluginParameters', {
+      ...(parameters.pluginParameters || {}),
+      [parameter.id]: value,
+    });
+  };
 
   return (
     <section>
@@ -41,7 +58,11 @@ export function PluginChainPanel({
       {pluginScan && (
         <div className="plugin-scan-summary">
           <span>{pluginScan.count || 0} local VST plugins</span>
-          <small>{pluginScan.formats || 'VST2, VST3'} | {pluginScan.status || 'idle'}</small>
+          <small>
+            {pluginScan.formats || 'VST2, VST3'} | scan {pluginScan.status || 'idle'}
+            {pluginScan.bridgeStatus ? ` | bridge ${pluginScan.bridgeStatus}` : ''}
+            {pluginScan.bridgeLoadedCount ? ` | ${pluginScan.bridgeLoadedCount} loaded` : ''}
+          </small>
         </div>
       )}
       <div className="plugin-rack">
@@ -59,16 +80,26 @@ export function PluginChainPanel({
             inputGainDb: 0,
             outputGainDb: 0,
             presetName: 'Default',
+            pluginParameters: {},
           };
+          const nativeLoad = plugin.nativeLoad || {};
+          const exposedParameters = Array.isArray(plugin.exposedParameters) ? plugin.exposedParameters : [];
           return (
             <article className={`plugin-item active ${plugin.executable === false ? 'blocked-plugin' : ''}`} key={key}>
               <div className="plugin-item-header">
                 <span>
                   <strong>{index + 1}. {plugin.name}</strong>
                   <small>
-                    {plugin.vendor} | {plugin.format || 'Plugin'} | {plugin.executable === false ? 'scan only' : 'active DSP'} | {parameters.presetName}
+                    {plugin.vendor} | {plugin.format || 'Plugin'} | {nativeLoad.processingEnabled ? 'native loaded' : plugin.executable === false ? 'scan only' : 'active DSP'} | {parameters.presetName}
                   </small>
-                  {plugin.executable === false && (
+                  {nativeLoad.status && (
+                    <small>
+                      Bridge status: {nativeLoad.status}
+                      {Number.isFinite(nativeLoad.parameterCount) ? ` | ${nativeLoad.parameterCount} params` : ''}
+                      {nativeLoad.error ? ` | ${nativeLoad.error}` : ''}
+                    </small>
+                  )}
+                  {plugin.executable === false && !nativeLoad.status && (
                     <small>Host status: staged only. Native VST loading is pending.</small>
                   )}
                 </span>
@@ -137,6 +168,29 @@ export function PluginChainPanel({
                   />
                 </label>
               </div>
+              {exposedParameters.length > 0 && (
+                <div className="plugin-exposed-parameters">
+                  <span>Plugin controls</span>
+                  {exposedParameters.map((parameter) => {
+                    const bounds = parameterBounds(parameter);
+                    const value = parameterValue(parameters, parameter);
+                    return (
+                      <label key={parameter.id}>
+                        <small>{parameter.name || parameter.id}</small>
+                        <input
+                          type="range"
+                          min={bounds.min}
+                          max={bounds.max}
+                          step={parameter.kind === 'boolean' ? 1 : 0.001}
+                          value={Math.max(bounds.min, Math.min(bounds.max, value))}
+                          onChange={(event) => setPluginExposedParameter(activeInputDeck, key, parameters, parameter, Number(event.target.value))}
+                        />
+                        <strong>{parameter.kind === 'boolean' ? (value >= 0.5 ? 'On' : 'Off') : value.toFixed(3)}</strong>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
               <div className="plugin-preset-actions">
                 <button type="button" onClick={() => savePluginPreset?.(activeInputDeck, key)}>
                   Save preset
@@ -198,9 +252,11 @@ export function PluginChainPanel({
                   <small>
                     {plugin.vendor} | {plugin.format || 'Plugin'}
                     {plugin.architecture ? ` | ${plugin.architecture}` : ''}
-                    {plugin.executable === false ? ' | scan only' : ''}
+                    {plugin.nativeLoad?.processingEnabled ? ' | native loaded' : plugin.executable === false ? ' | scan only' : ''}
+                    {plugin.nativeLoad?.status && !plugin.nativeLoad?.processingEnabled ? ` | ${plugin.nativeLoad.status}` : ''}
                     {stagedCount ? ` | ${stagedCount} staged` : ''}
                   </small>
+                  {plugin.nativeLoad?.error && <small>{plugin.nativeLoad.error}</small>}
                 </span>
                 <button type="button" onClick={() => (addDeckPlugin ? addDeckPlugin(activeInputDeck, plugin.id) : toggleDeckPlugin(activeInputDeck, plugin.id))}>
                   {plugin.executable === false ? 'Stage' : 'Add'}

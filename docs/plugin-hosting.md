@@ -18,6 +18,8 @@ Resonance can stage plugin-chain settings in the desktop UI now, and the native 
 - Scanned VST2/VST3 candidates can be staged in Deck A/B plugin chains, but they are marked blocked for execution until the native host can safely load third-party binaries.
 - Plugin entries carry editable session parameters: enabled state, wet/dry, input gain, output gain, and preset name.
 - The Deck Effects window can save, recall, and delete local named parameter presets per plugin. These presets are stored on the client's machine under browser local storage.
+- The desktop engine now probes scanned VST3 candidates through the native bridge process. Each candidate reports bridge status, plugin-path validation, processing availability, and exposed parameter metadata when the bridge returns it.
+- Deck Effects renders exposed plugin parameters as sliders and stores their values in local presets.
 - The EQ panel includes an active deck plugin rack with chain order controls, duplicate, remove, reset-parameter, and preset-name editing. The catalog can be filtered by all, active, built-in, VST2, VST3, Waves vendor, or blocked candidates.
 - In the desktop app, each deck opens its own Effects window. VST2/VST3 scanning happens on the client's Windows machine through the local Electron audio engine, not on Cloudflare or GitHub.
 - The desktop panel reports scan status, candidate count, supported formats, a short candidate summary, and the VST3 loader prototype status.
@@ -25,7 +27,7 @@ Resonance can stage plugin-chain settings in the desktop UI now, and the native 
 
 Waves is treated as a vendor/shell classification, not a separate plugin format. A Waves candidate can still be VST2 or VST3 depending on the discovered shell/bundle.
 
-The scanner only enumerates files and directories. The loader prototype validates the helper protocol and metadata lifecycle, but it does not load plugin DLLs, instantiate VST3 processors, execute Waves shells, expose vendor-defined VST parameters, or process PCM through a third-party binary.
+The scanner enumerates files and directories, then the native bridge is asked to load eligible VST3 candidates. The current native bridge validates the command protocol and plugin paths, but it still does not instantiate VST3 processors, execute Waves shells, or process PCM through a third-party binary until the Steinberg SDK host implementation is added.
 
 The helper process currently supports:
 

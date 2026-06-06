@@ -52,6 +52,8 @@ export function DeckEffectsWindow({ deck = 'A' }) {
     status: desktopEngine.state?.pluginHost?.scanStatus || desktopEngine.state?.pluginHost?.status || 'pending',
     count: desktopEngine.state?.pluginHost?.pluginCount || 0,
     formats: (desktopEngine.state?.pluginHost?.supportedFormats || []).join(', ') || 'VST2, VST3',
+    bridgeStatus: desktopEngine.state?.pluginHost?.nativeBridgeClient?.status || desktopEngine.state?.pluginHost?.nativeBridge?.status,
+    bridgeLoadedCount: desktopEngine.state?.pluginHost?.nativeBridgeClient?.loadedCount || 0,
     onRefresh: desktopEngine.refreshPlugins,
   };
 
@@ -205,8 +207,8 @@ export function DeckEffectsWindow({ deck = 'A' }) {
       <section className="effects-window-summary">
         <SlidersHorizontal size={18} />
         <p>
-          Scan this computer for VST2/VST3 plugins, then stage effects into Deck {activeDeck}'s chain.
-          Scanned third-party plugins are scan-only until the native plugin host is connected.
+          Scan this computer for VST2/VST3 plugins, then add effects into Deck {activeDeck}'s chain.
+          The native bridge reports whether each plugin loaded and which controls are exposed.
         </p>
       </section>
       <PluginChainPanel

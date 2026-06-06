@@ -857,6 +857,8 @@ function PlayerApp() {
           status: desktopEngine.state?.pluginHost?.scanStatus || desktopEngine.state?.pluginHost?.status || 'pending',
           count: desktopEngine.state?.pluginHost?.pluginCount || 0,
           formats: (desktopEngine.state?.pluginHost?.supportedFormats || []).join(', ') || 'VST2, VST3',
+          bridgeStatus: desktopEngine.state?.pluginHost?.nativeBridgeClient?.status || desktopEngine.state?.pluginHost?.nativeBridge?.status,
+          bridgeLoadedCount: desktopEngine.state?.pluginHost?.nativeBridgeClient?.loadedCount || 0,
           onRefresh: desktopEngine.refreshPlugins,
         } : null}
         addDeckPlugin={addDeckPlugin}

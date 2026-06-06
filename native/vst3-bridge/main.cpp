@@ -113,16 +113,26 @@ void HandleLine(const std::string& line) {
   }
   if (type == "loadPlugin") {
     const std::string pluginId = JsonStringValue(line, "id");
+    const std::string pluginPath = JsonStringValue(line, "path");
     const bool sdkFound = SdkLooksUsable(SdkDir());
+    const bool pluginFound = PathExists(pluginPath);
     std::ostringstream output;
     output
       << "{"
       << "\"type\":\"loadPlugin\","
       << "\"requestId\":\"" << JsonEscape(requestId) << "\","
-      << "\"status\":\"" << (sdkFound ? "bridge-ready" : "sdk-missing") << "\","
+      << "\"status\":\"" << (!pluginFound ? "plugin-missing" : sdkFound ? "sdk-ready-loader-missing" : "sdk-missing") << "\","
       << "\"pluginId\":\"" << JsonEscape(pluginId) << "\","
+      << "\"pluginPath\":\"" << JsonEscape(pluginPath) << "\","
+      << "\"pluginFound\":" << (pluginFound ? "true" : "false") << ","
       << "\"processingEnabled\":false,"
-      << "\"error\":\"" << (sdkFound ? "VST3 SDK detected, but binary instantiation is not implemented in this scaffold." : "VST3 SDK not found. Set RESONANCE_VST3_SDK_DIR to the Steinberg VST3 SDK root.") << "\""
+      << "\"error\":\""
+      << (!pluginFound
+        ? "Plugin path does not exist on this machine."
+        : sdkFound
+          ? "VST3 SDK detected, but binary instantiation is not implemented in this scaffold."
+          : "VST3 SDK not found. Set RESONANCE_VST3_SDK_DIR to the Steinberg VST3 SDK root.")
+      << "\""
       << "}";
     Respond(output.str());
     return;
