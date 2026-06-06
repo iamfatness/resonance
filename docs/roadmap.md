@@ -53,6 +53,12 @@ Acceptance criteria:
 - Underruns and capture queue pressure are visible.
 - Settings persist and restore on desktop app restart.
 
+Progress:
+
+- Desktop latency controls are now exposed in the engine panel with low, balanced, stable, and custom buffer modes.
+- Latency settings persist in app state and flow through the existing desktop engine settings IPC path.
+- Native snapshots surface requested/actual buffer state and restart-required status.
+
 Depends on:
 - Persistent native audio router.
 - Device enumeration.

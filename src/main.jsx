@@ -224,6 +224,8 @@ function PlayerApp() {
   const [eqMode, setEqMode] = useState(savedAppState?.eqMode === 'Manual' ? 'Manual' : 'Preset');
   const [appEqBypassed, setAppEqBypassed] = useState(Boolean(savedAppState?.appEqBypassed));
   const [deckProcessing, setDeckProcessing] = useState(savedDeckProcessing);
+  const [audioLatencyProfile, setAudioLatencyProfile] = useState(['low', 'balanced', 'stable', 'custom'].includes(savedAppState?.audioLatencyProfile) ? savedAppState.audioLatencyProfile : 'balanced');
+  const [audioBufferMs, setAudioBufferMs] = useState(Number.isFinite(savedAppState?.audioBufferMs) ? Math.max(20, Math.min(500, savedAppState.audioBufferMs)) : 80);
   const [likedVideos, setLikedVideos] = useState(Array.isArray(savedAppState?.likedVideos) ? savedAppState.likedVideos : [demoVideoA.id]);
   const [playHistory, setPlayHistory] = useState(Array.isArray(savedAppState?.playHistory) && savedAppState.playHistory.length ? savedAppState.playHistory : [demoVideoA]);
   const [playbackQueue, setPlaybackQueue] = useState(Array.isArray(savedAppState?.playbackQueue) ? savedAppState.playbackQueue : []);
@@ -257,7 +259,9 @@ function PlayerApp() {
     deckProcessing,
     deckVolumes,
     outputGain: deckVolumes.A / 100,
-  }), [activePreset, appEqBypassed, deckProcessing, deckVolumes, eqMode, processedCurve]);
+    audioLatencyProfile,
+    audioBufferMs,
+  }), [activePreset, appEqBypassed, audioBufferMs, audioLatencyProfile, deckProcessing, deckVolumes, eqMode, processedCurve]);
   const desktopEngine = useDesktopEngine(desktopEngineSettings);
   const desktopPluginCatalog = useMemo(() => {
     const discoveredPlugins = (desktopEngine.state?.pluginHost?.candidates || [])
@@ -290,6 +294,8 @@ function PlayerApp() {
       eqMode,
       appEqBypassed,
       deckProcessing,
+      audioLatencyProfile,
+      audioBufferMs,
       likedVideos,
       playHistory,
       playbackQueue,
@@ -302,6 +308,8 @@ function PlayerApp() {
     activePreset,
     activeSidePanel,
     appEqBypassed,
+    audioBufferMs,
+    audioLatencyProfile,
     deckA,
     deckB,
     deckCount,
@@ -761,7 +769,13 @@ function PlayerApp() {
 
         <DirectSourcePanel directUrl={directUrl} setDirectUrl={setDirectUrl} localEq={localEq} />
 
-        <DesktopEnginePanel engine={desktopEngine} />
+        <DesktopEnginePanel
+          engine={desktopEngine}
+          latencyProfile={audioLatencyProfile}
+          bufferMs={audioBufferMs}
+          onLatencyProfileChange={setAudioLatencyProfile}
+          onBufferMsChange={setAudioBufferMs}
+        />
 
         <div className={`deck-grid ${isSingleDeck ? 'single-deck' : ''}`}>
           <VideoDeck

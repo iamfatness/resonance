@@ -75,6 +75,17 @@ The command is read-only. It summarizes the built driver package, Secure Boot/si
 
 For the manual capture pass, build the native router, open the desktop app, select the Resonance capture endpoint for both decks, and run continuous Deck A/B capture for at least 20 minutes while watching the desktop panel meters, capture status, and underrun/failure diagnostics.
 
+## Latency Controls
+
+The desktop engine panel includes native router latency controls:
+
+- `Low` targets a 30 ms native buffer.
+- `Balanced` targets an 80 ms native buffer and is the default.
+- `Stable` targets a 160 ms native buffer for slower systems.
+- `Custom` enables a 20-500 ms buffer field.
+
+Latency settings are saved with the app state and sent to the native router through the existing engine settings IPC path. If the persistent native router is already running, a profile change is sent live and the router snapshot can report `restart required` when a restart is needed for the new buffer duration to take full effect.
+
 ## Next Desktop Milestones
 
 1. Validate the signed/installable virtual audio driver as the default capture source on the target Windows machine using `npm run driver:capture-readiness` plus the sustained Deck A/B capture checklist.

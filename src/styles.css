@@ -1801,7 +1801,8 @@ button {
   text-transform: uppercase;
 }
 
-.engine-grid select {
+.engine-grid select,
+.engine-grid input {
   width: 100%;
   height: 36px;
   border: 1px solid var(--line);
@@ -1809,6 +1810,11 @@ button {
   background: #0d1112;
   color: var(--text);
   padding: 0 9px;
+}
+
+.engine-grid input:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
 }
 
 .engine-actions {

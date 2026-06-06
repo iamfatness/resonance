@@ -5,7 +5,13 @@ function formatPlaybackTime(ms = 0) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
-export function DesktopEnginePanel({ engine }) {
+export function DesktopEnginePanel({
+  engine,
+  latencyProfile = 'balanced',
+  bufferMs = 80,
+  onLatencyProfileChange,
+  onBufferMsChange,
+}) {
   if (!engine.isDesktop) return null;
 
   const state = engine.state || { status: 'starting', devices: { inputs: [], outputs: [] } };
@@ -53,6 +59,30 @@ export function DesktopEnginePanel({ engine }) {
               <option value={device.id} key={device.id}>{device.name}</option>
             ))}
           </select>
+        </label>
+        <label>
+          <span>Latency</span>
+          <select
+            value={latencyProfile}
+            onChange={(event) => onLatencyProfileChange?.(event.target.value)}
+          >
+            <option value="low">Low - 30 ms</option>
+            <option value="balanced">Balanced - 80 ms</option>
+            <option value="stable">Stable - 160 ms</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+        <label>
+          <span>Buffer ms</span>
+          <input
+            type="number"
+            min="20"
+            max="500"
+            step="5"
+            value={bufferMs}
+            disabled={latencyProfile !== 'custom'}
+            onChange={(event) => onBufferMsChange?.(Math.max(20, Math.min(500, Number(event.target.value) || 80)))}
+          />
         </label>
       </div>
       <div className="engine-actions">

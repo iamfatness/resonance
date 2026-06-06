@@ -23,6 +23,8 @@
  * @property {{A: DeckProcessing, B: DeckProcessing}} deckProcessing Per-deck processing.
  * @property {{A: number, B: number}} deckVolumes Per-deck volume levels.
  * @property {number} outputGain Desktop output gain.
+ * @property {'low'|'balanced'|'stable'|'custom'} audioLatencyProfile Desktop native router latency profile.
+ * @property {number} audioBufferMs Custom desktop native router buffer size in ms.
  */
 
 export const bands = [31, 62, 125, 250, 500, '1k', '2k', '4k'];
