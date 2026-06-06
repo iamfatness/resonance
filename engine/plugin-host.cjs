@@ -31,6 +31,31 @@ const stagedPluginRuntimeProfiles = {
   'vst3-generic': { gainDb: 1.5, drive: 1.08 },
   'waves-vst3': { gainDb: 2.25, drive: 1.16 },
 };
+const defaultPluginParameters = {
+  enabled: true,
+  wetDry: 100,
+  inputGainDb: 0,
+  outputGainDb: 0,
+  presetName: 'Default',
+};
+
+function clampNumber(value, min, max, fallback = 0) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return fallback;
+  return Math.max(min, Math.min(max, number));
+}
+
+function normalizePluginParameters(parameters = {}) {
+  return {
+    enabled: parameters.enabled !== false,
+    wetDry: clampNumber(parameters.wetDry, 0, 100, defaultPluginParameters.wetDry),
+    inputGainDb: clampNumber(parameters.inputGainDb, -24, 24, defaultPluginParameters.inputGainDb),
+    outputGainDb: clampNumber(parameters.outputGainDb, -24, 24, defaultPluginParameters.outputGainDb),
+    presetName: typeof parameters.presetName === 'string' && parameters.presetName.trim()
+      ? parameters.presetName.trim().slice(0, 80)
+      : defaultPluginParameters.presetName,
+  };
+}
 
 function stablePluginId(filePath) {
   return `desktop-plugin:${Buffer.from(path.resolve(filePath).toLowerCase()).toString('base64url')}`;
@@ -101,6 +126,7 @@ function classifyCandidate(filePath, entryName) {
     path: filePath,
     stageable: true,
     executable: false,
+    parameters: { ...defaultPluginParameters },
     loadable: false,
     status: 'Found',
     note: isWavesShell
@@ -179,7 +205,10 @@ function scanPluginCandidates(options = {}) {
 
 function activeDeckPlugins(pluginChain = []) {
   return Array.isArray(pluginChain)
-    ? pluginChain.filter((plugin) => plugin && !plugin.bypassed)
+    ? pluginChain.filter((plugin) => {
+      const parameters = normalizePluginParameters(plugin?.parameters);
+      return plugin && !plugin.bypassed && parameters.enabled;
+    })
     : [];
 }
 
@@ -190,24 +219,39 @@ function buildNativePluginSettings(pluginChain = []) {
   });
   const totals = executablePlugins.reduce((settings, plugin) => {
     const profile = stagedPluginRuntimeProfiles[plugin.id] || { gainDb: 1, drive: 1.04 };
+    const parameters = normalizePluginParameters(plugin.parameters);
     return {
       pluginCount: settings.pluginCount + 1,
-      pluginGainDb: settings.pluginGainDb + profile.gainDb,
+      pluginGainDb: settings.pluginGainDb + profile.gainDb + parameters.inputGainDb,
+      pluginOutputGainDb: settings.pluginOutputGainDb + parameters.outputGainDb,
       pluginDrive: Math.max(settings.pluginDrive, profile.drive),
+      pluginWetDry: settings.pluginWetDry + parameters.wetDry,
       activePluginIds: [...settings.activePluginIds, plugin.id],
+      activePluginParameters: {
+        ...settings.activePluginParameters,
+        [plugin.id]: parameters,
+      },
     };
   }, {
     pluginCount: 0,
     pluginGainDb: 0,
+    pluginOutputGainDb: 0,
     pluginDrive: 1,
+    pluginWetDry: 0,
     activePluginIds: [],
+    activePluginParameters: {},
   });
+
+  const averageWetDry = totals.pluginCount > 0 ? totals.pluginWetDry / totals.pluginCount : defaultPluginParameters.wetDry;
 
   return {
     pluginCount: totals.pluginCount,
     pluginGainDb: Math.max(-12, Math.min(12, Number(totals.pluginGainDb.toFixed(2)))),
+    pluginOutputGainDb: Math.max(-24, Math.min(24, Number(totals.pluginOutputGainDb.toFixed(2)))),
     pluginDrive: Math.max(1, Math.min(3, Number(totals.pluginDrive.toFixed(2)))),
+    pluginWetDry: Math.max(0, Math.min(100, Number(averageWetDry.toFixed(2)))),
     activePluginIds: totals.activePluginIds,
+    activePluginParameters: totals.activePluginParameters,
   };
 }
 
@@ -234,6 +278,10 @@ function buildDeckPluginPlan(deckProcessing = {}) {
       activePluginIds: activeDeckPlugins(processing.pluginChain).map((plugin) => plugin.id),
       executablePluginIds: nativeSettings.activePluginIds,
       blockedPluginIds: blockedPlugins.map((plugin) => plugin.id),
+      parameters: Object.fromEntries(activeDeckPlugins(processing.pluginChain).map((plugin) => [
+        plugin.id,
+        normalizePluginParameters(plugin.parameters),
+      ])),
       nativeSettings,
     };
   };
@@ -428,8 +476,10 @@ module.exports = {
   buildNativePluginSettings,
   builtInRuntimePlugins,
   defaultScanRoots,
+  defaultPluginParameters,
   describePluginHostHelper,
   PluginHostClient,
+  normalizePluginParameters,
   pluginHostCapabilities,
   pluginHostProtocolVersion,
   pluginHostWorkerPath,

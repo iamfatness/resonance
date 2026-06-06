@@ -1458,9 +1458,7 @@ button {
 
 .plugin-item {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 92px;
   gap: 8px;
-  align-items: center;
   padding: 9px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -1472,7 +1470,14 @@ button {
   background: rgba(56, 213, 200, 0.08);
 }
 
-.plugin-item label {
+.plugin-item-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px;
+  gap: 8px;
+  align-items: center;
+}
+
+.plugin-item-header label {
   display: grid;
   grid-template-columns: 18px minmax(0, 1fr);
   gap: 9px;
@@ -1516,6 +1521,52 @@ button {
 .plugin-item button:disabled {
   color: var(--faint);
   cursor: not-allowed;
+}
+
+.plugin-parameter-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.plugin-parameter-grid label {
+  display: grid;
+  grid-template-columns: minmax(52px, 0.62fr) minmax(0, 1fr) minmax(58px, auto);
+  gap: 7px;
+  align-items: center;
+  min-width: 0;
+}
+
+.plugin-parameter-grid span,
+.plugin-parameter-grid strong {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.plugin-parameter-grid input[type='range'] {
+  width: 100%;
+}
+
+.plugin-enable-toggle {
+  grid-template-columns: 18px minmax(0, 1fr) !important;
+}
+
+.plugin-preset-name {
+  grid-column: 1 / -1;
+  grid-template-columns: 52px minmax(0, 1fr) !important;
+}
+
+.plugin-preset-name input {
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #0f1415;
+  color: var(--text);
 }
 
 .instrument-grid {

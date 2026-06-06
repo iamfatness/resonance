@@ -14,6 +14,7 @@ Resonance can stage plugin-chain settings in the desktop UI now, and the native 
 - `PluginHostClient` keeps that helper alive while the desktop engine is running, correlates JSON-line responses by request ID, and marks the helper degraded if it exits or times out.
 - The desktop plugin host runs a safe read-only scan for VST3 and Waves candidates in common Windows install paths and enriches candidates with stable IDs, vendor, format, architecture guess, shell type, and load strategy.
 - Scanned VST3/Waves candidates can be staged in Deck A/B plugin chains, but they are marked blocked for execution until the native host can safely load third-party binaries.
+- Plugin entries carry editable session parameters: enabled state, wet/dry, input gain, output gain, and preset name.
 - The desktop panel reports scan status, candidate count, supported formats, and a short candidate summary.
 - VST3/Waves plugins are not executed yet; the current executable processor is the built-in NativeDSP test lane.
 
@@ -29,6 +30,8 @@ stdin JSON: {"type":"exit"}
 ```
 
 `resolveChain` returns a per-deck plan with `hostMode`, active plugin IDs, EQ bypass state, and the bounded NativeDSP fallback settings that are forwarded to the native audio router.
+
+NativeDSP parameters are applied today through the router's plugin lane: input gain drives the saturation input, output gain trims the processed signal, and wet/dry blends processed and dry deck audio. VST3/Waves candidates keep the same parameter state in `deckProcessing.pluginChain`, but execution stays blocked until a native loader exists.
 
 ## Why Waves Requires Desktop Hosting
 

@@ -73,6 +73,8 @@ The Electron desktop shell exposes this path through Deck A and Deck B WAV picke
 
 The renderer merges scanned desktop candidates into the plugin catalog so users can stage discovered VST3/Waves candidates on Deck A or Deck B. Those candidates carry `executable: false` and resolve to `blocked-third-party` in the helper plan until a real native plugin loader is implemented.
 
+Each staged plugin also persists parameter state in `deckProcessing.pluginChain`: enabled, wet/dry, input gain, output gain, and preset name. NativeDSP entries use those values in the current router plugin lane; blocked VST3/Waves entries store them for the future host without executing.
+
 ```text
 Deck A playback -> deck EQ or EQ bypass -> NativeDSP plugin lane -> master output
 Deck B playback -> deck EQ or EQ bypass -> NativeDSP plugin lane -> master output

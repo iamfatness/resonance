@@ -51,6 +51,7 @@ export function EqPanel({
   pluginCatalog,
   toggleDeckPlugin,
   toggleDeckPluginBypass,
+  setDeckPluginParameter,
   instrumentBoosts,
   setInstrumentBoost,
   eqPath,
@@ -156,34 +157,99 @@ export function EqPanel({
         <div className="plugin-list">
           {pluginCatalog.map((plugin) => {
             const selectedPlugin = activeDeckProcessing.pluginChain.find((item) => item.id === plugin.id);
+            const parameters = selectedPlugin?.parameters || {
+              enabled: true,
+              wetDry: 100,
+              inputGainDb: 0,
+              outputGainDb: 0,
+              presetName: 'Default',
+            };
             return (
               <article className={`plugin-item ${selectedPlugin ? 'active' : ''}`} key={plugin.id}>
-                <label>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(selectedPlugin)}
-                    onChange={() => toggleDeckPlugin(activeInputDeck, plugin.id)}
-                  />
-                  <span>
-                    <strong>{plugin.name}</strong>
-                    <small>
-                      {plugin.vendor} | {plugin.format || 'Plugin'}
-                      {plugin.architecture ? ` | ${plugin.architecture}` : ''}
-                      {plugin.executable === false ? ' | staged only' : ''}
-                    </small>
-                  </span>
-                </label>
-                <button
-                  type="button"
-                  disabled={!selectedPlugin}
-                  onClick={() => toggleDeckPluginBypass(activeInputDeck, plugin.id)}
-                >
-                  {selectedPlugin?.bypassed
-                    ? 'Bypassed'
-                    : selectedPlugin
-                      ? selectedPlugin.executable === false ? 'Staged' : 'Active'
-                      : plugin.status}
-                </button>
+                <div className="plugin-item-header">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(selectedPlugin)}
+                      onChange={() => toggleDeckPlugin(activeInputDeck, plugin.id)}
+                    />
+                    <span>
+                      <strong>{plugin.name}</strong>
+                      <small>
+                        {plugin.vendor} | {plugin.format || 'Plugin'}
+                        {plugin.architecture ? ` | ${plugin.architecture}` : ''}
+                        {plugin.executable === false ? ' | staged only' : ''}
+                      </small>
+                    </span>
+                  </label>
+                  <button
+                    type="button"
+                    disabled={!selectedPlugin}
+                    onClick={() => toggleDeckPluginBypass(activeInputDeck, plugin.id)}
+                  >
+                    {selectedPlugin?.bypassed
+                      ? 'Bypassed'
+                      : selectedPlugin
+                        ? selectedPlugin.executable === false ? 'Staged' : 'Active'
+                        : plugin.status}
+                  </button>
+                </div>
+                {selectedPlugin && (
+                  <div className="plugin-parameter-grid">
+                    <label className="plugin-enable-toggle">
+                      <input
+                        type="checkbox"
+                        checked={parameters.enabled !== false}
+                        onChange={(event) => setDeckPluginParameter(activeInputDeck, plugin.id, 'enabled', event.target.checked)}
+                      />
+                      <span>Enabled</span>
+                    </label>
+                    <label>
+                      <span>Wet/Dry</span>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        step="1"
+                        value={parameters.wetDry}
+                        onChange={(event) => setDeckPluginParameter(activeInputDeck, plugin.id, 'wetDry', Number(event.target.value))}
+                      />
+                      <strong>{parameters.wetDry}%</strong>
+                    </label>
+                    <label>
+                      <span>Input</span>
+                      <input
+                        type="range"
+                        min="-24"
+                        max="24"
+                        step="0.5"
+                        value={parameters.inputGainDb}
+                        onChange={(event) => setDeckPluginParameter(activeInputDeck, plugin.id, 'inputGainDb', Number(event.target.value))}
+                      />
+                      <strong>{parameters.inputGainDb > 0 ? '+' : ''}{parameters.inputGainDb.toFixed(1)} dB</strong>
+                    </label>
+                    <label>
+                      <span>Output</span>
+                      <input
+                        type="range"
+                        min="-24"
+                        max="24"
+                        step="0.5"
+                        value={parameters.outputGainDb}
+                        onChange={(event) => setDeckPluginParameter(activeInputDeck, plugin.id, 'outputGainDb', Number(event.target.value))}
+                      />
+                      <strong>{parameters.outputGainDb > 0 ? '+' : ''}{parameters.outputGainDb.toFixed(1)} dB</strong>
+                    </label>
+                    <label className="plugin-preset-name">
+                      <span>Preset</span>
+                      <input
+                        type="text"
+                        value={parameters.presetName}
+                        onChange={(event) => setDeckPluginParameter(activeInputDeck, plugin.id, 'presetName', event.target.value)}
+                      />
+                    </label>
+                  </div>
+                )}
               </article>
             );
           })}

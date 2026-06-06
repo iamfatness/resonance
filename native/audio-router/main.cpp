@@ -593,7 +593,9 @@ struct ServerDeck {
   PersistentDeckEq eq;
   uint32_t pluginCount = 0;
   double pluginGainDb = 0.0;
+  double pluginOutputGainDb = 0.0;
   double pluginDrive = 1.0;
+  double pluginWetDry = 100.0;
   DeckStats stats;
   std::wstring name;
   std::string error;
@@ -625,12 +627,18 @@ double ServerDeckPositionMs(const ServerDeck& deck) {
 
 void ApplyDeckPluginLane(ServerDeck& deck, double& left, double& right) {
   if (deck.pluginCount == 0) return;
-  const double gain = std::pow(10.0, ClampDouble(deck.pluginGainDb, -12.0, 12.0) / 20.0);
+  const double inputGain = std::pow(10.0, ClampDouble(deck.pluginGainDb, -12.0, 12.0) / 20.0);
+  const double outputGain = std::pow(10.0, ClampDouble(deck.pluginOutputGainDb, -24.0, 24.0) / 20.0);
   const double drive = ClampDouble(deck.pluginDrive, 1.0, 3.0);
+  const double wet = ClampDouble(deck.pluginWetDry, 0.0, 100.0) / 100.0;
   const double normalize = std::tanh(drive);
   const double denominator = std::abs(normalize) > 0.0001 ? normalize : 1.0;
-  left = std::tanh(left * gain * drive) / denominator;
-  right = std::tanh(right * gain * drive) / denominator;
+  const double dryLeft = left;
+  const double dryRight = right;
+  const double wetLeft = (std::tanh(left * inputGain * drive) / denominator) * outputGain;
+  const double wetRight = (std::tanh(right * inputGain * drive) / denominator) * outputGain;
+  left = (dryLeft * (1.0 - wet)) + (wetLeft * wet);
+  right = (dryRight * (1.0 - wet)) + (wetRight * wet);
 }
 
 void CaptureLoopbackIntoDeck(
@@ -881,7 +889,9 @@ void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, cons
       << "\"eqLinear\":" << EqGainForFrequency(deck.processing) << ","
       << "\"pluginCount\":" << deck.pluginCount << ","
       << "\"pluginGainDb\":" << deck.pluginGainDb << ","
+      << "\"pluginOutputGainDb\":" << deck.pluginOutputGainDb << ","
       << "\"pluginDrive\":" << deck.pluginDrive << ","
+      << "\"pluginWetDry\":" << deck.pluginWetDry << ","
       << "\"eqBandsDb\":[";
     for (size_t index = 0; index < kPersistentEqBandCount; ++index) {
       if (index > 0) std::cout << ",";
@@ -942,7 +952,9 @@ void ApplyServerSettings(ServerDeck& deck, const std::string& line, double sampl
   }
   deck.pluginCount = static_cast<uint32_t>(ClampDouble(JsonNumberValue(line, "pluginCount", deck.pluginCount), 0.0, 16.0));
   deck.pluginGainDb = ClampDouble(JsonNumberValue(line, "pluginGainDb", deck.pluginGainDb), -12.0, 12.0);
+  deck.pluginOutputGainDb = ClampDouble(JsonNumberValue(line, "pluginOutputGainDb", deck.pluginOutputGainDb), -24.0, 24.0);
   deck.pluginDrive = ClampDouble(JsonNumberValue(line, "pluginDrive", deck.pluginDrive), 1.0, 3.0);
+  deck.pluginWetDry = ClampDouble(JsonNumberValue(line, "pluginWetDry", deck.pluginWetDry), 0.0, 100.0);
   deck.eq.Configure(sampleRate);
 }
 

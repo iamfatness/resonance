@@ -12,6 +12,7 @@ const {
   buildNativePluginSettings,
   describePluginHostHelper,
   PluginHostClient,
+  normalizePluginParameters,
   scanPluginCandidates,
 } = require('./plugin-host.cjs');
 
@@ -25,14 +26,48 @@ describe('plugin host runtime settings', () => {
 
   it('builds bounded native DSP settings from staged plugin chains', () => {
     expect(buildNativePluginSettings([
-      { id: 'waves-vst3', bypassed: false },
-      { id: 'vst3-generic', bypassed: false },
+      { id: 'waves-vst3', bypassed: false, parameters: { inputGainDb: 1, outputGainDb: -2, wetDry: 50 } },
+      { id: 'vst3-generic', bypassed: false, parameters: { inputGainDb: -0.5, outputGainDb: 1, wetDry: 75 } },
       { id: 'ignored', bypassed: true },
     ])).toEqual({
       pluginCount: 2,
-      pluginGainDb: 3.75,
+      pluginGainDb: 4.25,
+      pluginOutputGainDb: -1,
       pluginDrive: 1.16,
+      pluginWetDry: 62.5,
       activePluginIds: ['waves-vst3', 'vst3-generic'],
+      activePluginParameters: {
+        'waves-vst3': {
+          enabled: true,
+          wetDry: 50,
+          inputGainDb: 1,
+          outputGainDb: -2,
+          presetName: 'Default',
+        },
+        'vst3-generic': {
+          enabled: true,
+          wetDry: 75,
+          inputGainDb: -0.5,
+          outputGainDb: 1,
+          presetName: 'Default',
+        },
+      },
+    });
+  });
+
+  it('normalizes plugin parameters', () => {
+    expect(normalizePluginParameters({
+      enabled: false,
+      wetDry: 400,
+      inputGainDb: -48,
+      outputGainDb: 96,
+      presetName: '  Wide Mix  ',
+    })).toEqual({
+      enabled: false,
+      wetDry: 100,
+      inputGainDb: -24,
+      outputGainDb: 24,
+      presetName: 'Wide Mix',
     });
   });
 
@@ -67,6 +102,13 @@ describe('plugin host runtime settings', () => {
       stageable: true,
       executable: false,
       status: 'Found',
+      parameters: {
+        enabled: true,
+        wetDry: 100,
+        inputGainDb: 0,
+        outputGainDb: 0,
+        presetName: 'Default',
+      },
     });
   });
 
@@ -84,7 +126,16 @@ describe('plugin host runtime settings', () => {
           activePluginIds: ['waves-vst3'],
           executablePluginIds: ['waves-vst3'],
           blockedPluginIds: [],
-          nativeSettings: { pluginCount: 1, pluginGainDb: 2.25, pluginDrive: 1.16 },
+          parameters: {
+            'waves-vst3': {
+              enabled: true,
+              wetDry: 100,
+              inputGainDb: 0,
+              outputGainDb: 0,
+              presetName: 'Default',
+            },
+          },
+          nativeSettings: { pluginCount: 1, pluginGainDb: 2.25, pluginOutputGainDb: 0, pluginDrive: 1.16, pluginWetDry: 100 },
         },
         B: {
           hostMode: 'passthrough',
@@ -92,7 +143,8 @@ describe('plugin host runtime settings', () => {
           activePluginIds: [],
           executablePluginIds: [],
           blockedPluginIds: [],
-          nativeSettings: { pluginCount: 0, pluginGainDb: 0, pluginDrive: 1 },
+          parameters: {},
+          nativeSettings: { pluginCount: 0, pluginGainDb: 0, pluginOutputGainDb: 0, pluginDrive: 1, pluginWetDry: 100 },
         },
       },
     });

@@ -86,6 +86,8 @@ Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ b
 
 Desktop VST3/Waves scan results are merged into the app plugin catalog when the Electron engine reports them. Users can stage discovered candidates per deck, but scanned third-party plugins remain execution-blocked until the sandbox host can safely load native binaries.
 
+Staged plugins persist editable enabled, wet/dry, input gain, output gain, and preset-name parameters. NativeDSP plugins apply those values through the current router lane; blocked VST3/Waves candidates keep the same session state without running native code.
+
 The desktop engine has a native two-bus routing prototype for Deck A and Deck B when the audio router helper is built. The desktop panel shows per-deck input, left, and right meters from native snapshots for local WAV, pushed PCM, bounded capture, and continuous capture sources, with mock meters still available as a fallback.
 
 The routing logic lives behind `engine/audio-router.cjs`, which manages the native persistent router process. The renderer reads router state from the existing desktop engine IPC API, so virtual-device capture and plugin-host sources can keep using the same app UI contract.

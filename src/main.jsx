@@ -101,6 +101,13 @@ const basePluginCatalog = [
     loadStrategy: 'native-dsp',
     executable: true,
     status: 'NativeDSP',
+    parameters: {
+      enabled: true,
+      wetDry: 100,
+      inputGainDb: 0,
+      outputGainDb: 0,
+      presetName: 'Default',
+    },
   },
   {
     id: 'vst3-generic',
@@ -110,8 +117,40 @@ const basePluginCatalog = [
     loadStrategy: 'native-dsp',
     executable: true,
     status: 'NativeDSP',
+    parameters: {
+      enabled: true,
+      wetDry: 100,
+      inputGainDb: 0,
+      outputGainDb: 0,
+      presetName: 'Default',
+    },
   },
 ];
+
+const defaultPluginParameters = {
+  enabled: true,
+  wetDry: 100,
+  inputGainDb: 0,
+  outputGainDb: 0,
+  presetName: 'Default',
+};
+
+function normalizePluginParameters(parameters = {}) {
+  const clamp = (value, min, max, fallback) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+  };
+
+  return {
+    enabled: parameters.enabled !== false,
+    wetDry: clamp(parameters.wetDry, 0, 100, defaultPluginParameters.wetDry),
+    inputGainDb: clamp(parameters.inputGainDb, -24, 24, defaultPluginParameters.inputGainDb),
+    outputGainDb: clamp(parameters.outputGainDb, -24, 24, defaultPluginParameters.outputGainDb),
+    presetName: typeof parameters.presetName === 'string' && parameters.presetName.trim()
+      ? parameters.presetName.trim().slice(0, 80)
+      : defaultPluginParameters.presetName,
+  };
+}
 
 function normalizeDesktopPluginCandidate(candidate) {
   return {
@@ -127,6 +166,7 @@ function normalizeDesktopPluginCandidate(candidate) {
     stageable: candidate.stageable !== false,
     status: candidate.executable ? 'Ready' : 'Blocked',
     note: candidate.note,
+    parameters: normalizePluginParameters(candidate.parameters),
   };
 }
 
@@ -409,7 +449,15 @@ function PlayerApp() {
         return { ...settings, pluginChain: settings.pluginChain.filter((plugin) => plugin.id !== pluginId) };
       }
       const plugin = desktopPluginCatalog.find((item) => item.id === pluginId);
-      return plugin ? { ...settings, pluginChain: [...settings.pluginChain, { ...plugin, bypassed: false }] } : settings;
+      return plugin
+        ? {
+            ...settings,
+            pluginChain: [
+              ...settings.pluginChain,
+              { ...plugin, parameters: normalizePluginParameters(plugin.parameters), bypassed: false },
+            ],
+          }
+        : settings;
     });
   }
 
@@ -418,6 +466,23 @@ function PlayerApp() {
       ...settings,
       pluginChain: settings.pluginChain.map((plugin) => (
         plugin.id === pluginId ? { ...plugin, bypassed: !plugin.bypassed } : plugin
+      )),
+    }));
+  }
+
+  function setDeckPluginParameter(deck, pluginId, parameter, value) {
+    updateDeckProcessing(deck, (settings) => ({
+      ...settings,
+      pluginChain: settings.pluginChain.map((plugin) => (
+        plugin.id === pluginId
+          ? {
+              ...plugin,
+              parameters: normalizePluginParameters({
+                ...plugin.parameters,
+                [parameter]: value,
+              }),
+            }
+          : plugin
       )),
     }));
   }
@@ -771,6 +836,7 @@ function PlayerApp() {
         pluginCatalog={desktopPluginCatalog}
         toggleDeckPlugin={toggleDeckPlugin}
         toggleDeckPluginBypass={toggleDeckPluginBypass}
+        setDeckPluginParameter={setDeckPluginParameter}
         instrumentBoosts={instrumentBoosts}
         setInstrumentBoost={setInstrumentBoost}
         eqPath={eqPath}
