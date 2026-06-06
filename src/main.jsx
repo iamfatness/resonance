@@ -35,10 +35,11 @@ import {
   youtubeUrlForVideo,
 } from './lib/youtube.js';
 import { readSavedAppState, writeSavedAppState } from './lib/storage.js';
+import { buildPluginCatalog, normalizePluginParameters, pluginChainKey } from './lib/plugins.js';
 import { VideoDeck } from './components/VideoDeck.jsx';
 import { LandingPage } from './components/LandingPage.jsx';
 import { DirectSourcePanel } from './components/DirectSourcePanel.jsx';
-import { DesktopEnginePanel } from './components/DesktopEnginePanel.jsx';
+import { DeckEffectsWindow } from './components/DeckEffectsWindow.jsx';
 import { EqPanel } from './components/EqPanel.jsx';
 import { QueuePanel } from './components/QueuePanel.jsx';
 import { SearchResultsPanel } from './components/SearchResultsPanel.jsx';
@@ -91,72 +92,6 @@ const playlistCatalog = [
     tracks: [demoVideoA, demoVideoB, queueSeed[2], queueSeed[3]],
   },
 ];
-
-const basePluginCatalog = [
-  {
-    id: 'resonance-native-drive',
-    name: 'Resonance Native Drive',
-    vendor: 'Resonance',
-    format: 'NativeDSP',
-    loadStrategy: 'native-dsp',
-    executable: true,
-    status: 'NativeDSP',
-    parameters: {
-      enabled: true,
-      wetDry: 100,
-      inputGainDb: 0,
-      outputGainDb: 0,
-      presetName: 'Default',
-    },
-  },
-];
-
-const defaultPluginParameters = {
-  enabled: true,
-  wetDry: 100,
-  inputGainDb: 0,
-  outputGainDb: 0,
-  presetName: 'Default',
-};
-
-function normalizePluginParameters(parameters = {}) {
-  const clamp = (value, min, max, fallback) => {
-    const number = Number(value);
-    return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
-  };
-
-  return {
-    enabled: parameters.enabled !== false,
-    wetDry: clamp(parameters.wetDry, 0, 100, defaultPluginParameters.wetDry),
-    inputGainDb: clamp(parameters.inputGainDb, -24, 24, defaultPluginParameters.inputGainDb),
-    outputGainDb: clamp(parameters.outputGainDb, -24, 24, defaultPluginParameters.outputGainDb),
-    presetName: typeof parameters.presetName === 'string' && parameters.presetName.trim()
-      ? parameters.presetName.trim().slice(0, 80)
-      : defaultPluginParameters.presetName,
-  };
-}
-
-function pluginChainKey(plugin) {
-  return plugin.instanceId || plugin.id;
-}
-
-function normalizeDesktopPluginCandidate(candidate) {
-  return {
-    id: candidate.id,
-    name: candidate.name || 'Unknown plugin',
-    vendor: candidate.vendor || 'Unknown',
-    format: candidate.format || 'Unknown',
-    architecture: candidate.architecture || 'unknown',
-    shellType: candidate.shellType || 'unknown',
-    loadStrategy: candidate.loadStrategy || 'third-party-candidate',
-    path: candidate.path,
-    executable: Boolean(candidate.executable),
-    stageable: candidate.stageable !== false,
-    status: candidate.executable ? 'Ready' : 'Scan only',
-    note: candidate.note,
-    parameters: normalizePluginParameters(candidate.parameters),
-  };
-}
 
 async function searchYoutubeVideos(query) {
   const response = await fetch(`/api/youtube/search?q=${encodeURIComponent(query)}&limit=8`);
@@ -261,15 +196,7 @@ function PlayerApp() {
   }), [activePreset, appEqBypassed, audioBufferMs, audioLatencyProfile, deckProcessing, deckVolumes, eqMode, processedCurve]);
   const desktopEngine = useDesktopEngine(desktopEngineSettings);
   const desktopPluginCatalog = useMemo(() => {
-    const discoveredPlugins = (desktopEngine.state?.pluginHost?.candidates || [])
-      .map(normalizeDesktopPluginCandidate)
-      .filter((plugin) => plugin.id);
-    const seen = new Set();
-    return [...basePluginCatalog, ...discoveredPlugins].filter((plugin) => {
-      if (seen.has(plugin.id)) return false;
-      seen.add(plugin.id);
-      return true;
-    });
+    return buildPluginCatalog(desktopEngine.state?.pluginHost?.candidates || []);
   }, [desktopEngine.state?.pluginHost?.candidates]);
   const localEq = useLocalEq(activePreset, processedCurve, directUrl);
   const eqPanelRef = useRef(null);
@@ -369,6 +296,16 @@ function PlayerApp() {
     window.addEventListener('resonance-smoke-search-results', handleSmokeSearchResults);
     return () => window.removeEventListener('resonance-smoke-search-results', handleSmokeSearchResults);
   }, [activeInputDeck]);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return undefined;
+    const channel = new BroadcastChannel('resonance-deck-effects');
+    channel.onmessage = (event) => {
+      if (event.data?.type !== 'deck-processing-updated') return;
+      setDeckProcessing(normalizeDeckProcessing(event.data.deckProcessing));
+    };
+    return () => channel.close();
+  }, []);
 
   function setInstrumentBoost(name, value) {
     setInstrumentBoosts((current) => ({ ...current, [name]: value }));
@@ -640,6 +577,15 @@ function PlayerApp() {
     eqPanelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
   }
 
+  function openDeckEffects(deck) {
+    if (desktopEngine.isDesktop && window.resonanceDesktop?.openDeckEffectsWindow) {
+      window.resonanceDesktop.openDeckEffectsWindow(deck);
+      return;
+    }
+    setActiveDeck(deck);
+    openSettingsPanel();
+  }
+
   function sidebarLoad(video) {
     loadVideo(video, activeInputDeck);
   }
@@ -848,6 +794,7 @@ function PlayerApp() {
             setPan={(value) => setDeckPan('A', value)}
             active={activeDeck === 'A'}
             onActivate={() => setActiveDeck('A')}
+            onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('A') : null}
           />
           {!isSingleDeck && (
             <VideoDeck
@@ -863,6 +810,7 @@ function PlayerApp() {
               setPan={(value) => setDeckPan('B', value)}
               active={activeDeck === 'B'}
               onActivate={() => setActiveDeck('B')}
+              onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('B') : null}
             />
           )}
         </div>
@@ -926,18 +874,6 @@ function PlayerApp() {
         manualCurve={manualCurve}
         resetManualCurve={resetManualCurve}
         setManualBand={setManualBand}
-        desktopSettings={desktopEngine.isDesktop ? {
-          status: desktopEngine.state?.status || 'starting',
-          content: (
-            <DesktopEnginePanel
-              engine={desktopEngine}
-              latencyProfile={audioLatencyProfile}
-              bufferMs={audioBufferMs}
-              onLatencyProfileChange={setAudioLatencyProfile}
-              onBufferMsChange={setAudioBufferMs}
-            />
-          ),
-        } : null}
       />
 
       <footer className="transport">
@@ -979,6 +915,7 @@ function PlayerApp() {
 function App() {
   function currentRoute() {
     const params = new URLSearchParams(window.location.search);
+    if (params.get('view') === 'effects') return '/effects';
     if (params.get('view') === 'app') return '/app';
     if (params.get('view') === 'landing') return '/';
     return window.location.pathname;
@@ -1010,6 +947,11 @@ function App() {
     document.addEventListener('click', handleClick);
     return () => document.removeEventListener('click', handleClick);
   }, []);
+
+  if (path === '/effects') {
+    const params = new URLSearchParams(window.location.search);
+    return <DeckEffectsWindow deck={params.get('deck') === 'B' ? 'B' : 'A'} />;
+  }
 
   return path === '/app' ? <PlayerApp /> : <LandingPage />;
 }

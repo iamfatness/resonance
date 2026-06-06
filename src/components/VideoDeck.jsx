@@ -14,6 +14,7 @@ export function VideoDeck({
   setPan,
   active,
   onActivate,
+  onOpenEffects,
 }) {
   const actionLabel = parseYoutubePlaylistId(query)
     ? 'Import'
@@ -88,6 +89,12 @@ export function VideoDeck({
         />
         <strong>{pan === 0 ? 'C' : pan < 0 ? `L${Math.abs(pan)}` : `R${pan}`}</strong>
       </label>
+      {onOpenEffects && (
+        <button className="deck-effects-button" type="button" onClick={onOpenEffects}>
+          <SlidersHorizontal size={16} />
+          Deck {label} Effects
+        </button>
+      )}
     </article>
   );
 }

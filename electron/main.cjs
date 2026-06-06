@@ -12,6 +12,7 @@ let desktopServer = null;
 let desktopServerUrl = null;
 let requestCounter = 0;
 const pendingEngineRequests = new Map();
+const deckEffectsWindows = new Map();
 
 if (process.env.RESONANCE_USER_DATA_DIR) {
   app.setPath('userData', process.env.RESONANCE_USER_DATA_DIR);
@@ -212,6 +213,45 @@ function registerIpc() {
   ipcMain.handle('engine:pauseDeck', (_event, payload) => sendEngineCommand('PAUSE_DECK', { payload }));
   ipcMain.handle('engine:stopDeck', (_event, payload) => sendEngineCommand('STOP_DECK', { payload }));
   ipcMain.handle('engine:seekDeck', (_event, payload) => sendEngineCommand('SEEK_DECK', { payload }));
+  ipcMain.handle('window:openDeckEffects', (_event, deck) => openDeckEffectsWindow(deck));
+}
+
+async function openDeckEffectsWindow(deck = 'A') {
+  const normalizedDeck = deck === 'B' ? 'B' : 'A';
+  const existing = deckEffectsWindows.get(normalizedDeck);
+  if (existing && !existing.isDestroyed()) {
+    existing.focus();
+    return { status: 'focused', deck: normalizedDeck };
+  }
+
+  const window = new BrowserWindow({
+    width: 760,
+    height: 820,
+    minWidth: 620,
+    minHeight: 620,
+    title: `Deck ${normalizedDeck} Effects`,
+    backgroundColor: '#070a0b',
+    show: false,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.cjs'),
+    },
+  });
+
+  deckEffectsWindows.set(normalizedDeck, window);
+  window.once('ready-to-show', () => window.show());
+  window.on('closed', () => {
+    if (deckEffectsWindows.get(normalizedDeck) === window) deckEffectsWindows.delete(normalizedDeck);
+  });
+  window.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  const serverUrl = await startDesktopServer();
+  window.loadURL(`${serverUrl}/?view=effects&deck=${normalizedDeck}`);
+  return { status: 'opened', deck: normalizedDeck };
 }
 
 async function createMainWindow() {
@@ -311,4 +351,5 @@ app.on('before-quit', () => {
     desktopServer = null;
     desktopServerUrl = null;
   }
+  deckEffectsWindows.clear();
 });

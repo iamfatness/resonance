@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('resonanceDesktop', {
   platform: process.platform,
   isDesktop: true,
+  openDeckEffectsWindow: (deck) => ipcRenderer.invoke('window:openDeckEffects', deck),
   selectWavFile: () => ipcRenderer.invoke('dialog:selectWav'),
   engine: {
     getState: () => ipcRenderer.invoke('engine:getState'),

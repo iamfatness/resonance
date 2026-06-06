@@ -84,6 +84,7 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 - The desktop panel shows readiness diagnostics for native metering, SysVAD source, WDK toolsets, virtual device status, and plugin host status.
 - The desktop panel can export a beta diagnostics bundle with engine state, device scan, router snapshot, plugin scan, diagnostics checks, and recent export status.
 - The left sidebar switches between functional Now Playing, Library, Playlist, History, Liked Videos, and Radio panels.
+- Deck A and Deck B each expose a desktop-only Effects button. Each button opens a separate deck effects window where the user can scan the local Windows machine for VST2/VST3 plugins and stage that deck's chain.
 
 ## Beta Diagnostics
 

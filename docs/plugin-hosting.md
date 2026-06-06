@@ -18,6 +18,7 @@ Resonance can stage plugin-chain settings in the desktop UI now, and the native 
 - Scanned VST2/VST3 candidates can be staged in Deck A/B plugin chains, but they are marked blocked for execution until the native host can safely load third-party binaries.
 - Plugin entries carry editable session parameters: enabled state, wet/dry, input gain, output gain, and preset name.
 - The EQ panel includes an active deck plugin rack with chain order controls, duplicate, remove, reset-parameter, and preset-name editing. The catalog can be filtered by all, active, built-in, VST2, VST3, Waves vendor, or blocked candidates.
+- In the desktop app, each deck opens its own Effects window. VST2/VST3 scanning happens on the client's Windows machine through the local Electron audio engine, not on Cloudflare or GitHub.
 - The desktop panel reports scan status, candidate count, supported formats, a short candidate summary, and the VST3 loader prototype status.
 - VST2/VST3 plugins are not executed yet; the current executable processor is the built-in NativeDSP test lane.
 

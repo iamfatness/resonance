@@ -72,6 +72,7 @@ export function EqPanel({
   resetManualCurve,
   setManualBand,
   desktopSettings,
+  showPluginControls = false,
 }) {
   const [pluginFilter, setPluginFilter] = useState('all');
   const [pluginSort, setPluginSort] = useState('status');
@@ -207,6 +208,7 @@ export function EqPanel({
         </div>
       </section>
 
+      {showPluginControls && (
       <section>
         <div className="panel-heading">
           <h2>Deck {activeInputDeck} Plugins</h2>
@@ -363,6 +365,7 @@ export function EqPanel({
           })}
         </div>
       </section>
+      )}
 
       <section>
         <div className="panel-heading">
