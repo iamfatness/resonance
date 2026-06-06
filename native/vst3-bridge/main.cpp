@@ -1,6 +1,9 @@
 #include <algorithm>
+#include <array>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <map>
@@ -20,6 +23,7 @@ namespace fs = std::filesystem;
 using Steinberg::Vst::IEditController;
 using Steinberg::Vst::ParameterInfo;
 constexpr int32_t kVstString128Size = 128;
+const char kBase64Alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
 struct LoadedPlugin {
   VST3::Hosting::Module::Ptr module;
@@ -90,6 +94,49 @@ std::string JsonStringValue(const std::string& line, const std::string& key) {
   position = line.find('"', start);
   if (position == std::string::npos) return "";
   return line.substr(start, position - start);
+}
+
+int Base64Value(char ch) {
+  if (ch >= 'A' && ch <= 'Z') return ch - 'A';
+  if (ch >= 'a' && ch <= 'z') return ch - 'a' + 26;
+  if (ch >= '0' && ch <= '9') return ch - '0' + 52;
+  if (ch == '+') return 62;
+  if (ch == '/') return 63;
+  return -1;
+}
+
+std::vector<uint8_t> DecodeBase64(const std::string& value) {
+  std::vector<uint8_t> bytes;
+  int accumulator = 0;
+  int bits = -8;
+  for (char ch : value) {
+    if (ch == '=') break;
+    const int decoded = Base64Value(ch);
+    if (decoded < 0) continue;
+    accumulator = (accumulator << 6) | decoded;
+    bits += 6;
+    if (bits >= 0) {
+      bytes.push_back(static_cast<uint8_t>((accumulator >> bits) & 0xff));
+      bits -= 8;
+    }
+  }
+  return bytes;
+}
+
+std::string EncodeBase64(const std::vector<uint8_t>& bytes) {
+  std::string output;
+  output.reserve(((bytes.size() + 2) / 3) * 4);
+  for (size_t index = 0; index < bytes.size(); index += 3) {
+    const uint32_t octetA = bytes[index];
+    const uint32_t octetB = index + 1 < bytes.size() ? bytes[index + 1] : 0;
+    const uint32_t octetC = index + 2 < bytes.size() ? bytes[index + 2] : 0;
+    const uint32_t triple = (octetA << 16) | (octetB << 8) | octetC;
+    output.push_back(kBase64Alphabet[(triple >> 18) & 0x3f]);
+    output.push_back(kBase64Alphabet[(triple >> 12) & 0x3f]);
+    output.push_back(index + 1 < bytes.size() ? kBase64Alphabet[(triple >> 6) & 0x3f] : '=');
+    output.push_back(index + 2 < bytes.size() ? kBase64Alphabet[triple & 0x3f] : '=');
+  }
+  return output;
 }
 
 double JsonNumberValue(const std::string& line, const std::string& key, double fallback) {
@@ -244,6 +291,18 @@ struct ProcessToneResult {
   bool changed = false;
 };
 
+struct ProcessPcmResult {
+  int32_t frames = 0;
+  int32_t inputChannels = 0;
+  int32_t outputChannels = 0;
+  double sampleRate = 0;
+  double inputPeak = 0;
+  double outputPeak = 0;
+  double maxDelta = 0;
+  bool changed = false;
+  std::string pcm16Base64;
+};
+
 double BufferPeak(Steinberg::Vst::AudioBusBuffers& bus, int32_t frames) {
   double peak = 0;
   for (Steinberg::int32 channel = 0; channel < bus.numChannels; ++channel) {
@@ -350,6 +409,135 @@ ProcessToneResult ProcessTone(LoadedPlugin& plugin, int32_t frames, double sampl
   result.inputChannels = inputBus.numChannels;
   result.outputChannels = outputBus.numChannels;
   result.changed = maxDelta > 0.00001 || std::abs(outputPeak - inputPeak) > 0.00001;
+  return result;
+}
+
+ProcessPcmResult ProcessPcm(LoadedPlugin& plugin, const std::string& pcm16Base64, int32_t frames, int32_t channels, double sampleRate) {
+  const std::vector<uint8_t> bytes = DecodeBase64(pcm16Base64);
+  const int32_t sourceChannels = std::max<int32_t>(1, std::min<int32_t>(2, channels));
+  const int32_t availableFrames = static_cast<int32_t>(bytes.size() / (static_cast<size_t>(sourceChannels) * sizeof(int16_t)));
+  const int32_t frameCount = std::max<int32_t>(0, std::min<int32_t>(frames, availableFrames));
+  if (frameCount <= 0) throw std::runtime_error("PCM payload is empty or invalid.");
+
+  auto component = plugin.provider ? plugin.provider->getComponentPtr() : nullptr;
+  if (!component) throw std::runtime_error("Loaded plugin does not expose an audio component.");
+
+  Steinberg::FUnknownPtr<Steinberg::Vst::IAudioProcessor> processor = component;
+  if (!processor) throw std::runtime_error("Loaded plugin does not expose an audio processor.");
+  if (processor->canProcessSampleSize(Steinberg::Vst::kSample32) != Steinberg::kResultOk) {
+    throw std::runtime_error("Loaded plugin does not support 32-bit float processing.");
+  }
+
+  component->activateBus(Steinberg::Vst::kAudio, Steinberg::Vst::kInput, 0, true);
+  component->activateBus(Steinberg::Vst::kAudio, Steinberg::Vst::kOutput, 0, true);
+
+  Steinberg::Vst::ProcessSetup setup {
+    Steinberg::Vst::kRealtime,
+    Steinberg::Vst::kSample32,
+    frameCount,
+    sampleRate,
+  };
+  if (processor->setupProcessing(setup) != Steinberg::kResultOk) {
+    throw std::runtime_error("VST3 setupProcessing failed.");
+  }
+
+  Steinberg::Vst::HostProcessData processData;
+  if (!processData.prepare(*component, frameCount, Steinberg::Vst::kSample32)) {
+    throw std::runtime_error("VST3 process buffer preparation failed.");
+  }
+  processData.numSamples = frameCount;
+  processData.processMode = Steinberg::Vst::kRealtime;
+  processData.symbolicSampleSize = Steinberg::Vst::kSample32;
+
+  if (processData.numInputs <= 0 || !processData.inputs || processData.inputs[0].numChannels <= 0) {
+    throw std::runtime_error("Loaded plugin does not expose an audio input bus.");
+  }
+  if (processData.numOutputs <= 0 || !processData.outputs || processData.outputs[0].numChannels <= 0) {
+    throw std::runtime_error("Loaded plugin does not expose an audio output bus.");
+  }
+
+  auto& inputBus = processData.inputs[0];
+  auto& outputBus = processData.outputs[0];
+  std::vector<std::array<float, 2>> dryFrames(static_cast<size_t>(frameCount));
+
+  for (int32_t frame = 0; frame < frameCount; ++frame) {
+    const size_t frameOffset = static_cast<size_t>(frame) * sourceChannels * sizeof(int16_t);
+    int16_t leftPacked = 0;
+    int16_t rightPacked = 0;
+    std::memcpy(&leftPacked, bytes.data() + frameOffset, sizeof(int16_t));
+    if (sourceChannels > 1) {
+      std::memcpy(&rightPacked, bytes.data() + frameOffset + sizeof(int16_t), sizeof(int16_t));
+    } else {
+      rightPacked = leftPacked;
+    }
+    dryFrames[frame][0] = static_cast<float>(ClampDouble(static_cast<double>(leftPacked) / 32768.0, -1.0, 1.0));
+    dryFrames[frame][1] = static_cast<float>(ClampDouble(static_cast<double>(rightPacked) / 32768.0, -1.0, 1.0));
+  }
+
+  for (Steinberg::int32 channel = 0; channel < inputBus.numChannels; ++channel) {
+    auto* samples = inputBus.channelBuffers32 ? inputBus.channelBuffers32[channel] : nullptr;
+    if (!samples) continue;
+    const int32_t sourceChannel = channel == 0 ? 0 : 1;
+    for (int32_t frame = 0; frame < frameCount; ++frame) {
+      samples[frame] = dryFrames[frame][sourceChannel];
+    }
+  }
+  inputBus.silenceFlags = 0;
+
+  for (Steinberg::int32 channel = 0; channel < outputBus.numChannels; ++channel) {
+    auto* samples = outputBus.channelBuffers32 ? outputBus.channelBuffers32[channel] : nullptr;
+    if (samples) std::fill(samples, samples + frameCount, 0.0f);
+  }
+  outputBus.silenceFlags = 0;
+
+  const double inputPeak = BufferPeak(inputBus, frameCount);
+  if (component->setActive(true) != Steinberg::kResultOk) {
+    throw std::runtime_error("VST3 component activation failed.");
+  }
+  if (processor->setProcessing(true) != Steinberg::kResultOk) {
+    component->setActive(false);
+    throw std::runtime_error("VST3 setProcessing(true) failed.");
+  }
+
+  const Steinberg::tresult processResult = processor->process(processData);
+  processor->setProcessing(false);
+  component->setActive(false);
+  if (processResult != Steinberg::kResultOk) {
+    throw std::runtime_error("VST3 process call failed.");
+  }
+
+  const double outputPeak = BufferPeak(outputBus, frameCount);
+  double maxDelta = 0;
+  std::vector<uint8_t> outputBytes(static_cast<size_t>(frameCount) * 2 * sizeof(int16_t));
+  for (int32_t frame = 0; frame < frameCount; ++frame) {
+    double left = dryFrames[frame][0];
+    double right = dryFrames[frame][1];
+    if (outputBus.numChannels > 0 && outputBus.channelBuffers32 && outputBus.channelBuffers32[0]) {
+      left = outputBus.channelBuffers32[0][frame];
+    }
+    if (outputBus.numChannels > 1 && outputBus.channelBuffers32 && outputBus.channelBuffers32[1]) {
+      right = outputBus.channelBuffers32[1][frame];
+    } else {
+      right = left;
+    }
+    maxDelta = std::max(maxDelta, std::abs(left - static_cast<double>(dryFrames[frame][0])));
+    maxDelta = std::max(maxDelta, std::abs(right - static_cast<double>(dryFrames[frame][1])));
+    const int16_t packedLeft = static_cast<int16_t>(ClampDouble(left, -1.0, 1.0) * 32767.0);
+    const int16_t packedRight = static_cast<int16_t>(ClampDouble(right, -1.0, 1.0) * 32767.0);
+    std::memcpy(outputBytes.data() + (static_cast<size_t>(frame) * 4), &packedLeft, sizeof(int16_t));
+    std::memcpy(outputBytes.data() + (static_cast<size_t>(frame) * 4) + sizeof(int16_t), &packedRight, sizeof(int16_t));
+  }
+
+  ProcessPcmResult result;
+  result.frames = frameCount;
+  result.inputChannels = sourceChannels;
+  result.outputChannels = std::min<int32_t>(2, std::max<int32_t>(1, outputBus.numChannels));
+  result.sampleRate = sampleRate;
+  result.inputPeak = inputPeak;
+  result.outputPeak = outputPeak;
+  result.maxDelta = maxDelta;
+  result.changed = maxDelta > 0.00001 || std::abs(outputPeak - inputPeak) > 0.00001;
+  result.pcm16Base64 = EncodeBase64(outputBytes);
   return result;
 }
 
@@ -502,6 +690,45 @@ void HandleLine(const std::string& line) {
       Respond(output.str());
     } catch (const std::exception& error) {
       Respond("{\"type\":\"processTone\",\"requestId\":\"" + JsonEscape(requestId) + "\",\"status\":\"process-failed\",\"pluginId\":\"" + JsonEscape(pluginId) + "\",\"bridgePcmProcessing\":false,\"processingEnabled\":false,\"error\":\"" + JsonEscape(error.what()) + "\"}");
+    }
+    return;
+  }
+  if (type == "processPcm") {
+    const std::string pluginId = JsonStringValue(line, "pluginId").empty() ? JsonStringValue(line, "id") : JsonStringValue(line, "pluginId");
+    const auto plugin = gLoadedPlugins.find(pluginId);
+    if (plugin == gLoadedPlugins.end()) {
+      Respond("{\"type\":\"processPcm\",\"requestId\":\"" + JsonEscape(requestId) + "\",\"status\":\"not-loaded\",\"pluginId\":\"" + JsonEscape(pluginId) + "\",\"error\":\"Plugin is not loaded.\"}");
+      return;
+    }
+    const std::string pcm16Base64 = JsonStringValue(line, "pcm16Base64");
+    const int32_t frames = JsonIntValue(line, "frames", 512, 1, 8192);
+    const int32_t channels = JsonIntValue(line, "channels", 2, 1, 2);
+    const double sampleRate = ClampDouble(JsonNumberValue(line, "sampleRate", 48000), 8000, 384000);
+    try {
+      const auto result = ProcessPcm(plugin->second, pcm16Base64, frames, channels, sampleRate);
+      std::ostringstream output;
+      output
+        << "{"
+        << "\"type\":\"processPcm\","
+        << "\"requestId\":\"" << JsonEscape(requestId) << "\","
+        << "\"status\":\"processed\","
+        << "\"pluginId\":\"" << JsonEscape(pluginId) << "\","
+        << "\"frames\":" << result.frames << ","
+        << "\"channels\":2,"
+        << "\"sampleRate\":" << result.sampleRate << ","
+        << "\"inputChannels\":" << result.inputChannels << ","
+        << "\"outputChannels\":" << result.outputChannels << ","
+        << "\"inputPeak\":" << result.inputPeak << ","
+        << "\"outputPeak\":" << result.outputPeak << ","
+        << "\"maxDelta\":" << result.maxDelta << ","
+        << "\"changed\":" << (result.changed ? "true" : "false") << ","
+        << "\"bridgePcmProcessing\":true,"
+        << "\"processingEnabled\":false,"
+        << "\"pcm16Base64\":\"" << result.pcm16Base64 << "\""
+        << "}";
+      Respond(output.str());
+    } catch (const std::exception& error) {
+      Respond("{\"type\":\"processPcm\",\"requestId\":\"" + JsonEscape(requestId) + "\",\"status\":\"process-failed\",\"pluginId\":\"" + JsonEscape(pluginId) + "\",\"bridgePcmProcessing\":false,\"processingEnabled\":false,\"error\":\"" + JsonEscape(error.what()) + "\"}");
     }
     return;
   }

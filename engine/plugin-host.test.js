@@ -244,6 +244,7 @@ describe('plugin host runtime settings', () => {
         if (message.type === 'loadPlugin') send({ type: 'loadPlugin', requestId: message.requestId, status: 'loaded', pluginId: message.id, processingEnabled: false, bridgePcmProcessing: true });
         if (message.type === 'enumerateParameters') send({ type: 'enumerateParameters', requestId: message.requestId, status: 'ready', parameters: [{ id: 'mix', name: 'Mix', minimum: 0, maximum: 1, defaultValue: 0.5 }] });
         if (message.type === 'processTone') send({ type: 'processTone', requestId: message.requestId, status: 'processed', pluginId: message.pluginId, frames: message.frames, sampleRate: message.sampleRate, inputPeak: 0.2, outputPeak: 0.18, maxDelta: 0.02, changed: true, bridgePcmProcessing: true, processingEnabled: false });
+        if (message.type === 'processPcm') send({ type: 'processPcm', requestId: message.requestId, status: 'processed', pluginId: message.pluginId, frames: message.frames, channels: message.channels, sampleRate: message.sampleRate, inputPeak: 0.2, outputPeak: 0.18, maxDelta: 0.02, changed: true, bridgePcmProcessing: true, processingEnabled: false, pcm16Base64: message.pcm16Base64 });
         if (message.type === 'unloadPlugin') send({ type: 'unloadPlugin', requestId: message.requestId, status: 'unloaded', pluginId: message.pluginId });
         if (message.type === 'exit') {
           send({ type: 'exit', requestId: message.requestId, status: 'ok' });
@@ -272,6 +273,17 @@ describe('plugin host runtime settings', () => {
         status: 'processed',
         bridgePcmProcessing: true,
         processingEnabled: false,
+      });
+      await expect(client.processPcm('desktop-plugin:test', {
+        frames: 1,
+        channels: 2,
+        sampleRate: 48000,
+        pcm16Base64: 'AAAAAA==',
+      })).resolves.toMatchObject({
+        status: 'processed',
+        bridgePcmProcessing: true,
+        processingEnabled: false,
+        pcm16Base64: 'AAAAAA==',
       });
       await expect(client.unloadPlugin('desktop-plugin:test')).resolves.toMatchObject({
         status: 'unloaded',

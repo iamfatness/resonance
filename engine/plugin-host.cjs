@@ -19,6 +19,7 @@ const pluginHostCapabilities = {
   vst3MetadataLoad: true,
   vst3ParameterEnumeration: true,
   vst3BridgePcmTest: true,
+  vst3ExternalPcmBlocks: true,
   vst2Discovery: true,
   pluginBinaryExecution: false,
   vst3Discovery: true,
@@ -654,6 +655,19 @@ class NativeVst3BridgeClient {
       amplitude: Number.isFinite(options.amplitude) ? options.amplitude : 0.2,
     }, {
       timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 2500,
+    });
+  }
+
+  async processPcm(pluginId, options = {}) {
+    return this.request('processPcm', {
+      id: pluginId,
+      pluginId,
+      frames: Number.isFinite(options.frames) ? options.frames : 512,
+      channels: Number.isFinite(options.channels) ? options.channels : 2,
+      sampleRate: Number.isFinite(options.sampleRate) ? options.sampleRate : 48000,
+      pcm16Base64: options.pcm16Base64 || '',
+    }, {
+      timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 3000,
     });
   }
 }
