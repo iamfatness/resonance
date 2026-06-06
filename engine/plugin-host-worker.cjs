@@ -2,11 +2,14 @@ const readline = require('node:readline');
 const {
   buildDeckPluginPlan,
   builtInRuntimePlugins,
+  createSandboxPluginInstance,
   pluginHostCapabilities,
   pluginHostProtocolVersion,
   supportedFormats,
   plannedVendors,
 } = require('./plugin-host.cjs');
+
+const loadedPlugins = new Map();
 
 function describe() {
   return {
@@ -19,6 +22,7 @@ function describe() {
     supportedFormats,
     plannedVendors,
     note: 'Helper process is ready for chain planning. Third-party VST3/Waves binaries are not loaded yet.',
+    loadedPluginCount: loadedPlugins.size,
   };
 }
 
@@ -38,6 +42,63 @@ function handleMessage(message = {}) {
       requestId: message.requestId,
       status: 'ready',
       plan: buildDeckPluginPlan(message.deckProcessing || {}),
+    });
+    return;
+  }
+
+  if (message.type === 'loadPlugin') {
+    const instance = createSandboxPluginInstance(message.candidate || message.plugin || {}, {
+      allowBinaryExecution: false,
+    });
+    if (instance.status === 'error') {
+      respond({
+        type: 'loadPlugin',
+        requestId: message.requestId,
+        status: 'error',
+        error: instance.error,
+      });
+      return;
+    }
+    loadedPlugins.set(instance.id, instance);
+    respond({
+      type: 'loadPlugin',
+      requestId: message.requestId,
+      status: instance.status,
+      plugin: instance,
+    });
+    return;
+  }
+
+  if (message.type === 'unloadPlugin') {
+    const pluginId = message.pluginId || message.id;
+    const existed = loadedPlugins.delete(pluginId);
+    respond({
+      type: 'unloadPlugin',
+      requestId: message.requestId,
+      status: existed ? 'unloaded' : 'not-loaded',
+      pluginId,
+    });
+    return;
+  }
+
+  if (message.type === 'enumerateParameters') {
+    const pluginId = message.pluginId || message.id;
+    const plugin = loadedPlugins.get(pluginId);
+    if (!plugin) {
+      respond({
+        type: 'enumerateParameters',
+        requestId: message.requestId,
+        status: 'error',
+        error: `Plugin is not loaded: ${pluginId || 'unknown'}`,
+      });
+      return;
+    }
+    respond({
+      type: 'enumerateParameters',
+      requestId: message.requestId,
+      status: 'ready',
+      pluginId,
+      parameters: plugin.parameters,
     });
     return;
   }

@@ -89,7 +89,7 @@ Depends on:
 Goal: Load one real VST3 plugin instance behind the existing helper boundary without destabilizing the Electron UI.
 
 Deliverables:
-- Native helper design for VST3 discovery, instantiate, process, unload.
+- Native helper design for VST3 discovery, instantiate, process, unload. The current helper protocol now covers sandbox metadata load, parameter enumeration, and unload.
 - One known test VST3 plugin loaded in a sandbox/helper process.
 - Crash/timeout handling that marks the plugin degraded instead of crashing Resonance.
 - Parameter enumeration for the loaded test plugin.
@@ -99,6 +99,12 @@ Acceptance criteria:
 - Failure is contained to the helper process.
 - The UI shows load status and blocked/degraded state.
 - Third-party plugin loading remains disabled unless explicitly routed through the sandbox path.
+
+Progress:
+
+- Helper commands are in place for `loadPlugin`, `enumerateParameters`, and `unloadPlugin`.
+- The prototype can load VST3 bundle metadata in the sandbox process and expose the initial host-side parameter contract.
+- Third-party binary execution remains disabled; the next step is a native VST3 SDK bridge for one real test plugin instance.
 
 Depends on:
 - Persistent `PluginHostClient`.

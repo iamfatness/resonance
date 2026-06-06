@@ -10,6 +10,7 @@ const {
   blockedThirdPartyPlugins,
   buildDeckPluginPlan,
   buildNativePluginSettings,
+  createSandboxPluginInstance,
   describePluginHostHelper,
   PluginHostClient,
   normalizePluginParameters,
@@ -178,6 +179,57 @@ describe('plugin host runtime settings', () => {
           A: { hostMode: 'native-dsp-fallback', activePluginIds: ['waves-vst3'], blockedPluginIds: [] },
           B: { hostMode: 'passthrough', activePluginIds: [] },
         },
+      });
+    } finally {
+      client.stop();
+    }
+  });
+
+  it('loads VST3 metadata in the sandbox without enabling binary execution', () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'resonance-vst3-load-'));
+    const pluginPath = path.join(root, 'AcmeVerb.vst3');
+    fs.mkdirSync(path.join(pluginPath, 'Contents', 'x86_64'), { recursive: true });
+
+    const candidate = scanPluginCandidates({ roots: [root] }).candidates[0];
+    const instance = createSandboxPluginInstance(candidate);
+
+    expect(instance).toMatchObject({
+      id: candidate.id,
+      name: 'AcmeVerb',
+      status: 'metadata-loaded',
+      loadStrategy: 'sandbox-vst3-metadata',
+      executable: false,
+      processingEnabled: false,
+      degraded: true,
+      metadata: {
+        exists: true,
+        isBundle: true,
+        hasContents: true,
+        architectureDirs: ['x86_64'],
+      },
+    });
+    expect(instance.parameters.map((parameter) => parameter.id)).toEqual(['bypass', 'inputGainDb', 'wetDry', 'outputGainDb']);
+  });
+
+  it('loads, enumerates, and unloads a VST3 metadata handle through the helper process', async () => {
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'resonance-vst3-worker-'));
+    fs.mkdirSync(path.join(root, 'WorkerVerb.vst3', 'Contents', 'x86_64'), { recursive: true });
+    const candidate = scanPluginCandidates({ roots: [root] }).candidates[0];
+    const client = new PluginHostClient();
+
+    try {
+      const loaded = await client.loadPlugin(candidate);
+      expect(loaded).toMatchObject({
+        id: candidate.id,
+        status: 'metadata-loaded',
+        processingEnabled: false,
+      });
+      await expect(client.enumerateParameters(candidate.id)).resolves.toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'wetDry' }),
+      ]));
+      await expect(client.unloadPlugin(candidate.id)).resolves.toMatchObject({
+        status: 'unloaded',
+        pluginId: candidate.id,
       });
     } finally {
       client.stop();

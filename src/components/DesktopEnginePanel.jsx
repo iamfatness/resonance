@@ -264,6 +264,13 @@ export function DesktopEnginePanel({
               {state.pluginHost.chainPlan?.decks ? ` | A ${state.pluginHost.chainPlan.decks.A.hostMode}, B ${state.pluginHost.chainPlan.decks.B.hostMode}` : ''}
             </small>
           )}
+          {state.pluginHost.loaderPrototype && (
+            <small>
+              VST3 loader {state.pluginHost.loaderPrototype.status}
+              {state.pluginHost.loaderPrototype.loadedPlugin?.name ? ` | ${state.pluginHost.loaderPrototype.loadedPlugin.name}` : ''}
+              {Number.isFinite(state.pluginHost.loaderPrototype.parameterCount) ? ` | ${state.pluginHost.loaderPrototype.parameterCount} params` : ''}
+            </small>
+          )}
           {state.pluginHost.candidates?.length > 0 && (
             <small>
               Found: {state.pluginHost.candidates.slice(0, 3).map((plugin) => plugin.name).join(', ')}

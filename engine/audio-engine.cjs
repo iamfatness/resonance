@@ -151,6 +151,12 @@ const engineState = {
     plannedVendors,
     runtimePlugins: builtInRuntimePlugins,
     helper: { status: 'pending' },
+    loaderPrototype: {
+      status: 'pending',
+      loadedPlugin: null,
+      parameters: [],
+      note: 'VST3 sandbox loader prototype has not probed a candidate yet.',
+    },
     chainPlan: buildDeckPluginPlan(defaultSettings.deckProcessing),
     roots: [],
     note: 'Built-in NativeDSP plugin processing is available for staged deck chains; VST3/Waves loading is still scan-only.',
@@ -382,6 +388,13 @@ function refreshPlugins(requestId) {
       plannedVendors: result.plannedVendors,
       runtimePlugins: result.runtimePlugins,
       helper: pluginHostClient.getStatus(),
+      loaderPrototype: {
+        ...engineState.pluginHost.loaderPrototype,
+        status: result.candidates.some((candidate) => candidate.sandboxLoadable) ? 'pending' : 'no-candidate',
+        note: result.candidates.some((candidate) => candidate.sandboxLoadable)
+          ? 'Waiting for sandbox metadata load probe.'
+          : 'No VST3 candidate is available for the sandbox metadata load probe.',
+      },
       chainPlan: buildDeckPluginPlan(engineState.settings.deckProcessing),
       roots: result.roots,
       errors: result.errors,
@@ -398,6 +411,7 @@ function refreshPlugins(requestId) {
   }
 
   publishState(requestId);
+  probeVst3LoaderPrototype({ publish: true });
 }
 
 function persistEngineState() {
@@ -580,6 +594,70 @@ function startPluginHost({ publish = false } = {}) {
           ...pluginHostClient.getStatus(),
           status: 'error',
           error: error.message,
+        },
+      };
+      if (publish) publishState();
+    });
+}
+
+function probeVst3LoaderPrototype({ publish = false } = {}) {
+  const candidate = (engineState.pluginHost.candidates || []).find((plugin) => plugin.sandboxLoadable);
+  if (!candidate) return;
+
+  engineState.pluginHost = {
+    ...engineState.pluginHost,
+    loaderPrototype: {
+      ...engineState.pluginHost.loaderPrototype,
+      status: 'loading',
+      candidateId: candidate.id,
+      candidateName: candidate.name,
+      note: 'Loading VST3 metadata in the sandbox helper.',
+    },
+  };
+  if (publish) publishState();
+
+  pluginHostClient.loadPlugin(candidate)
+    .then((plugin) => pluginHostClient.enumerateParameters(plugin.id)
+      .then((parameters) => ({ plugin, parameters })))
+    .then(({ plugin, parameters }) => {
+      engineState.pluginHost = {
+        ...engineState.pluginHost,
+        loaderPrototype: {
+          status: plugin.status,
+          loadedPlugin: plugin,
+          parameters,
+          parameterCount: parameters.length,
+          note: plugin.blockedReason || 'VST3 metadata loaded in the sandbox helper.',
+          updatedAt: new Date().toISOString(),
+        },
+        candidates: (engineState.pluginHost.candidates || []).map((item) => (
+          item.id === plugin.id
+            ? {
+              ...item,
+              loaderStatus: plugin.status,
+              sandboxLoad: {
+                status: plugin.status,
+                parameterCount: parameters.length,
+                processingEnabled: plugin.processingEnabled,
+                degraded: plugin.degraded,
+                blockedReason: plugin.blockedReason,
+              },
+            }
+            : item
+        )),
+      };
+      pluginHostClient.unloadPlugin(plugin.id).catch(() => {});
+      if (publish) publishState();
+    })
+    .catch((error) => {
+      engineState.pluginHost = {
+        ...engineState.pluginHost,
+        loaderPrototype: {
+          ...engineState.pluginHost.loaderPrototype,
+          status: 'error',
+          error: error.message,
+          note: 'Sandbox VST3 metadata load failed without crashing the app.',
+          updatedAt: new Date().toISOString(),
         },
       };
       if (publish) publishState();

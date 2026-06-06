@@ -13,12 +13,13 @@ Resonance can stage plugin-chain settings in the desktop UI now, and the native 
 - `engine/plugin-host-worker.cjs` provides the sandbox helper protocol for describing host capabilities and resolving Deck A/B plugin-chain plans.
 - `PluginHostClient` keeps that helper alive while the desktop engine is running, correlates JSON-line responses by request ID, and marks the helper degraded if it exits or times out.
 - The desktop plugin host runs a safe read-only scan for VST3 and Waves candidates in common Windows install paths and enriches candidates with stable IDs, vendor, format, architecture guess, shell type, and load strategy.
+- The helper has a VST3 loader prototype that can create a sandbox metadata handle, enumerate Resonance's initial host-side parameter contract, and unload the handle without executing third-party plugin audio code.
 - Scanned VST3/Waves candidates can be staged in Deck A/B plugin chains, but they are marked blocked for execution until the native host can safely load third-party binaries.
 - Plugin entries carry editable session parameters: enabled state, wet/dry, input gain, output gain, and preset name.
-- The desktop panel reports scan status, candidate count, supported formats, and a short candidate summary.
+- The desktop panel reports scan status, candidate count, supported formats, a short candidate summary, and the VST3 loader prototype status.
 - VST3/Waves plugins are not executed yet; the current executable processor is the built-in NativeDSP test lane.
 
-The scanner only enumerates files and directories. It does not load plugin DLLs, instantiate VST3 bundles, execute Waves shells, or inspect plugin parameters.
+The scanner only enumerates files and directories. The loader prototype validates the helper protocol and metadata lifecycle, but it does not load plugin DLLs, instantiate VST3 processors, execute Waves shells, or process PCM through a third-party binary.
 
 The helper process currently supports:
 
@@ -26,10 +27,15 @@ The helper process currently supports:
 --describe
 stdin JSON: {"type":"describe"}
 stdin JSON: {"type":"resolveChain","deckProcessing":{...}}
+stdin JSON: {"type":"loadPlugin","candidate":{...}}
+stdin JSON: {"type":"enumerateParameters","pluginId":"..."}
+stdin JSON: {"type":"unloadPlugin","pluginId":"..."}
 stdin JSON: {"type":"exit"}
 ```
 
 `resolveChain` returns a per-deck plan with `hostMode`, active plugin IDs, EQ bypass state, and the bounded NativeDSP fallback settings that are forwarded to the native audio router.
+
+`loadPlugin` currently returns `metadata-loaded` for a valid VST3 bundle path and marks `processingEnabled: false`. This gives Resonance a stable sandbox lifecycle and parameter enumeration contract before the native VST3 SDK bridge is connected.
 
 NativeDSP parameters are applied today through the router's plugin lane: input gain drives the saturation input, output gain trims the processed signal, and wet/dry blends processed and dry deck audio. VST3/Waves candidates keep the same parameter state in `deckProcessing.pluginChain`, but execution stays blocked until a native loader exists.
 
@@ -50,7 +56,7 @@ Resonance virtual playback device
 ## Native Host Milestones
 
 1. Validate continuous virtual-device capture streams against the installed Resonance driver.
-2. Expand VST3/Waves discovery metadata beyond scan-only candidates.
+2. Connect the sandbox metadata loader to a native VST3 SDK bridge that can instantiate one test plugin.
 3. Replace or augment the built-in NativeDSP lane with one real VST3 instance through the sandboxed helper.
 4. Add plugin parameter state, bypass, ordering, and preset persistence.
 5. Validate Waves plugins specifically after the generic VST3 path works.

@@ -13,6 +13,10 @@ const pluginHostCapabilities = {
   perDeckChains: true,
   nativeDspFallback: true,
   thirdPartyPluginLoading: false,
+  vst3LoaderPrototype: true,
+  vst3MetadataLoad: true,
+  vst3ParameterEnumeration: true,
+  pluginBinaryExecution: false,
   vst3Discovery: true,
   wavesDiscovery: true,
 };
@@ -38,6 +42,12 @@ const defaultPluginParameters = {
   outputGainDb: 0,
   presetName: 'Default',
 };
+const vst3PrototypeParameters = [
+  { id: 'bypass', name: 'Bypass', kind: 'boolean', defaultValue: 0, minimum: 0, maximum: 1, automatable: true },
+  { id: 'inputGainDb', name: 'Input Gain', kind: 'gain-db', defaultValue: 0, minimum: -24, maximum: 24, automatable: true },
+  { id: 'wetDry', name: 'Wet/Dry', kind: 'percent', defaultValue: 100, minimum: 0, maximum: 100, automatable: true },
+  { id: 'outputGainDb', name: 'Output Gain', kind: 'gain-db', defaultValue: 0, minimum: -24, maximum: 24, automatable: true },
+];
 
 function clampNumber(value, min, max, fallback = 0) {
   const number = Number(value);
@@ -128,10 +138,88 @@ function classifyCandidate(filePath, entryName) {
     executable: false,
     parameters: { ...defaultPluginParameters },
     loadable: false,
+    sandboxLoadable: isVst3 && !isWavesShell,
+    loaderStatus: isVst3 && !isWavesShell ? 'metadata-ready' : 'blocked',
     status: 'Found',
     note: isWavesShell
       ? 'Waves shell candidate detected; Resonance does not load plugin binaries yet.'
-      : 'VST3 candidate detected; Resonance scan mode is read-only.',
+      : 'VST3 candidate detected; sandbox prototype can load metadata, but plugin binary execution remains disabled.',
+  };
+}
+
+function normalizePluginCandidate(candidate = {}) {
+  if (!candidate.path || !candidate.id) return null;
+  const entryName = candidate.name || path.basename(candidate.path);
+  return {
+    ...classifyCandidate(candidate.path, entryName),
+    ...candidate,
+    parameters: normalizePluginParameters(candidate.parameters),
+  };
+}
+
+function vst3BundleMetadata(filePath) {
+  const resolvedPath = path.resolve(filePath);
+  const stat = fs.existsSync(resolvedPath) ? fs.statSync(resolvedPath) : null;
+  const isBundle = stat?.isDirectory() && resolvedPath.toLowerCase().endsWith('.vst3');
+  const contentsDir = path.join(resolvedPath, 'Contents');
+  const hasContents = isBundle && fs.existsSync(contentsDir);
+  const architectureDirs = hasContents
+    ? fs.readdirSync(contentsDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .filter((name) => /^(x86|x86_64|arm64|Win32|Resources)$/i.test(name))
+    : [];
+
+  return {
+    path: resolvedPath,
+    exists: Boolean(stat),
+    kind: stat?.isDirectory() ? 'bundle' : stat?.isFile() ? 'file' : 'missing',
+    isBundle,
+    hasContents,
+    architectureDirs,
+  };
+}
+
+function createSandboxPluginInstance(candidate = {}, options = {}) {
+  const normalized = normalizePluginCandidate(candidate);
+  if (!normalized) {
+    return {
+      status: 'error',
+      error: 'Plugin candidate is missing an id or path.',
+    };
+  }
+
+  const metadata = vst3BundleMetadata(normalized.path);
+  if (!metadata.exists) {
+    return {
+      id: normalized.id,
+      name: normalized.name,
+      path: normalized.path,
+      status: 'degraded',
+      loadStrategy: normalized.loadStrategy,
+      error: 'Plugin path does not exist.',
+      metadata,
+    };
+  }
+
+  const isVst3 = normalized.format === 'VST3' || String(normalized.path).toLowerCase().endsWith('.vst3');
+  const binaryExecutionEnabled = options.allowBinaryExecution === true;
+  return {
+    id: normalized.id,
+    name: normalized.name,
+    vendor: normalized.vendor,
+    format: normalized.format,
+    path: normalized.path,
+    status: binaryExecutionEnabled && isVst3 ? 'loaded' : 'metadata-loaded',
+    loadStrategy: binaryExecutionEnabled && isVst3 ? 'sandbox-vst3' : 'sandbox-vst3-metadata',
+    executable: binaryExecutionEnabled && isVst3,
+    processingEnabled: binaryExecutionEnabled && isVst3,
+    degraded: !binaryExecutionEnabled,
+    blockedReason: binaryExecutionEnabled ? null : 'VST3 binary execution is disabled until the native SDK bridge is connected.',
+    parameterCount: vst3PrototypeParameters.length,
+    parameters: vst3PrototypeParameters,
+    metadata,
+    loadedAt: new Date().toISOString(),
   };
 }
 
@@ -467,6 +555,26 @@ class PluginHostClient {
     const response = await this.request('resolveChain', { deckProcessing });
     return response.plan;
   }
+
+  async loadPlugin(candidate = {}, options = {}) {
+    const response = await this.request('loadPlugin', { candidate }, {
+      timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 2000,
+    });
+    return response.plugin;
+  }
+
+  async unloadPlugin(pluginId, options = {}) {
+    return this.request('unloadPlugin', { pluginId }, {
+      timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 1000,
+    });
+  }
+
+  async enumerateParameters(pluginId, options = {}) {
+    const response = await this.request('enumerateParameters', { pluginId }, {
+      timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 1000,
+    });
+    return response.parameters || [];
+  }
 }
 
 module.exports = {
@@ -475,15 +583,18 @@ module.exports = {
   buildDeckPluginPlan,
   buildNativePluginSettings,
   builtInRuntimePlugins,
+  createSandboxPluginInstance,
   defaultScanRoots,
   defaultPluginParameters,
   describePluginHostHelper,
   PluginHostClient,
   normalizePluginParameters,
+  normalizePluginCandidate,
   pluginHostCapabilities,
   pluginHostProtocolVersion,
   pluginHostWorkerPath,
   scanPluginCandidates,
   supportedFormats,
+  vst3PrototypeParameters,
   plannedVendors,
 };
