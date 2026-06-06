@@ -281,6 +281,12 @@ export function DesktopEnginePanel({
               {Number.isFinite(state.pluginHost.loaderPrototype.parameterCount) ? ` | ${state.pluginHost.loaderPrototype.parameterCount} params` : ''}
             </small>
           )}
+          {state.pluginHost.nativeBridge && (
+            <small>
+              Native VST3 bridge {state.pluginHost.nativeBridge.status}
+              {state.pluginHost.nativeBridge.sdk?.found ? ' | SDK ready' : ' | SDK missing'}
+            </small>
+          )}
           {state.pluginHost.candidates?.length > 0 && (
             <small>
               Found: {state.pluginHost.candidates.slice(0, 3).map((plugin) => plugin.name).join(', ')}

@@ -5,6 +5,7 @@ const { DesktopAudioRouter } = require('./audio-router.cjs');
 const {
   buildDeckPluginPlan,
   builtInRuntimePlugins,
+  describeNativeVst3Bridge,
   PluginHostClient,
   scanPluginCandidates,
   supportedFormats,
@@ -153,6 +154,7 @@ const engineState = {
     plannedVendors,
     runtimePlugins: builtInRuntimePlugins,
     helper: { status: 'pending' },
+    nativeBridge: describeNativeVst3Bridge(),
     loaderPrototype: {
       status: 'pending',
       loadedPlugin: null,
@@ -391,6 +393,7 @@ function refreshPlugins(requestId) {
       plannedVendors: result.plannedVendors,
       runtimePlugins: result.runtimePlugins,
       helper: pluginHostClient.getStatus(),
+      nativeBridge: describeNativeVst3Bridge(),
       loaderPrototype: {
         ...engineState.pluginHost.loaderPrototype,
         status: result.candidates.some((candidate) => candidate.sandboxLoadable) ? 'pending' : 'no-candidate',

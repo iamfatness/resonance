@@ -13,6 +13,7 @@ if (-not (Test-Path -LiteralPath $electronDist)) {
 & npm run build
 & npm run native:wasapi-meter
 & npm run native:audio-router
+& npm run native:vst3-bridge
 
 New-Item -ItemType Directory -Force -Path $releaseRoot | Out-Null
 if (Test-Path -LiteralPath $packageRoot) {
@@ -50,7 +51,8 @@ $copyItems = @(
   'engine',
   'scripts\list-audio-devices.ps1',
   'native\wasapi-meter\build\Release\resonance-wasapi-meter.exe',
-  'native\audio-router\build\Release\resonance-audio-router.exe'
+  'native\audio-router\build\Release\resonance-audio-router.exe',
+  'native\vst3-bridge\build\Release\resonance-vst3-bridge.exe'
 )
 
 foreach ($item in $copyItems) {
@@ -82,6 +84,7 @@ $manifest = [pscustomobject]@{
     'Resonance audio engine',
     'WASAPI meter helper',
     'Native Deck A/B audio router helper',
+    'Native VST3 bridge scaffold',
     'Plugin host helper'
   )
 }

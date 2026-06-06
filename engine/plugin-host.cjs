@@ -8,6 +8,7 @@ const plannedVendors = ['Waves'];
 const maxCandidates = 120;
 const pluginHostProtocolVersion = 1;
 const pluginHostWorkerPath = path.join(__dirname, 'plugin-host-worker.cjs');
+const nativeVst3BridgePath = path.join(__dirname, '..', 'native', 'vst3-bridge', 'build', 'Release', 'resonance-vst3-bridge.exe');
 const pluginHostCapabilities = {
   sandboxProcess: true,
   perDeckChains: true,
@@ -407,6 +408,44 @@ function describePluginHostHelper(options = {}) {
   }
 }
 
+function describeNativeVst3Bridge(options = {}) {
+  const bridgePath = options.bridgePath || nativeVst3BridgePath;
+  if (!fs.existsSync(bridgePath)) {
+    return {
+      status: 'not-built',
+      path: bridgePath,
+      sdk: {
+        path: process.env.RESONANCE_VST3_SDK_DIR || 'third_party\\vst3sdk',
+        found: false,
+      },
+      capabilities: {
+        metadataLifecycle: false,
+        binaryInstantiation: false,
+        pcmProcessing: false,
+      },
+      note: 'Native VST3 bridge is not built. Run npm run native:vst3-bridge.',
+    };
+  }
+
+  try {
+    const stdout = execFileSync(bridgePath, ['--describe'], {
+      encoding: 'utf8',
+      timeout: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 1500,
+      windowsHide: true,
+    });
+    return {
+      path: bridgePath,
+      ...JSON.parse(stdout.trim()),
+    };
+  } catch (error) {
+    return {
+      status: 'error',
+      path: bridgePath,
+      error: error.message,
+    };
+  }
+}
+
 class PluginHostClient {
   constructor({ nodePath = process.execPath, workerPath = pluginHostWorkerPath, onStatus } = {}) {
     this.nodePath = nodePath;
@@ -586,6 +625,7 @@ module.exports = {
   createSandboxPluginInstance,
   defaultScanRoots,
   defaultPluginParameters,
+  describeNativeVst3Bridge,
   describePluginHostHelper,
   PluginHostClient,
   normalizePluginParameters,
@@ -593,6 +633,7 @@ module.exports = {
   pluginHostCapabilities,
   pluginHostProtocolVersion,
   pluginHostWorkerPath,
+  nativeVst3BridgePath,
   scanPluginCandidates,
   supportedFormats,
   vst3PrototypeParameters,

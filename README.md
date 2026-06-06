@@ -155,6 +155,7 @@ Build native desktop helpers:
 ```powershell
 npm run native:wasapi-meter
 npm run native:audio-router
+npm run native:vst3-bridge
 ```
 
 Create a local Windows desktop package:

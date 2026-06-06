@@ -37,8 +37,8 @@ Resonance is now a functional web app, Electron desktop prototype, Chrome extens
 
 ### Track B: Real Plugin Host
 
-1. Add a native VST3 SDK bridge helper for one known test VST3 plugin.
-2. Extend `loadPlugin` from metadata-loaded to real instantiate/unload while keeping crashes isolated.
+1. Add a native VST3 SDK bridge helper for one known test VST3 plugin. The scaffold now lives in `native/vst3-bridge` and builds with `npm run native:vst3-bridge`.
+2. Install/configure the Steinberg VST3 SDK with `RESONANCE_VST3_SDK_DIR`, set `RESONANCE_TEST_VST3_PLUGIN`, then extend `loadPlugin` from metadata-loaded to real instantiate/unload while keeping crashes isolated.
 3. Define PCM block exchange between `native/audio-router` and the plugin helper.
 4. Route Deck A and Deck B through independent plugin instances.
 5. Add fallback/degraded behavior if processing misses timing budget or the helper crashes.

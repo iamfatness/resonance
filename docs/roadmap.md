@@ -106,6 +106,7 @@ Progress:
 
 - Helper commands are in place for `loadPlugin`, `enumerateParameters`, and `unloadPlugin`.
 - The prototype can load VST3 bundle metadata in the sandbox process and expose the initial host-side parameter contract.
+- Native VST3 bridge scaffold is in `native/vst3-bridge`, builds with `npm run native:vst3-bridge`, and reports SDK/test-plugin readiness to the desktop panel.
 - Third-party binary execution remains disabled; the next step is a native VST3 SDK bridge for one real test plugin instance.
 
 Depends on:

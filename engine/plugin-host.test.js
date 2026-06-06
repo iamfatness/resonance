@@ -11,6 +11,7 @@ const {
   buildDeckPluginPlan,
   buildNativePluginSettings,
   createSandboxPluginInstance,
+  describeNativeVst3Bridge,
   describePluginHostHelper,
   PluginHostClient,
   normalizePluginParameters,
@@ -159,6 +160,16 @@ describe('plugin host runtime settings', () => {
       capabilities: {
         sandboxProcess: true,
         thirdPartyPluginLoading: false,
+      },
+    });
+  });
+
+  it('reports native VST3 bridge not-built state without failing plugin host startup', () => {
+    expect(describeNativeVst3Bridge({ bridgePath: path.join(os.tmpdir(), 'missing-vst3-bridge.exe') })).toMatchObject({
+      status: 'not-built',
+      capabilities: {
+        binaryInstantiation: false,
+        pcmProcessing: false,
       },
     });
   });

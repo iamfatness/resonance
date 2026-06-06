@@ -6,4 +6,5 @@ release/
 driver/
 native/wasapi-meter/build/
 native/audio-router/build/
+native/vst3-bridge/build/
 *.local
