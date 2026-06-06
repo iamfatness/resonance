@@ -152,6 +152,10 @@ function normalizePluginParameters(parameters = {}) {
   };
 }
 
+function pluginChainKey(plugin) {
+  return plugin.instanceId || plugin.id;
+}
+
 function normalizeDesktopPluginCandidate(candidate) {
   return {
     id: candidate.id,
@@ -462,27 +466,91 @@ function PlayerApp() {
             ...settings,
             pluginChain: [
               ...settings.pluginChain,
-              { ...plugin, parameters: normalizePluginParameters(plugin.parameters), bypassed: false },
+              { ...plugin, instanceId: `${plugin.id}:${Date.now()}`, parameters: normalizePluginParameters(plugin.parameters), bypassed: false },
             ],
           }
         : settings;
     });
   }
 
-  function toggleDeckPluginBypass(deck, pluginId) {
+  function addDeckPlugin(deck, pluginId) {
+    updateDeckProcessing(deck, (settings) => {
+      const plugin = desktopPluginCatalog.find((item) => item.id === pluginId);
+      return plugin
+        ? {
+            ...settings,
+            pluginChain: [
+              ...settings.pluginChain,
+              { ...plugin, instanceId: `${plugin.id}:${Date.now()}`, parameters: normalizePluginParameters(plugin.parameters), bypassed: false },
+            ],
+          }
+        : settings;
+    });
+  }
+
+  function removeDeckPlugin(deck, pluginKey) {
+    updateDeckProcessing(deck, (settings) => ({
+      ...settings,
+      pluginChain: settings.pluginChain.filter((plugin) => pluginChainKey(plugin) !== pluginKey),
+    }));
+  }
+
+  function moveDeckPlugin(deck, pluginKey, direction) {
+    updateDeckProcessing(deck, (settings) => {
+      const index = settings.pluginChain.findIndex((plugin) => pluginChainKey(plugin) === pluginKey);
+      const nextIndex = index + direction;
+      if (index < 0 || nextIndex < 0 || nextIndex >= settings.pluginChain.length) return settings;
+      const pluginChain = [...settings.pluginChain];
+      const [plugin] = pluginChain.splice(index, 1);
+      pluginChain.splice(nextIndex, 0, plugin);
+      return { ...settings, pluginChain };
+    });
+  }
+
+  function duplicateDeckPlugin(deck, pluginKey) {
+    updateDeckProcessing(deck, (settings) => {
+      const plugin = settings.pluginChain.find((item) => pluginChainKey(item) === pluginKey);
+      return plugin
+        ? {
+            ...settings,
+            pluginChain: [
+              ...settings.pluginChain,
+              {
+                ...plugin,
+                instanceId: `${plugin.id}:copy-${Date.now()}`,
+                parameters: normalizePluginParameters(plugin.parameters),
+              },
+            ],
+          }
+        : settings;
+    });
+  }
+
+  function resetDeckPluginParameters(deck, pluginKey) {
     updateDeckProcessing(deck, (settings) => ({
       ...settings,
       pluginChain: settings.pluginChain.map((plugin) => (
-        plugin.id === pluginId ? { ...plugin, bypassed: !plugin.bypassed } : plugin
+        pluginChainKey(plugin) === pluginKey
+          ? { ...plugin, parameters: normalizePluginParameters({}) }
+          : plugin
       )),
     }));
   }
 
-  function setDeckPluginParameter(deck, pluginId, parameter, value) {
+  function toggleDeckPluginBypass(deck, pluginKey) {
     updateDeckProcessing(deck, (settings) => ({
       ...settings,
       pluginChain: settings.pluginChain.map((plugin) => (
-        plugin.id === pluginId
+        pluginChainKey(plugin) === pluginKey ? { ...plugin, bypassed: !plugin.bypassed } : plugin
+      )),
+    }));
+  }
+
+  function setDeckPluginParameter(deck, pluginKey, parameter, value) {
+    updateDeckProcessing(deck, (settings) => ({
+      ...settings,
+      pluginChain: settings.pluginChain.map((plugin) => (
+        pluginChainKey(plugin) === pluginKey
           ? {
               ...plugin,
               parameters: normalizePluginParameters({
@@ -848,6 +916,11 @@ function PlayerApp() {
         toggleDeckEqBypass={toggleDeckEqBypass}
         setDeckEqBand={setDeckEqBand}
         pluginCatalog={desktopPluginCatalog}
+        addDeckPlugin={addDeckPlugin}
+        removeDeckPlugin={removeDeckPlugin}
+        moveDeckPlugin={moveDeckPlugin}
+        duplicateDeckPlugin={duplicateDeckPlugin}
+        resetDeckPluginParameters={resetDeckPluginParameters}
         toggleDeckPlugin={toggleDeckPlugin}
         toggleDeckPluginBypass={toggleDeckPluginBypass}
         setDeckPluginParameter={setDeckPluginParameter}

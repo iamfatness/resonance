@@ -163,6 +163,12 @@ Acceptance criteria:
 - Built-in NativeDSP and scanned third-party candidates are visually distinct.
 - Blocked third-party plugins can store settings but clearly do not execute.
 
+Progress:
+
+- The EQ panel now has an active plugin rack for the selected deck with move up/down, duplicate, reset parameters, remove, bypass, and preset-name editing.
+- The plugin catalog can be filtered by all, active, built-in, VST3, Waves, and blocked candidates, then sorted by status, name, or vendor.
+- Chain entries use per-instance IDs while retaining the original plugin ID for NativeDSP fallback and future VST3 routing.
+
 Depends on:
 - Current plugin parameter state.
 - Scanned plugin catalog.

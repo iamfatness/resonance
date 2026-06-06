@@ -1,5 +1,9 @@
+import { useMemo, useState } from 'react';
 import {
+  ArrowDown,
+  ArrowUp,
   BadgeInfo,
+  Copy,
   Disc3,
   Drum,
   Gauge,
@@ -7,9 +11,11 @@ import {
   KeyboardMusic,
   Mic2,
   Moon,
+  RotateCcw,
   SlidersHorizontal,
   Sparkles,
   SunMedium,
+  Trash2,
   WandSparkles,
   Zap,
 } from 'lucide-react';
@@ -49,6 +55,11 @@ export function EqPanel({
   toggleDeckEqBypass,
   setDeckEqBand,
   pluginCatalog,
+  addDeckPlugin,
+  removeDeckPlugin,
+  moveDeckPlugin,
+  duplicateDeckPlugin,
+  resetDeckPluginParameters,
   toggleDeckPlugin,
   toggleDeckPluginBypass,
   setDeckPluginParameter,
@@ -60,6 +71,35 @@ export function EqPanel({
   resetManualCurve,
   setManualBand,
 }) {
+  const [pluginFilter, setPluginFilter] = useState('all');
+  const [pluginSort, setPluginSort] = useState('status');
+  const pluginChain = useMemo(() => activeDeckProcessing.pluginChain || [], [activeDeckProcessing.pluginChain]);
+  const pluginStatus = (plugin) => {
+    if (plugin.executable === true || plugin.format === 'NativeDSP') return 'ready';
+    if (plugin.sandboxLoad?.status || plugin.loaderStatus === 'metadata-loaded') return 'sandbox';
+    if (plugin.executable === false) return 'blocked';
+    return 'ready';
+  };
+  const filteredPlugins = useMemo(() => {
+    const selectedIds = new Set(pluginChain.map((plugin) => plugin.id));
+    const statusWeight = { ready: 0, sandbox: 1, blocked: 2 };
+    return pluginCatalog
+      .filter((plugin) => {
+        if (pluginFilter === 'active') return selectedIds.has(plugin.id);
+        if (pluginFilter === 'built-in') return plugin.format === 'NativeDSP';
+        if (pluginFilter === 'vst3') return plugin.format === 'VST3';
+        if (pluginFilter === 'waves') return plugin.vendor === 'Waves' || plugin.format === 'WavesShell';
+        if (pluginFilter === 'blocked') return plugin.executable === false;
+        return true;
+      })
+      .sort((a, b) => {
+        if (pluginSort === 'name') return a.name.localeCompare(b.name);
+        if (pluginSort === 'vendor') return `${a.vendor} ${a.name}`.localeCompare(`${b.vendor} ${b.name}`);
+        return (statusWeight[pluginStatus(a)] ?? 3) - (statusWeight[pluginStatus(b)] ?? 3) || a.name.localeCompare(b.name);
+      });
+  }, [pluginCatalog, pluginChain, pluginFilter, pluginSort]);
+  const pluginKey = (plugin) => plugin.instanceId || plugin.id;
+
   return (
     <aside className="eq-panel" ref={panelRef}>
       <section>
@@ -154,10 +194,15 @@ export function EqPanel({
           <h2>Deck {activeInputDeck} Plugins</h2>
           <SlidersHorizontal size={16} />
         </div>
-        <div className="plugin-list">
-          {pluginCatalog.map((plugin) => {
-            const selectedPlugin = activeDeckProcessing.pluginChain.find((item) => item.id === plugin.id);
-            const parameters = selectedPlugin?.parameters || {
+        <div className="plugin-rack">
+          <div className="plugin-rack-header">
+            <span>Active Chain</span>
+            <strong>{pluginChain.length}</strong>
+          </div>
+          {pluginChain.length === 0 && <small className="plugin-empty">No plugins staged on Deck {activeInputDeck}.</small>}
+          {pluginChain.map((plugin, index) => {
+            const key = pluginKey(plugin);
+            const parameters = plugin.parameters || {
               enabled: true,
               wetDry: 100,
               inputGainDb: 0,
@@ -165,91 +210,123 @@ export function EqPanel({
               presetName: 'Default',
             };
             return (
-              <article className={`plugin-item ${selectedPlugin ? 'active' : ''}`} key={plugin.id}>
+              <article className={`plugin-item active ${plugin.executable === false ? 'blocked-plugin' : ''}`} key={key}>
                 <div className="plugin-item-header">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={Boolean(selectedPlugin)}
-                      onChange={() => toggleDeckPlugin(activeInputDeck, plugin.id)}
-                    />
-                    <span>
-                      <strong>{plugin.name}</strong>
-                      <small>
-                        {plugin.vendor} | {plugin.format || 'Plugin'}
-                        {plugin.architecture ? ` | ${plugin.architecture}` : ''}
-                        {plugin.executable === false ? ' | staged only' : ''}
-                      </small>
-                    </span>
-                  </label>
-                  <button
-                    type="button"
-                    disabled={!selectedPlugin}
-                    onClick={() => toggleDeckPluginBypass(activeInputDeck, plugin.id)}
-                  >
-                    {selectedPlugin?.bypassed
-                      ? 'Bypassed'
-                      : selectedPlugin
-                        ? selectedPlugin.executable === false ? 'Staged' : 'Active'
-                        : plugin.status}
+                  <span>
+                    <strong>{index + 1}. {plugin.name}</strong>
+                    <small>
+                      {plugin.vendor} | {plugin.format || 'Plugin'} | {plugin.executable === false ? 'staged only' : 'active DSP'} | {parameters.presetName}
+                    </small>
+                  </span>
+                  <button type="button" onClick={() => toggleDeckPluginBypass(activeInputDeck, key)}>
+                    {plugin.bypassed ? 'Bypassed' : plugin.executable === false ? 'Staged' : 'Active'}
                   </button>
                 </div>
-                {selectedPlugin && (
-                  <div className="plugin-parameter-grid">
-                    <label className="plugin-enable-toggle">
-                      <input
-                        type="checkbox"
-                        checked={parameters.enabled !== false}
-                        onChange={(event) => setDeckPluginParameter(activeInputDeck, plugin.id, 'enabled', event.target.checked)}
-                      />
-                      <span>Enabled</span>
-                    </label>
-                    <label>
-                      <span>Wet/Dry</span>
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        step="1"
-                        value={parameters.wetDry}
-                        onChange={(event) => setDeckPluginParameter(activeInputDeck, plugin.id, 'wetDry', Number(event.target.value))}
-                      />
-                      <strong>{parameters.wetDry}%</strong>
-                    </label>
-                    <label>
-                      <span>Input</span>
-                      <input
-                        type="range"
-                        min="-24"
-                        max="24"
-                        step="0.5"
-                        value={parameters.inputGainDb}
-                        onChange={(event) => setDeckPluginParameter(activeInputDeck, plugin.id, 'inputGainDb', Number(event.target.value))}
-                      />
-                      <strong>{parameters.inputGainDb > 0 ? '+' : ''}{parameters.inputGainDb.toFixed(1)} dB</strong>
-                    </label>
-                    <label>
-                      <span>Output</span>
-                      <input
-                        type="range"
-                        min="-24"
-                        max="24"
-                        step="0.5"
-                        value={parameters.outputGainDb}
-                        onChange={(event) => setDeckPluginParameter(activeInputDeck, plugin.id, 'outputGainDb', Number(event.target.value))}
-                      />
-                      <strong>{parameters.outputGainDb > 0 ? '+' : ''}{parameters.outputGainDb.toFixed(1)} dB</strong>
-                    </label>
-                    <label className="plugin-preset-name">
-                      <span>Preset</span>
-                      <input
-                        type="text"
-                        value={parameters.presetName}
-                        onChange={(event) => setDeckPluginParameter(activeInputDeck, plugin.id, 'presetName', event.target.value)}
-                      />
-                    </label>
-                  </div>
-                )}
+                <div className="plugin-chain-actions">
+                  <button type="button" onClick={() => moveDeckPlugin(activeInputDeck, key, -1)} disabled={index === 0} aria-label={`Move ${plugin.name} up`}><ArrowUp size={15} /></button>
+                  <button type="button" onClick={() => moveDeckPlugin(activeInputDeck, key, 1)} disabled={index === pluginChain.length - 1} aria-label={`Move ${plugin.name} down`}><ArrowDown size={15} /></button>
+                  <button type="button" onClick={() => duplicateDeckPlugin(activeInputDeck, key)} aria-label={`Duplicate ${plugin.name}`}><Copy size={15} /></button>
+                  <button type="button" onClick={() => resetDeckPluginParameters(activeInputDeck, key)} aria-label={`Reset ${plugin.name} parameters`}><RotateCcw size={15} /></button>
+                  <button type="button" onClick={() => removeDeckPlugin(activeInputDeck, key)} aria-label={`Remove ${plugin.name}`}><Trash2 size={15} /></button>
+                </div>
+                <div className="plugin-parameter-grid">
+                  <label className="plugin-enable-toggle">
+                    <input
+                      type="checkbox"
+                      checked={parameters.enabled !== false}
+                      onChange={(event) => setDeckPluginParameter(activeInputDeck, key, 'enabled', event.target.checked)}
+                    />
+                    <span>Enabled</span>
+                  </label>
+                  <label>
+                    <span>Wet/Dry</span>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      step="1"
+                      value={parameters.wetDry}
+                      onChange={(event) => setDeckPluginParameter(activeInputDeck, key, 'wetDry', Number(event.target.value))}
+                    />
+                    <strong>{parameters.wetDry}%</strong>
+                  </label>
+                  <label>
+                    <span>Input</span>
+                    <input
+                      type="range"
+                      min="-24"
+                      max="24"
+                      step="0.5"
+                      value={parameters.inputGainDb}
+                      onChange={(event) => setDeckPluginParameter(activeInputDeck, key, 'inputGainDb', Number(event.target.value))}
+                    />
+                    <strong>{parameters.inputGainDb > 0 ? '+' : ''}{parameters.inputGainDb.toFixed(1)} dB</strong>
+                  </label>
+                  <label>
+                    <span>Output</span>
+                    <input
+                      type="range"
+                      min="-24"
+                      max="24"
+                      step="0.5"
+                      value={parameters.outputGainDb}
+                      onChange={(event) => setDeckPluginParameter(activeInputDeck, key, 'outputGainDb', Number(event.target.value))}
+                    />
+                    <strong>{parameters.outputGainDb > 0 ? '+' : ''}{parameters.outputGainDb.toFixed(1)} dB</strong>
+                  </label>
+                  <label className="plugin-preset-name">
+                    <span>Preset</span>
+                    <input
+                      type="text"
+                      value={parameters.presetName}
+                      onChange={(event) => setDeckPluginParameter(activeInputDeck, key, 'presetName', event.target.value)}
+                    />
+                  </label>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        <div className="plugin-catalog-controls">
+          <label>
+            <span>Show</span>
+            <select value={pluginFilter} onChange={(event) => setPluginFilter(event.target.value)}>
+              <option value="all">All</option>
+              <option value="active">Active</option>
+              <option value="built-in">Built-in</option>
+              <option value="vst3">VST3</option>
+              <option value="waves">Waves</option>
+              <option value="blocked">Blocked</option>
+            </select>
+          </label>
+          <label>
+            <span>Sort</span>
+            <select value={pluginSort} onChange={(event) => setPluginSort(event.target.value)}>
+              <option value="status">Status</option>
+              <option value="name">Name</option>
+              <option value="vendor">Vendor</option>
+            </select>
+          </label>
+        </div>
+        <div className="plugin-list">
+          {filteredPlugins.map((plugin) => {
+            const stagedCount = pluginChain.filter((item) => item.id === plugin.id).length;
+            return (
+              <article className={`plugin-item ${stagedCount ? 'active' : ''} ${plugin.executable === false ? 'blocked-plugin' : ''}`} key={plugin.id}>
+                <div className="plugin-item-header">
+                  <span>
+                    <strong>{plugin.name}</strong>
+                    <small>
+                      {plugin.vendor} | {plugin.format || 'Plugin'}
+                      {plugin.architecture ? ` | ${plugin.architecture}` : ''}
+                      {plugin.executable === false ? ' | staged only' : ''}
+                      {stagedCount ? ` | ${stagedCount} staged` : ''}
+                    </small>
+                  </span>
+                  <button type="button" onClick={() => (addDeckPlugin ? addDeckPlugin(activeInputDeck, plugin.id) : toggleDeckPlugin(activeInputDeck, plugin.id))}>
+                    Add
+                  </button>
+                </div>
               </article>
             );
           })}

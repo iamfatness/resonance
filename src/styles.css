@@ -1388,6 +1388,56 @@ button {
   gap: 8px;
 }
 
+.plugin-rack {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.plugin-rack-header,
+.plugin-catalog-controls {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.plugin-rack-header strong {
+  color: var(--teal);
+}
+
+.plugin-empty {
+  padding: 9px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.plugin-catalog-controls {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-bottom: 8px;
+}
+
+.plugin-catalog-controls label {
+  display: grid;
+  gap: 5px;
+}
+
+.plugin-catalog-controls select {
+  width: 100%;
+  height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #151a1c;
+  color: var(--text);
+  padding: 0 8px;
+}
+
 .deck-processing-summary,
 .deck-eq-actions {
   display: grid;
@@ -1470,6 +1520,10 @@ button {
   background: rgba(56, 213, 200, 0.08);
 }
 
+.plugin-item.blocked-plugin {
+  border-color: rgba(243, 180, 71, 0.42);
+}
+
 .plugin-item-header {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 92px;
@@ -1521,6 +1575,19 @@ button {
 .plugin-item button:disabled {
   color: var(--faint);
   cursor: not-allowed;
+}
+
+.plugin-chain-actions {
+  display: flex;
+  gap: 6px;
+  padding-top: 7px;
+}
+
+.plugin-chain-actions button {
+  display: grid;
+  place-items: center;
+  width: 31px;
+  padding: 0;
 }
 
 .plugin-parameter-grid {
