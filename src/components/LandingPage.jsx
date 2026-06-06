@@ -93,6 +93,7 @@ export function LandingPage() {
           <nav>
             <a href="#documentation">Docs</a>
             <a href="https://github.com/iamfatness/resonance">GitHub</a>
+            <a href="https://github.com/iamfatness/resonance/blob/main/docs/known-limitations.md">Limits</a>
             <a className="nav-cta" href="/app">Enter app</a>
           </nav>
         </div>
@@ -199,6 +200,13 @@ export function LandingPage() {
               href="https://github.com/iamfatness/resonance/blob/main/docs/extension-beta.md"
             >
               Tester guide
+              <ArrowRight size={17} />
+            </a>
+            <a
+              className="secondary-link"
+              href="https://github.com/iamfatness/resonance/blob/main/docs/known-limitations.md"
+            >
+              Known limits
               <ArrowRight size={17} />
             </a>
           </div>

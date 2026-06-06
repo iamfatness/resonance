@@ -34,6 +34,7 @@
     "test": "vitest run",
     "smoke:browser": "npm run build && node scripts/browser-smoke.mjs",
     "smoke:browser:preview": "node scripts/browser-smoke.mjs",
+    "smoke:deploy": "node scripts/browser-smoke.mjs --url=https://resonance.iamfatness.us/app",
     "desktop:dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start-electron-dev.ps1",
     "desktop:run": "npm run build && electron .",
     "desktop:package": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-desktop-local.ps1",

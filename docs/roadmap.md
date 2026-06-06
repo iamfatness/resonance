@@ -340,6 +340,12 @@ Acceptance criteria:
 - Missing secrets produce clear errors.
 - Hosted app smoke check passes after deploy.
 
+Progress:
+
+- Added `npm run smoke:deploy` for live hosted smoke checks against `https://resonance.iamfatness.us/app`.
+- Added `docs/release-checklist.md` with local verification, Cloudflare deploy, beta artifact, and manual beta checks.
+- Current repeated deploys have passed through `npm run deploy:worker` and live route checks.
+
 Depends on:
 - Current Worker deploy script.
 
@@ -357,6 +363,11 @@ Acceptance criteria:
 - A developer can build web, desktop, native helper, and extension from docs.
 - A beta tester can install/use the relevant build from docs.
 - Roadmap links remain current.
+
+Progress:
+
+- Added `docs/known-limitations.md` covering YouTube, mobile, desktop driver, plugin host, and Chrome extension constraints.
+- README and the public landing page now link to release and limitation documentation.
 
 Depends on:
 - Current docs.
@@ -377,6 +388,12 @@ Acceptance criteria:
 - Native helper build/run checks are documented or automated.
 - Beta feedback maps to GitHub issues.
 
+Progress:
+
+- Added a beta bug report issue template under `.github/ISSUE_TEMPLATE`.
+- Browser smoke covers search, queue de-duplication, playlist import de-duplication, upload layout, and mobile playlist rendering.
+- Native helper and package commands are listed in the release checklist.
+
 Depends on:
 - Current Vitest and Playwright smoke setup.
 
@@ -395,6 +412,12 @@ Acceptance criteria:
 - Privacy-sensitive behavior is documented.
 - Plugin host failure modes do not crash the app.
 - Google/YouTube auth decisions are tracked before implementation.
+
+Progress:
+
+- Known limitations and extension beta docs document YouTube API key handling, public playlist import, Chrome tab-capture privacy, and plugin sandbox boundaries.
+- Diagnostics export redacts secret-like fields before writing support bundles.
+- Google account login remains intentionally out of scope until an OAuth/privacy plan exists.
 
 Depends on:
 - YouTube API Worker route.

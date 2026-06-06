@@ -106,6 +106,7 @@ Quality checks:
 npm run lint
 npm test
 npm run smoke:browser
+npm run smoke:deploy
 npm run format:check
 ```
 
@@ -113,6 +114,13 @@ Deploy:
 
 ```powershell
 npm run deploy:worker
+```
+
+Release checklist and known limitations:
+
+```text
+docs/release-checklist.md
+docs/known-limitations.md
 ```
 
 ## Project Structure
