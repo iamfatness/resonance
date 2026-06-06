@@ -52,6 +52,20 @@ The local package includes the Electron shell, built web bundle, audio engine, p
 release/Resonance-local/resonance-package.json
 ```
 
+Create an installable Windows beta build:
+
+```powershell
+npm run desktop:installer
+```
+
+The installer is created at:
+
+```text
+release/installer/Resonance-Setup-0.2.0-x64.exe
+```
+
+The installer uses NSIS through `electron-builder`, creates Start Menu and desktop shortcuts, and installs the Electron desktop app plus the native WASAPI meter, Deck A/B audio router, and VST3 bridge helper. The virtual audio driver is not bundled into this installer yet; keep driver installation separate until the driver signing and update path are stable.
+
 ## Current Scope
 
 - Desktop shell opens the app view by default.

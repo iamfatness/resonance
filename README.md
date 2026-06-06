@@ -170,6 +170,18 @@ The packaged app is written to:
 release/Resonance-local/Resonance.exe
 ```
 
+Create an installable Windows beta build:
+
+```powershell
+npm run desktop:installer
+```
+
+The installer is written to:
+
+```text
+release/installer/Resonance-Setup-0.2.0-x64.exe
+```
+
 Desktop notes live in:
 
 ```text

@@ -46,10 +46,11 @@ Resonance is now a functional web app, Electron desktop prototype, Chrome extens
 
 ### Track C: Beta Packaging
 
-1. Add a versioned desktop zip/installer artifact around `release/Resonance-local`.
-2. Include package manifest, helper versions, and diagnostics export instructions.
+1. Build and verify the NSIS installer with `npm run desktop:installer`; the artifact is `release/installer/Resonance-Setup-0.2.0-x64.exe`.
+2. Include package manifest, helper versions, and diagnostics export instructions in release notes.
 3. Add a beta smoke checklist for desktop install, extension install, playlist import, and diagnostics export.
 4. Decide whether GitHub Releases or Cloudflare downloads will host desktop beta packages.
+5. Add code signing before broad Windows distribution to reduce SmartScreen friction.
 
 ### Track D: Product Hardening
 

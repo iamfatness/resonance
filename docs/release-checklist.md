@@ -11,6 +11,7 @@ npm run build
 npm run smoke:browser
 npm run native:audio-router
 npm run desktop:package
+npm run desktop:installer
 npm run package:extension
 ```
 
@@ -40,6 +41,7 @@ Record the Worker version ID printed by Wrangler in `docs/roadmap.md` or the rel
 
 - Desktop package: `release/Resonance-local/Resonance.exe`
 - Desktop package manifest: `release/Resonance-local/resonance-package.json`
+- Windows installer: `release/installer/Resonance-Setup-0.2.0-x64.exe`
 - Extension zip: `public/downloads/resonance-eq-0.1.0.zip`
 - Extension package metadata: `public/downloads/resonance-eq-0.1.0.json`
 

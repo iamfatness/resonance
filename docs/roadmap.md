@@ -178,7 +178,7 @@ Depends on:
 
 ## Phase 3: Desktop App Packaging
 
-### [ ] Desktop: package Resonance for beta users
+### [x] Desktop: package Resonance for beta users
 
 Goal: Provide a repeatable Windows desktop build that includes the Electron app and native helpers.
 
@@ -197,6 +197,8 @@ Progress:
 
 - `npm run desktop:package` now builds and copies both native helper binaries: WASAPI meter and Deck A/B audio router.
 - The local package writes `release/Resonance-local/resonance-package.json` with version, build time, and included components.
+- `npm run desktop:installer` now builds an NSIS Windows installer at `release/installer/Resonance-Setup-0.2.0-x64.exe`.
+- The installer includes the Electron shell, built web app, audio engine, native router helper, WASAPI meter helper, and VST3 bridge helper. The virtual audio driver is intentionally not bundled yet.
 
 Depends on:
 - Native helper build scripts.
