@@ -121,6 +121,7 @@ Release checklist and known limitations:
 ```text
 docs/release-checklist.md
 docs/known-limitations.md
+docs/project-evaluation-and-next-plan.md
 ```
 
 ## Project Structure

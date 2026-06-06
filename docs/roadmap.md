@@ -2,6 +2,8 @@
 
 This file is the project backlog until GitHub issue creation is available from the connector. Each top-level checklist item is sized to become one GitHub issue. Keep implementation PRs linked back to the relevant item.
 
+The current post-roadmap evaluation and next execution plan lives in `docs/project-evaluation-and-next-plan.md`.
+
 ## Tracking Rules
 
 - One issue per top-level roadmap item.
