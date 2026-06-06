@@ -1301,6 +1301,99 @@ button {
   overflow: auto;
 }
 
+.settings-section {
+  display: grid;
+  gap: 10px;
+}
+
+.desktop-settings-details {
+  border: 1px solid rgba(243, 180, 71, 0.34);
+  border-radius: 7px;
+  background: #0d1112;
+}
+
+.desktop-settings-details summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  padding: 0 12px;
+  color: var(--text);
+  list-style: none;
+}
+
+.desktop-settings-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.desktop-settings-details summary span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.desktop-settings-details summary strong,
+.desktop-settings-details summary small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.desktop-settings-details summary strong {
+  color: var(--amber);
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.desktop-settings-details summary small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.desktop-settings-details summary svg {
+  color: var(--amber);
+}
+
+.desktop-settings-details .desktop-engine-panel {
+  margin: 0;
+  border-width: 1px 0 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-left: 0;
+  border-radius: 0 0 7px 7px;
+  background: #101516;
+}
+
+.eq-panel .desktop-engine-panel .engine-grid,
+.eq-panel .desktop-engine-panel .engine-meter-grid,
+.eq-panel .desktop-engine-panel .deck-bus-grid,
+.eq-panel .desktop-engine-panel .engine-diagnostic-list {
+  grid-template-columns: 1fr;
+}
+
+.eq-panel .desktop-engine-panel .engine-actions,
+.eq-panel .desktop-engine-panel .engine-scan,
+.eq-panel .desktop-engine-panel .plugin-host-status {
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.eq-panel .desktop-engine-panel .engine-scan > div,
+.eq-panel .desktop-engine-panel .wav-playback-controls {
+  justify-content: flex-start;
+}
+
+.eq-panel .desktop-engine-panel .wav-render-panel,
+.eq-panel .desktop-engine-panel .wav-render-list > div,
+.eq-panel .desktop-engine-panel .wav-render-list > .wav-playback-row,
+.eq-panel .desktop-engine-panel .wav-playback-seek,
+.eq-panel .desktop-engine-panel .plugin-host-status {
+  grid-template-columns: 1fr;
+}
+
 .panel-heading {
   display: flex;
   align-items: center;

@@ -780,7 +780,7 @@ function PlayerApp() {
           <span>{isIOS ? 'iOS' : effectiveDeckCount === 1 ? 'Mode' : 'Active'}</span>
           <strong>{effectiveDeckCount === 1 ? 'Single Deck' : `Deck ${activeDeck}`}</strong>
         </div>
-        <button className="icon-button" aria-label="Open EQ and plugin settings" onClick={openSettingsPanel} type="button"><Settings size={18} /></button>
+        <button className="icon-button" aria-label="Open settings" onClick={openSettingsPanel} type="button"><Settings size={18} /></button>
       </header>
 
       <SearchResultsPanel
@@ -849,14 +849,6 @@ function PlayerApp() {
         )}
 
         <DirectSourcePanel directUrl={directUrl} setDirectUrl={setDirectUrl} localEq={localEq} />
-
-        <DesktopEnginePanel
-          engine={desktopEngine}
-          latencyProfile={audioLatencyProfile}
-          bufferMs={audioBufferMs}
-          onLatencyProfileChange={setAudioLatencyProfile}
-          onBufferMsChange={setAudioBufferMs}
-        />
 
         <div className={`deck-grid ${isSingleDeck ? 'single-deck' : ''}`}>
           <VideoDeck
@@ -944,6 +936,18 @@ function PlayerApp() {
         manualCurve={manualCurve}
         resetManualCurve={resetManualCurve}
         setManualBand={setManualBand}
+        desktopSettings={desktopEngine.isDesktop ? {
+          status: desktopEngine.state?.status || 'starting',
+          content: (
+            <DesktopEnginePanel
+              engine={desktopEngine}
+              latencyProfile={audioLatencyProfile}
+              bufferMs={audioBufferMs}
+              onLatencyProfileChange={setAudioLatencyProfile}
+              onBufferMsChange={setAudioBufferMs}
+            />
+          ),
+        } : null}
       />
 
       <footer className="transport">

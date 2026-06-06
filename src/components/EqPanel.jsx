@@ -70,6 +70,7 @@ export function EqPanel({
   manualCurve,
   resetManualCurve,
   setManualBand,
+  desktopSettings,
 }) {
   const [pluginFilter, setPluginFilter] = useState('all');
   const [pluginSort, setPluginSort] = useState('status');
@@ -129,6 +130,21 @@ export function EqPanel({
           <span>EQ {appEqBypassed ? 'Bypassed' : eqMode}</span>
         </div>
       </section>
+
+      {desktopSettings && (
+        <section className="settings-section">
+          <details className="desktop-settings-details">
+            <summary>
+              <span>
+                <strong>Desktop Audio Engine</strong>
+                <small>{desktopSettings.status || 'Settings and diagnostics'}</small>
+              </span>
+              <SlidersHorizontal size={16} />
+            </summary>
+            {desktopSettings.content}
+          </details>
+        </section>
+      )}
 
       <section>
         <div className="panel-heading">
