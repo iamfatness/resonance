@@ -290,6 +290,11 @@ Acceptance criteria:
 - Extension version matches package output.
 - Known limitations are explicit.
 
+Progress:
+
+- `npm run package:extension` now reads `extension/manifest.json` for the versioned zip name and writes a package metadata JSON file.
+- Beta docs cover Developer Mode install/update/remove expectations, current limitations, and local-only tab audio processing.
+
 Depends on:
 - Existing extension package script.
 - Hosted download route.
@@ -308,6 +313,11 @@ Acceptance criteria:
 - Submission checklist is complete.
 - Privacy and permission explanations are ready.
 - Any policy blockers are tracked separately.
+
+Progress:
+
+- Extension beta docs now include the requested permissions, tab-capture privacy behavior, and Chrome Web Store trusted-tester submission checklist.
+- Store distribution remains gated until beta users validate tab-capture behavior and listing screenshots are prepared.
 
 Depends on:
 - Stable extension behavior.

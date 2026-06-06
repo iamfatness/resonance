@@ -38,3 +38,15 @@ Chrome suppresses normal tab audio after capture starts, so the offscreen docume
 - This processes the active captured tab, not system-wide audio.
 - Chrome may show a tab-capture indicator while Resonance EQ is active.
 - This prototype targets Chrome 116+ Manifest V3 offscreen documents.
+- Captured audio stays local in Chrome and is not uploaded.
+- EQ settings are stored in Chrome extension storage.
+
+## Package
+
+From the repository root:
+
+```powershell
+npm run package:extension
+```
+
+The zip and metadata manifest are written to `public/downloads/` using the version from `manifest.json`.
