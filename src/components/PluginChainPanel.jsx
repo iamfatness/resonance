@@ -61,6 +61,7 @@ export function PluginChainPanel({
           <small>
             {pluginScan.formats || 'VST2, VST3'} | scan {pluginScan.status || 'idle'}
             {pluginScan.bridgeStatus ? ` | bridge ${pluginScan.bridgeStatus}` : ''}
+            {pluginScan.bridgeParameterLoadedCount ? ` | ${pluginScan.bridgeParameterLoadedCount} parameter loaded` : ''}
             {pluginScan.bridgeLoadedCount ? ` | ${pluginScan.bridgeLoadedCount} loaded` : ''}
           </small>
         </div>

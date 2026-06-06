@@ -54,6 +54,7 @@ export function DeckEffectsWindow({ deck = 'A' }) {
     formats: (desktopEngine.state?.pluginHost?.supportedFormats || []).join(', ') || 'VST2, VST3',
     bridgeStatus: desktopEngine.state?.pluginHost?.nativeBridgeClient?.status || desktopEngine.state?.pluginHost?.nativeBridge?.status,
     bridgeLoadedCount: desktopEngine.state?.pluginHost?.nativeBridgeClient?.loadedCount || 0,
+    bridgeParameterLoadedCount: desktopEngine.state?.pluginHost?.nativeBridgeClient?.parameterLoadedCount || 0,
     onRefresh: desktopEngine.refreshPlugins,
   };
 

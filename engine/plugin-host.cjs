@@ -163,11 +163,11 @@ function classifyCandidate(filePath, entryName) {
     executable: false,
     parameters: { ...defaultPluginParameters },
     loadable: false,
-    sandboxLoadable: isVst3 && !isWavesShell,
-    loaderStatus: isVst3 && !isWavesShell ? 'metadata-ready' : 'scan-only',
+    sandboxLoadable: isVst3,
+    loaderStatus: isVst3 ? 'metadata-ready' : 'scan-only',
     status: 'Found',
     note: isWavesShell
-      ? `${format} Waves shell candidate detected; Resonance does not load plugin binaries yet.`
+      ? `${format} Waves shell candidate detected; Resonance will attempt native bridge parameter loading for VST3 shells.`
       : `${format} candidate detected; plugin binary execution remains disabled until the native host is connected.`,
   };
 }

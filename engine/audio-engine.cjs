@@ -818,6 +818,7 @@ function probeNativeVst3Candidates({ publish = false } = {}) {
           status: 'ready',
           probedCount: results.length,
           loadedCount: results.filter((result) => result.nativeLoad.processingEnabled).length,
+          parameterLoadedCount: results.filter((result) => result.nativeLoad.status === 'loaded' && result.nativeLoad.parameterCount > 0).length,
           updatedAt: new Date().toISOString(),
         },
         candidates: (engineState.pluginHost.candidates || []).map((candidate) => {
@@ -828,9 +829,11 @@ function probeNativeVst3Candidates({ publish = false } = {}) {
             executable: nativeLoad.processingEnabled,
             loadable: nativeLoad.processingEnabled,
             loaderStatus: nativeLoad.status,
-            status: nativeLoad.processingEnabled ? 'Loaded' : 'Blocked',
+            status: nativeLoad.processingEnabled ? 'Loaded' : nativeLoad.status === 'loaded' ? 'Parameters loaded' : 'Blocked',
             note: nativeLoad.processingEnabled
               ? 'Native VST3 bridge loaded this plugin and exposed parameters.'
+              : nativeLoad.status === 'loaded'
+                ? 'Native VST3 bridge loaded this plugin and exposed parameters; PCM processing is not connected yet.'
               : nativeLoad.error || 'Native VST3 bridge could not execute this plugin.',
             nativeLoad,
           };

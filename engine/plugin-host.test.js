@@ -162,6 +162,7 @@ describe('plugin host runtime settings', () => {
         vendor: 'Waves',
         format: 'VST3',
         shellType: 'vst3-waves-shell',
+        sandboxLoadable: true,
       }),
     ]));
   });

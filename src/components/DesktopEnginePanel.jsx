@@ -291,6 +291,7 @@ export function DesktopEnginePanel({
             <small>
               Bridge probe {state.pluginHost.nativeBridgeClient.status}
               {Number.isFinite(state.pluginHost.nativeBridgeClient.probedCount) ? ` | ${state.pluginHost.nativeBridgeClient.probedCount} probed` : ''}
+              {Number.isFinite(state.pluginHost.nativeBridgeClient.parameterLoadedCount) ? ` | ${state.pluginHost.nativeBridgeClient.parameterLoadedCount} parameter loaded` : ''}
               {Number.isFinite(state.pluginHost.nativeBridgeClient.loadedCount) ? ` | ${state.pluginHost.nativeBridgeClient.loadedCount} loaded` : ''}
             </small>
           )}

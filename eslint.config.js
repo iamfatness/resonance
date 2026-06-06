@@ -9,6 +9,7 @@ export default [
       'dist/**',
       'release/**',
       'node_modules/**',
+      'third_party/**',
       'driver/**',
       'native/**/build/**',
       'public/downloads/**',
