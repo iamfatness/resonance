@@ -257,6 +257,34 @@ struct RenderStats {
   double masterPeakRight = 0.0;
 };
 
+struct LatencySettings {
+  std::string profile = "balanced";
+  int bufferMs = 80;
+  bool restartRequired = false;
+};
+
+LatencySettings MakeLatencySettings(const std::string& profile, double requestedBufferMs = 0.0) {
+  LatencySettings settings;
+  if (profile == "low") {
+    settings.profile = "low";
+    settings.bufferMs = 30;
+  } else if (profile == "stable") {
+    settings.profile = "stable";
+    settings.bufferMs = 160;
+  } else if (profile == "custom") {
+    settings.profile = "custom";
+    settings.bufferMs = static_cast<int>(ClampDouble(requestedBufferMs, 20.0, 500.0));
+  } else {
+    settings.profile = "balanced";
+    settings.bufferMs = 80;
+  }
+  return settings;
+}
+
+REFERENCE_TIME BufferMsToReferenceTime(int bufferMs) {
+  return static_cast<REFERENCE_TIME>(std::max(20, std::min(500, bufferMs))) * 10000;
+}
+
 struct WavData {
   uint16_t formatTag = 0;
   uint16_t channels = 0;
@@ -606,6 +634,11 @@ struct ServerState {
   ServerDeck deckB;
   std::thread captureAThread;
   std::thread captureBThread;
+  LatencySettings latency;
+  UINT32 actualBufferFrames = 0;
+  double actualBufferMs = 0.0;
+  double defaultPeriodMs = 0.0;
+  double minimumPeriodMs = 0.0;
   bool running = true;
   uint64_t framesWritten = 0;
   uint32_t passes = 0;
@@ -917,6 +950,15 @@ void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, cons
     << "\"bitsPerSample\":" << (mixFormat ? mixFormat->wBitsPerSample : 0) << ","
     << "\"blockAlign\":" << (mixFormat ? mixFormat->nBlockAlign : 0)
     << "},"
+    << "\"latency\":{"
+    << "\"profile\":\"" << state.latency.profile << "\","
+    << "\"requestedBufferMs\":" << state.latency.bufferMs << ","
+    << "\"actualBufferFrames\":" << state.actualBufferFrames << ","
+    << "\"actualBufferMs\":" << state.actualBufferMs << ","
+    << "\"defaultPeriodMs\":" << state.defaultPeriodMs << ","
+    << "\"minimumPeriodMs\":" << state.minimumPeriodMs << ","
+    << "\"restartRequired\":" << (state.latency.restartRequired ? "true" : "false")
+    << "},"
     << "\"render\":{"
     << "\"type\":\"persistent-wav\","
     << "\"framesWritten\":" << state.framesWritten << ","
@@ -958,6 +1000,23 @@ void ApplyServerSettings(ServerDeck& deck, const std::string& line, double sampl
   deck.eq.Configure(sampleRate);
 }
 
+void ApplyServerLatency(ServerState& state, const std::string& line) {
+  if (
+    line.find("\"latencyProfile\"") == std::string::npos &&
+    line.find("\"profile\"") == std::string::npos &&
+    line.find("\"bufferMs\"") == std::string::npos) {
+    return;
+  }
+  const std::string requestedProfile = JsonStringValue(line, "latencyProfile");
+  const std::string profile = requestedProfile.empty() ? JsonStringValue(line, "profile") : requestedProfile;
+  const double bufferMs = JsonNumberValue(line, "bufferMs", 0.0);
+  const LatencySettings requested = MakeLatencySettings(profile, bufferMs);
+  if (requested.profile != state.latency.profile || requested.bufferMs != state.latency.bufferMs) {
+    state.latency = requested;
+    state.latency.restartRequired = true;
+  }
+}
+
 void RunServerCommand(ServerState& state, const std::string& line, double sampleRate) {
   const std::string type = JsonStringValue(line, "type");
   const std::string deckId = JsonStringValue(line, "deck");
@@ -967,6 +1026,11 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
     state.running = false;
     state.deckA.captureStreaming = false;
     state.deckB.captureStreaming = false;
+    return;
+  }
+
+  if (type == "latency") {
+    ApplyServerLatency(state, line);
     return;
   }
 
@@ -1074,6 +1138,7 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
   }
 
   if (type == "settings") {
+    ApplyServerLatency(state, line);
     ApplyServerSettings(deck, line, sampleRate);
     return;
   }
@@ -1116,8 +1181,9 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
   }
 }
 
-int RunPersistentServer(const std::wstring& outputDeviceId) {
+int RunPersistentServer(const std::wstring& outputDeviceId, LatencySettings latencySettings = MakeLatencySettings("balanced")) {
   ServerState state;
+  state.latency = latencySettings;
   state.deckA.id = 'A';
   state.deckA.processing = MakeDeck("A", 1000.0, 0.12, -12.0, 0.0, 0.0, 0.0);
   state.deckB.id = 'B';
@@ -1143,7 +1209,7 @@ int RunPersistentServer(const std::wstring& outputDeviceId) {
     return 4;
   }
 
-  const REFERENCE_TIME requestedDuration = 1000000;
+  const REFERENCE_TIME requestedDuration = BufferMsToReferenceTime(state.latency.bufferMs);
   hr = audioClient->Initialize(AUDCLNT_SHAREMODE_SHARED, 0, requestedDuration, 0, mixFormat, nullptr);
   if (FAILED(hr)) {
     CoTaskMemFree(mixFormat);
@@ -1164,6 +1230,10 @@ int RunPersistentServer(const std::wstring& outputDeviceId) {
   REFERENCE_TIME defaultPeriod = 0;
   REFERENCE_TIME minimumPeriod = 0;
   audioClient->GetDevicePeriod(&defaultPeriod, &minimumPeriod);
+  state.actualBufferFrames = bufferFrames;
+  state.actualBufferMs = bufferFrames * 1000.0 / std::max<DWORD>(1, mixFormat->nSamplesPerSec);
+  state.defaultPeriodMs = defaultPeriod / 10000.0;
+  state.minimumPeriodMs = minimumPeriod / 10000.0;
   const std::wstring deviceName = GetDeviceName(renderDevice.Get());
   std::wstring openedDeviceId;
   LPWSTR rawOpenedDeviceId = nullptr;
@@ -2071,10 +2141,21 @@ int wmain(int argc, wchar_t** argv) {
   }
   if (command == L"--server") {
     std::wstring outputDeviceId;
+    std::string latencyProfile = "balanced";
+    double bufferMs = 0.0;
     for (int i = 2; i < argc - 1; ++i) {
-      if (std::wstring(argv[i]) == L"--output-id") outputDeviceId = argv[i + 1];
+      const std::wstring arg = argv[i];
+      if (arg == L"--output-id") outputDeviceId = argv[i + 1];
+      if (arg == L"--latency-profile") {
+        const std::wstring value = argv[i + 1];
+        if (value == L"low") latencyProfile = "low";
+        else if (value == L"stable") latencyProfile = "stable";
+        else if (value == L"custom") latencyProfile = "custom";
+        else latencyProfile = "balanced";
+      }
+      if (arg == L"--buffer-ms") bufferMs = _wtof(argv[i + 1]);
     }
-    return RunPersistentServer(outputDeviceId);
+    return RunPersistentServer(outputDeviceId, MakeLatencySettings(latencyProfile, bufferMs));
   }
   if (command == L"--render-silence") {
     int durationMs = 500;

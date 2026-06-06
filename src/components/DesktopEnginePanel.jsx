@@ -15,6 +15,8 @@ export function DesktopEnginePanel({ engine }) {
   const diagnostics = state.diagnostics?.checks || [];
   const routes = state.router?.routes || [];
   const playbackDecks = state.playbackDecks || {};
+  const latency = state.router?.latency || {};
+  const nativeLatency = latency.native || state.router?.nativeSnapshot?.latency;
 
   return (
     <section className="desktop-engine-panel">
@@ -67,7 +69,7 @@ export function DesktopEnginePanel({ engine }) {
             const positionMs = deckState.positionMs || 0;
             const isPlaying = deckState.status === 'playing';
             const isCapturing = Boolean(deckState.captureStreaming);
-            const hasDeckSource = Boolean(deckState.path || deckState.sourceType === 'pcm' || deckState.sourceType === 'loopback' || isCapturing);
+            const hasDeckSource = Boolean(deckState.path || deckState.source || deckState.sourceType === 'pcm' || deckState.sourceType === 'loopback' || deckState.sourceType === 'virtual-device' || isCapturing);
             const captureDeviceId = state.inputDeviceId && state.inputDeviceId !== 'mock-input' ? state.inputDeviceId : state.outputDeviceId;
             return (
               <div className="wav-playback-row" key={deck}>
@@ -129,12 +131,21 @@ export function DesktopEnginePanel({ engine }) {
         {['A', 'B'].map((deck) => {
           const deckMeter = meters.decks?.[deck] || { inputPeak: 0, outputPeak: 0, leftPeak: 0, rightPeak: 0, pan: 0, pluginCount: 0, eqActivity: 0 };
           const route = routes.find((candidate) => candidate.deck === deck);
+          const source = state.router?.nativeSnapshot?.sources?.find((candidate) => candidate.deck === deck);
           return (
             <div className="deck-bus-meter" key={deck}>
               <div>
                 <strong>Deck {deck} Bus</strong>
                 <span>Pan {deckMeter.pan === 0 ? 'C' : deckMeter.pan < 0 ? `L${Math.abs(deckMeter.pan)}` : `R${deckMeter.pan}`} | EQ {Math.round((deckMeter.eqActivity || 0) * 100)}% | {deckMeter.pluginCount || 0} plugins</span>
                 {route && <small>{route.status} route: {route.source} to {route.destination}</small>}
+                {source && (
+                  <small>
+                    Source {source.sourceType || 'empty'}
+                    {source.captureStreaming ? ' | capturing' : ''}
+                    {Number.isFinite(source.pcmQueuedFrames) ? ` | queue ${source.pcmQueuedFrames}` : ''}
+                    {source.pcmUnderruns ? ` | underruns ${source.pcmUnderruns}` : ''}
+                  </small>
+                )}
               </div>
               <label>
                 <span>In</span>
@@ -162,6 +173,13 @@ export function DesktopEnginePanel({ engine }) {
           {state.router.nativeSnapshot?.buffer && (
             <small>
               Native buffer: {state.router.nativeSnapshot.buffer.frames} frames, {Math.round(state.router.nativeSnapshot.buffer.durationMs)} ms at {state.router.nativeSnapshot.format?.sampleRate || 'unknown'} Hz
+            </small>
+          )}
+          {(latency.profile || nativeLatency) && (
+            <small>
+              Latency: {latency.profile || nativeLatency?.profile || 'balanced'} {latency.bufferMs || nativeLatency?.requestedBufferMs || 80} ms
+              {nativeLatency?.actualBufferMs ? ` | actual ${Math.round(nativeLatency.actualBufferMs)} ms` : ''}
+              {nativeLatency?.restartRequired ? ' | restart required' : ''}
             </small>
           )}
           {state.router.nativeSnapshot?.render && (

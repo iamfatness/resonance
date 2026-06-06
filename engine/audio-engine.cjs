@@ -41,9 +41,85 @@ const defaultPlaybackDeck = {
   status: 'empty',
   positionMs: 0,
   durationMs: 0,
+  source: null,
+  sourceType: null,
   captureStreaming: false,
   lastStartedAt: null,
 };
+
+function deckSourceTypeForDevice(deviceId, fallbackType = 'loopback') {
+  if (/resonance/i.test(String(deviceId || ''))) return 'virtual-device';
+  return fallbackType;
+}
+
+function normalizeDeckSource({
+  type = 'empty',
+  mode = 'empty',
+  label,
+  deviceId = null,
+  streaming = false,
+  startedAt = null,
+  stoppedAt = null,
+  metadata = {},
+} = {}) {
+  if (type === 'empty') return null;
+  return {
+    type,
+    mode,
+    label: label || type,
+    deviceId,
+    streaming: Boolean(streaming),
+    startedAt,
+    stoppedAt,
+    metadata,
+  };
+}
+
+function withDeckSource(deckState = defaultPlaybackDeck, source) {
+  return {
+    ...deckState,
+    source,
+    sourceType: source?.type || null,
+    captureStreaming: Boolean(source?.streaming),
+  };
+}
+
+function buildDeckSourceState(deckState = defaultPlaybackDeck, sourceOptions = {}, playbackOptions = {}) {
+  const source = normalizeDeckSource(sourceOptions);
+  return withDeckSource({
+    ...deckState,
+    path: playbackOptions.path ?? null,
+    name: playbackOptions.name || source?.label || null,
+    status: playbackOptions.status || (source ? 'loaded' : 'empty'),
+    positionMs: Math.max(0, Number(playbackOptions.positionMs) || 0),
+    durationMs: Math.max(0, Number(playbackOptions.durationMs) || 0),
+    lastStartedAt: playbackOptions.lastStartedAt ?? null,
+    format: playbackOptions.format,
+    error: playbackOptions.error,
+  }, source);
+}
+
+function isStoppedContinuousCapture(deckState) {
+  return deckState?.source?.mode === 'continuous-capture'
+    && deckState.source.streaming === false
+    && deckState.source.stoppedAt
+    && !deckState.lastStartedAt;
+}
+
+function normalizeSnapshotSourceType(incomingType, deckState) {
+  if (deckState?.source?.type === 'virtual-device' && incomingType === 'loopback') {
+    return 'virtual-device';
+  }
+  return incomingType || deckState?.sourceType || 'wav';
+}
+
+function deckSourceLabel(sourceType, { streaming = false, fallback = 'WAV source' } = {}) {
+  if (streaming) return sourceType === 'virtual-device' ? 'Continuous virtual-device capture' : 'Continuous capture';
+  if (sourceType === 'pcm') return 'Pushed PCM';
+  if (sourceType === 'virtual-device') return 'Virtual-device capture';
+  if (sourceType === 'loopback') return 'Loopback capture';
+  return fallback;
+}
 
 function readPersistedState() {
   try {
@@ -580,14 +656,36 @@ function handleNativeRouterSnapshot(snapshot) {
       const deckId = source.deck === 'B' ? 'B' : 'A';
       const deckState = engineState.playbackDecks[deckId];
       if (!deckState) continue;
-      deckState.captureStreaming = Boolean(source.captureStreaming);
       if (source.loaded) {
+        const sourceType = normalizeSnapshotSourceType(source.sourceType, deckState);
+        const streaming = Boolean(source.captureStreaming);
+        if (streaming && isStoppedContinuousCapture(deckState)) continue;
+        const mode = streaming
+          ? 'continuous-capture'
+          : sourceType === 'pcm'
+            ? 'pushed-pcm'
+            : sourceType === 'loopback' || sourceType === 'virtual-device'
+              ? deckState.source?.mode || 'bounded-capture'
+              : 'file';
+        const label = deckSourceLabel(sourceType, { streaming, fallback: deckState.name || 'WAV source' });
+        deckState.source = normalizeDeckSource({
+          ...(deckState.source || {}),
+          type: sourceType,
+          mode,
+          label,
+          streaming,
+          stoppedAt: streaming ? null : deckState.source?.stoppedAt || null,
+          metadata: {
+            ...(deckState.source?.metadata || {}),
+            positionMs: Math.max(0, Number(source.positionMs) || 0),
+            durationMs: Math.max(0, Number(source.durationMs) || 0),
+          },
+        });
+        deckState.sourceType = deckState.source?.type || sourceType;
+        deckState.captureStreaming = streaming;
         deckState.positionMs = Math.max(0, Number(source.positionMs) || 0);
         deckState.durationMs = Math.max(deckState.durationMs || 0, Number(source.durationMs) || 0);
-        deckState.sourceType = source.sourceType || deckState.sourceType || 'wav';
-        if (!deckState.name && source.sourceType === 'pcm') deckState.name = 'Pushed PCM';
-        if (!deckState.name && source.sourceType === 'loopback') deckState.name = 'Loopback capture';
-        if (source.captureStreaming) deckState.name = 'Continuous capture';
+        if (!deckState.name || streaming) deckState.name = label;
         deckState.status = source.playing ? 'playing' : deckState.path ? deckState.status === 'empty' ? 'loaded' : deckState.status : 'loaded';
         deckState.lastStartedAt = source.playing ? new Date().toISOString() : null;
       }
@@ -898,8 +996,12 @@ function loadDeckWav(requestId, { deck, filePath, name } = {}) {
 
   try {
     const info = readWavInfo(filePath);
-    engineState.playbackDecks[deckId] = {
-      ...defaultPlaybackDeck,
+    engineState.playbackDecks[deckId] = buildDeckSourceState(defaultPlaybackDeck, {
+      type: 'wav',
+      mode: 'file',
+      label: name || path.basename(filePath),
+      metadata: info,
+    }, {
       path: filePath,
       name: name || path.basename(filePath),
       status: 'loaded',
@@ -907,7 +1009,7 @@ function loadDeckWav(requestId, { deck, filePath, name } = {}) {
       durationMs: info.durationMs,
       lastStartedAt: null,
       format: info,
-    };
+    });
     if (hasNativeRouter()) {
       syncPlaybackDecksToNativeRouter();
     }
@@ -924,7 +1026,7 @@ function loadDeckWav(requestId, { deck, filePath, name } = {}) {
 function playDeck(requestId, { deck } = {}) {
   const deckId = deck === 'B' ? 'B' : 'A';
   const deckState = engineState.playbackDecks[deckId];
-  if (!deckState.path && !deckState.sourceType) {
+  if (!deckState.path && !deckState.sourceType && !deckState.source) {
     publishState(requestId);
     return;
   }
@@ -946,7 +1048,9 @@ function pauseDeck(requestId, { deck } = {}) {
   const deckId = deck === 'B' ? 'B' : 'A';
   const deckState = engineState.playbackDecks[deckId];
   deckState.positionMs = currentDeckPosition(deckState);
-  deckState.status = deckState.path || deckState.sourceType ? 'paused' : 'empty';
+  deckState.status = deckState.path || deckState.sourceType || deckState.source ? 'paused' : 'empty';
+  if (deckState.source) deckState.source.streaming = false;
+  deckState.captureStreaming = false;
   deckState.lastStartedAt = null;
   if (hasNativeRouter()) {
     ensureNativeRouterStarted();
@@ -959,7 +1063,11 @@ function stopDeck(requestId, { deck } = {}) {
   const deckId = deck === 'B' ? 'B' : 'A';
   const deckState = engineState.playbackDecks[deckId];
   deckState.positionMs = 0;
-  deckState.status = deckState.path ? 'stopped' : 'empty';
+  deckState.status = deckState.path || deckState.sourceType || deckState.source ? 'stopped' : 'empty';
+  if (deckState.source) {
+    deckState.source.streaming = false;
+    deckState.source.stoppedAt = new Date().toISOString();
+  }
   deckState.captureStreaming = false;
   deckState.lastStartedAt = null;
   if (hasNativeRouter()) {
@@ -1064,17 +1172,25 @@ function pushDeckPcm(requestId, payload = {}) {
   ensureNativeRouterStarted();
   audioRouter.pushDeckPcm(payload);
   const deckId = payload.deck === 'B' ? 'B' : 'A';
-  engineState.playbackDecks[deckId] = {
-    ...engineState.playbackDecks[deckId],
-    path: null,
+  const now = new Date().toISOString();
+  engineState.playbackDecks[deckId] = buildDeckSourceState(engineState.playbackDecks[deckId], {
+    type: 'pcm',
+    mode: 'pushed-pcm',
+    label: 'Pushed PCM',
+    startedAt: now,
+    metadata: {
+      sampleRate: Number(payload.sampleRate) || null,
+      channels: Number(payload.channels) || null,
+      frames: Number(payload.frames) || null,
+      bytes: Number(payload.bytes) || null,
+    },
+  }, {
     name: 'Pushed PCM',
-    sourceType: 'pcm',
     status: 'playing',
     positionMs: 0,
     durationMs: 0,
-    captureStreaming: false,
-    lastStartedAt: new Date().toISOString(),
-  };
+    lastStartedAt: now,
+  });
   engineState.router = audioRouter.getState();
   publishState(requestId);
 }
@@ -1092,17 +1208,25 @@ function captureLoopback(requestId, payload = {}) {
     deviceId: payload.deviceId || engineState.outputDeviceId,
     durationMs: payload.durationMs || 500,
   });
-  engineState.playbackDecks[deckId] = {
-    ...engineState.playbackDecks[deckId],
-    path: null,
-    name: 'Loopback capture',
-    sourceType: 'loopback',
+  const deviceId = payload.deviceId || engineState.outputDeviceId;
+  const sourceType = deckSourceTypeForDevice(deviceId);
+  const now = new Date().toISOString();
+  engineState.playbackDecks[deckId] = buildDeckSourceState(engineState.playbackDecks[deckId], {
+    type: sourceType,
+    mode: 'bounded-capture',
+    label: sourceType === 'virtual-device' ? 'Virtual-device capture' : 'Loopback capture',
+    deviceId,
+    startedAt: now,
+    metadata: {
+      requestedDurationMs: Number(payload.durationMs) || 500,
+    },
+  }, {
+    name: sourceType === 'virtual-device' ? 'Virtual-device capture' : 'Loopback capture',
     status: 'playing',
     positionMs: 0,
     durationMs: 0,
-    captureStreaming: false,
-    lastStartedAt: new Date().toISOString(),
-  };
+    lastStartedAt: now,
+  });
   engineState.router = audioRouter.getState();
   publishState(requestId);
 }
@@ -1115,21 +1239,28 @@ function startDeckCapture(requestId, payload = {}) {
 
   ensureNativeRouterStarted();
   const deckId = payload.deck === 'B' ? 'B' : 'A';
+  const deviceId = payload.deviceId || engineState.inputDeviceId || engineState.outputDeviceId;
   audioRouter.startDeckCapture({
     deck: deckId,
-    deviceId: payload.deviceId || engineState.inputDeviceId || engineState.outputDeviceId,
+    deviceId,
   });
-  engineState.playbackDecks[deckId] = {
-    ...engineState.playbackDecks[deckId],
-    path: null,
-    name: 'Continuous capture',
-    sourceType: 'loopback',
+  const sourceType = deckSourceTypeForDevice(deviceId);
+  const now = new Date().toISOString();
+  engineState.playbackDecks[deckId] = buildDeckSourceState(engineState.playbackDecks[deckId], {
+    type: sourceType,
+    mode: 'continuous-capture',
+    label: sourceType === 'virtual-device' ? 'Continuous virtual-device capture' : 'Continuous capture',
+    deviceId,
+    streaming: true,
+    startedAt: now,
+    stoppedAt: null,
+  }, {
+    name: sourceType === 'virtual-device' ? 'Continuous virtual-device capture' : 'Continuous capture',
     status: 'playing',
     positionMs: 0,
     durationMs: 0,
-    captureStreaming: true,
-    lastStartedAt: new Date().toISOString(),
-  };
+    lastStartedAt: now,
+  });
   engineState.router = audioRouter.getState();
   publishState(requestId);
 }
@@ -1142,17 +1273,24 @@ function stopDeckCapture(requestId, payload = {}) {
 
   const deckId = payload.deck === 'B' ? 'B' : 'A';
   audioRouter.stopDeckCapture({ deck: deckId });
-  engineState.playbackDecks[deckId] = {
-    ...engineState.playbackDecks[deckId],
-    status: 'loaded',
-    captureStreaming: false,
+  const deckState = engineState.playbackDecks[deckId];
+  const stoppedAt = new Date().toISOString();
+  engineState.playbackDecks[deckId] = withDeckSource({
+    ...deckState,
+    status: deckState.source || deckState.sourceType ? 'stopped' : 'empty',
+    positionMs: 0,
+    durationMs: 0,
     lastStartedAt: null,
-  };
+  }, normalizeDeckSource({
+    ...(deckState.source || { type: deckState.sourceType || 'loopback', mode: 'continuous-capture', label: deckState.name || 'Continuous capture' }),
+    streaming: false,
+    stoppedAt,
+  }));
   engineState.router = audioRouter.getState();
   publishState(requestId);
 }
 
-process.on('message', (message = {}) => {
+function handleEngineMessage(message = {}) {
   if (message.type === 'GET_STATE') publishState(message.requestId);
   if (message.type === 'REFRESH_DEVICES') refreshDevices(message.requestId);
   if (message.type === 'REFRESH_PLUGINS') refreshPlugins(message.requestId);
@@ -1172,12 +1310,27 @@ process.on('message', (message = {}) => {
   if (message.type === 'PAUSE_DECK') pauseDeck(message.requestId, message.payload);
   if (message.type === 'STOP_DECK') stopDeck(message.requestId, message.payload);
   if (message.type === 'SEEK_DECK') seekDeck(message.requestId, message.payload);
-});
+}
 
-syncEngineMode();
-refreshPlugins();
-refreshDevices();
+if (require.main === module) {
+  process.on('message', handleEngineMessage);
 
-process.on('disconnect', () => {
-  stopMetering();
-});
+  syncEngineMode();
+  refreshPlugins();
+  refreshDevices();
+
+  process.on('disconnect', () => {
+    stopMetering();
+  });
+}
+
+module.exports = {
+  buildDeckSourceState,
+  deckSourceTypeForDevice,
+  defaultPlaybackDeck,
+  handleEngineMessage,
+  isStoppedContinuousCapture,
+  normalizeSnapshotSourceType,
+  normalizeDeckSource,
+  withDeckSource,
+};

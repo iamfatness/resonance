@@ -42,6 +42,7 @@
     "native:audio-router": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-audio-router.ps1",
     "driver:install:wdk-buildtools": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-wdk-buildtools.ps1",
     "driver:preflight": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/driver-preflight.ps1",
+    "driver:capture-readiness": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/driver-capture-readiness.ps1",
     "driver:customize:resonance": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/customize-sysvad-resonance.ps1",
     "driver:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-sysvad.ps1",
     "driver:install:sysvad": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-sysvad.ps1",

@@ -63,8 +63,20 @@ release/Resonance-local/Resonance.exe
 - The desktop panel shows readiness diagnostics for native metering, SysVAD source, WDK toolsets, virtual device status, and plugin host status.
 - The left sidebar switches between functional Now Playing, Library, Playlist, History, Liked Videos, and Radio panels.
 
+## Driver/Capture Readiness
+
+Run the desktop capture readiness check before a driver beta test:
+
+```powershell
+npm run driver:capture-readiness
+```
+
+The command is read-only. It summarizes the built driver package, Secure Boot/signing path, active Resonance endpoints, capture endpoint detection, native router helper availability, and the remaining sustained Deck A/B capture test.
+
+For the manual capture pass, build the native router, open the desktop app, select the Resonance capture endpoint for both decks, and run continuous Deck A/B capture for at least 20 minutes while watching the desktop panel meters, capture status, and underrun/failure diagnostics.
+
 ## Next Desktop Milestones
 
-1. Validate the signed/installable virtual audio driver as the default capture source on the target Windows machine.
+1. Validate the signed/installable virtual audio driver as the default capture source on the target Windows machine using `npm run driver:capture-readiness` plus the sustained Deck A/B capture checklist.
 2. Replace the built-in NativeDSP lane with a sandboxed VST3 host, then validate Waves plugins on that path.
 3. Surface install/test status in the UI.

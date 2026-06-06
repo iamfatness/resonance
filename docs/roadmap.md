@@ -18,14 +18,20 @@ Goal: Make the Resonance virtual audio path reliable enough for beta users on Wi
 Deliverables:
 - Validate SysVAD/Resonance virtual endpoint install on the target Windows setup.
 - Confirm continuous Deck A/B capture from the virtual endpoint.
-- Document driver build, install, rollback, and test requirements.
+- Document driver build, install, rollback, and test requirements. `docs/virtual-audio-device.md` now includes Secure Boot-compatible signing guidance, a capture test checklist, and rollback steps.
 - Add app-side diagnostics for missing driver, wrong input, and capture failures.
+- Add a read-only driver/capture readiness command for beta validation: `npm run driver:capture-readiness`.
 
 Acceptance criteria:
 - Secure Boot compatible install path is documented.
 - Resonance virtual endpoint is auto-detected and selected when available.
 - Continuous capture into Deck A and Deck B works for a sustained test session.
 - Failure states are visible in the desktop panel.
+
+Progress:
+
+- Readiness documentation and the local diagnostic command are in place.
+- Target-machine install and the 20-minute sustained Deck A/B capture pass remain open.
 
 Depends on:
 - Current native router capture path.

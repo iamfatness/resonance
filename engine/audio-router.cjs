@@ -3,9 +3,31 @@ const readline = require('node:readline');
 const { buildNativePluginSettings } = require('./plugin-host.cjs');
 
 const DEFAULT_DECKS = ['A', 'B'];
+const LATENCY_PROFILES = {
+  low: { label: 'Low', bufferMs: 30 },
+  balanced: { label: 'Balanced', bufferMs: 80 },
+  stable: { label: 'Stable', bufferMs: 160 },
+};
+const SAFE_LATENCY_PROFILE_NAMES = Object.keys(LATENCY_PROFILES);
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value) || 0));
+}
+
+function normalizeLatencySettings(settings = {}) {
+  const rawProfile = settings.latencyProfile || settings.audioLatencyProfile || 'balanced';
+  const profile = rawProfile === 'custom'
+    ? 'custom'
+    : Object.prototype.hasOwnProperty.call(LATENCY_PROFILES, rawProfile)
+      ? rawProfile
+      : 'balanced';
+  const customBufferMs = Number(settings.audioBufferMs ?? settings.bufferMs);
+  return {
+    profile,
+    bufferMs: profile === 'custom' && Number.isFinite(customBufferMs)
+      ? clamp(customBufferMs, 20, 500)
+      : (LATENCY_PROFILES[profile]?.bufferMs || LATENCY_PROFILES.balanced.bufferMs),
+  };
 }
 
 function defaultRoute(deck) {
@@ -39,19 +61,31 @@ function eqBandGains(processing = {}) {
   return [0, 1, 2, 3, 4, 5, 6, 7].map((index) => clamp(curve[index], -18, 18));
 }
 
-function buildRouterState({ backend = 'mock', status = 'idle', routes = DEFAULT_DECKS.map(defaultRoute), nativeSnapshot = null } = {}) {
+function buildRouterState({
+  backend = 'mock',
+  status = 'idle',
+  routes = DEFAULT_DECKS.map(defaultRoute),
+  nativeSnapshot = null,
+  latency = normalizeLatencySettings(),
+} = {}) {
   const isNativeSkeleton = backend === 'native-router';
   return {
     backend,
     status,
     routes,
     nativeSnapshot,
+    latency: {
+      ...latency,
+      profiles: SAFE_LATENCY_PROFILE_NAMES,
+      native: nativeSnapshot?.latency || null,
+    },
     capabilities: {
       perDeckCapture: backend === 'native-router',
       perDeckPan: true,
       perDeckEq: true,
       perDeckPlugins: backend === 'native-router',
       nativePcmRouting: backend === 'native-router',
+      latencyProfiles: backend === 'native-router' ? SAFE_LATENCY_PROFILE_NAMES : [],
     },
     note: isNativeSkeleton
       ? 'Native router helper is built. Local WAV, pushed PCM, bounded WASAPI capture, and continuous per-deck capture streams can use the persistent mixer with per-deck EQ, pan, and built-in plugin-lane DSP.'
@@ -125,7 +159,13 @@ class DesktopAudioRouter {
       };
     });
 
-    return buildRouterState({ backend, status, routes, nativeSnapshot: this.nativeSnapshot });
+    return buildRouterState({
+      backend,
+      status,
+      routes,
+      nativeSnapshot: this.nativeSnapshot,
+      latency: normalizeLatencySettings(this.settings),
+    });
   }
 
   startPersistentServer({ onSnapshot, outputDeviceId } = {}) {
@@ -139,6 +179,8 @@ class DesktopAudioRouter {
     if (selectedOutput && selectedOutput !== 'default-output') {
       args.push('--output-id', selectedOutput);
     }
+    const latency = normalizeLatencySettings(this.settings);
+    args.push('--latency-profile', latency.profile, '--buffer-ms', String(latency.bufferMs));
     this.serverOutputDeviceId = selectedOutput;
     const launchedProcess = spawn(this.nativeRouterPath, args, {
       windowsHide: true,
@@ -224,9 +266,12 @@ class DesktopAudioRouter {
     const eq = eqBands(processing);
     const eqGains = eqBandGains(processing);
     const pluginSettings = buildNativePluginSettings(processing.pluginChain);
+    const latency = normalizeLatencySettings(this.settings);
     return {
       type: 'settings',
       deck,
+      latencyProfile: latency.profile,
+      bufferMs: latency.bufferMs,
       gain: clamp((volumes[deck] || 0) / 100 * 0.2, 0, 0.35),
       pan: clamp(processing.pan, -50, 50),
       pluginCount: pluginSettings.pluginCount,
@@ -250,6 +295,12 @@ class DesktopAudioRouter {
 
   updatePersistentSettings() {
     if (!this.serverProcess) return;
+    const latency = normalizeLatencySettings(this.settings);
+    this.sendServerCommand({
+      type: 'latency',
+      latencyProfile: latency.profile,
+      bufferMs: latency.bufferMs,
+    });
     for (const deck of DEFAULT_DECKS) {
       this.sendServerCommand(this.deckCommandSettings(deck));
     }
@@ -653,4 +704,5 @@ class DesktopAudioRouter {
 module.exports = {
   DesktopAudioRouter,
   buildRouterState,
+  normalizeLatencySettings,
 };

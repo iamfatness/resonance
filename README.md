@@ -204,3 +204,15 @@ Build the local SysVAD sample once the WDK Visual Studio driver toolsets are ins
 ```powershell
 npm run driver:build
 ```
+
+Check driver/capture readiness without installing or removing anything:
+
+```powershell
+npm run driver:capture-readiness
+```
+
+Secure Boot beta machines require a Microsoft-signed driver package. The local test-signed SysVAD install path is only for VMs or dedicated test machines with Secure Boot disabled. Full install, capture test, and rollback steps live in:
+
+```text
+docs/virtual-audio-device.md
+```

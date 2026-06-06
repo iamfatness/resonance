@@ -84,6 +84,21 @@ Check the local driver readiness state without installing anything:
 npm run driver:preflight
 ```
 
+Check the driver/capture production readiness state after building or installing the package:
+
+```powershell
+npm run driver:capture-readiness
+```
+
+This check does not install or remove anything. It reports:
+
+- whether the built SysVAD package exists,
+- whether the current machine is on the Secure Boot production-signing path or the VM/test-signing path,
+- whether Windows exposes an active Resonance audio endpoint,
+- whether that endpoint appears usable as a capture input,
+- whether the native Deck A/B audio router helper is built,
+- the remaining manual sustained-capture validation step.
+
 ## Required Local Setup
 
 Install the Windows Driver Kit integration for Visual Studio. The required pieces are:
@@ -124,6 +139,64 @@ Do not turn off Secure Boot on a primary machine that must keep it enabled. For 
 2. Sign the package with the required organization certificate.
 3. Submit the driver package for Microsoft attestation or HLK signing.
 4. Install the Microsoft-signed package on Secure Boot systems.
+
+After any install path, rerun:
+
+```powershell
+npm run driver:capture-readiness
+```
+
+The Secure Boot-compatible path is production or attestation signing. A Secure Boot beta machine should only receive a Microsoft-signed package; the local test-signed SysVAD package is for non-critical VMs or dedicated test machines with Secure Boot disabled.
+
+## Capture Test Checklist
+
+Use this checklist before marking the virtual audio path beta-ready:
+
+1. Build the native router helper:
+
+   ```powershell
+   npm run native:audio-router
+   ```
+
+2. Build and sign the driver package for the target path:
+
+   ```powershell
+   npm run driver:customize:resonance
+   npm run driver:build
+   npm run driver:capture-readiness
+   ```
+
+3. Install only the package type allowed for the target machine:
+   - Secure Boot enabled: install the Microsoft-signed Resonance package.
+   - Secure Boot disabled VM/test machine: use `npm run driver:install:sysvad` from elevated PowerShell after enabling test signing and rebooting.
+
+4. Open the desktop app:
+
+   ```powershell
+   npm run desktop:dev
+   ```
+
+5. In the desktop engine panel, confirm the Resonance capture endpoint is selected, then start continuous capture for Deck A and Deck B.
+6. Run a sustained session for at least 20 minutes. Pass only if both decks show live meters, no stale capture state remains after stop/start, and underruns/capture failures are visible in diagnostics.
+
+## Rollback
+
+For VM/test-machine installs, remove the test package from an elevated PowerShell window:
+
+```powershell
+pnputil /enum-drivers
+pnputil /delete-driver <published-oem-inf> /uninstall /force
+```
+
+Use the `Published Name` that corresponds to the Resonance/SysVAD package. Reboot if Windows keeps the endpoint until the next device refresh.
+
+If test signing was enabled only for driver validation, disable it and reboot:
+
+```powershell
+bcdedit /set testsigning off
+```
+
+For Secure Boot machines, uninstall through Windows Settings or `pnputil` using the Microsoft-signed package's published INF. Keep the signed package and install log with the beta report so endpoint, signing, and rollback issues can be traced.
 
 ## First Milestones
 
