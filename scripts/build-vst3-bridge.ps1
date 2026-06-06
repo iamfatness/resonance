@@ -12,3 +12,6 @@ if (-not (Test-Path -LiteralPath $vcvars)) {
 New-Item -ItemType Directory -Force -Path $buildDir | Out-Null
 
 cmd.exe /c "`"$vcvars`" && cmake -S `"$sourceDir`" -B `"$buildDir`" -A x64 && cmake --build `"$buildDir`" --config Release"
+if ($LASTEXITCODE -ne 0) {
+  throw "VST3 bridge build failed with exit code $LASTEXITCODE."
+}

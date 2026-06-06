@@ -89,6 +89,7 @@ async function handleYouTubePlaylist(req, res) {
 }
 
 export default defineConfig({
+  base: './',
   test: {
     exclude: ['**/node_modules/**', '**/dist/**', '**/.wrangler/**', '**/release/**'],
   },
