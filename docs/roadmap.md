@@ -239,6 +239,12 @@ Acceptance criteria:
 - API errors are user-readable.
 - Queue state survives refresh.
 
+Progress:
+
+- Playlist imports now remove duplicate video IDs before loading the first video and queueing the rest.
+- Import messaging clarifies that public playlist videos are imported and reports skipped duplicates.
+- Browser smoke now starts from clean storage, covers search queue de-duplication, mocked playlist import, queue population, and mobile playlist rendering.
+
 Depends on:
 - Current YouTube Data API Worker route.
 - Browser smoke infrastructure.
@@ -257,6 +263,11 @@ Acceptance criteria:
 - iOS layout has no dead two-deck controls.
 - Playlist playback and queue management remain usable on small screens.
 - Smoke/manual test notes cover iOS limitations.
+
+Progress:
+
+- Browser smoke now validates the mobile playlist strip and deck-count controls at a phone-sized viewport.
+- iOS remains single-deck by default with the two-deck control disabled and an iOS-specific limitation notice.
 
 Depends on:
 - Current iOS deck-count restriction.

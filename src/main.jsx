@@ -195,6 +195,15 @@ async function importYoutubePlaylist(playlistId) {
   };
 }
 
+function uniqueVideos(videos = []) {
+  const seen = new Set();
+  return videos.filter((video) => {
+    if (!video?.id || seen.has(video.id)) return false;
+    seen.add(video.id);
+    return true;
+  });
+}
+
 function isIOSDevice() {
   if (typeof navigator === 'undefined') return false;
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -663,22 +672,26 @@ function PlayerApp() {
 
       try {
         const imported = await importYoutubePlaylist(playlistId);
-        if (!imported.items.length) {
+        const importedItems = uniqueVideos(imported.items);
+        if (!importedItems.length) {
           setYoutubeSearchState({ status: 'empty', message: 'No public videos were found in that playlist.' });
           return;
         }
 
         const nextPlaylist = {
-          name: 'Imported Playlist',
+          name: imported.title || 'Imported Playlist',
           mood: activePreset,
-          tracks: imported.items,
+          tracks: importedItems,
         };
         setImportedPlaylist(nextPlaylist);
         setSelectedPlaylistName(nextPlaylist.name);
         setActiveSidePanel('playlists');
-        setPlaybackQueue(imported.items.slice(1));
-        loadVideo(imported.items[0], safeTargetDeck);
-        setYoutubeSearchState({ status: 'ready', message: `Imported ${imported.items.length} videos. The first video is loaded and the rest are queued.` });
+        setPlaybackQueue(importedItems.slice(1));
+        loadVideo(importedItems[0], safeTargetDeck);
+        setYoutubeSearchState({
+          status: 'ready',
+          message: `Imported ${importedItems.length} public videos${imported.items.length !== importedItems.length ? ` and skipped ${imported.items.length - importedItems.length} duplicate.` : ''} The first video is loaded and the rest are queued.`,
+        });
       } catch (error) {
         setYoutubeSearchState({ status: 'error', message: error.message });
       }

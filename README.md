@@ -74,6 +74,8 @@ Set the production Worker secret before deploying:
 npx wrangler secret put YOUTUBE_API_KEY --config wrangler.worker.jsonc
 ```
 
+Playlist imports use public YouTube playlist data from the same API route. Resonance does not require Google login for this path; duplicate playlist videos are skipped before the queue is created.
+
 The main YouTube field accepts video links, search text, or public playlist links. Playlist links import up to 25 public videos, load the first video into the selected deck, and place the rest in the Up next queue.
 
 The web app saves deck URLs, imported playlists, liked videos, queue, repeat mode, deck count, mood preset, volumes, and EQ settings in local browser storage so refreshes restore the working session.
