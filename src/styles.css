@@ -1752,6 +1752,34 @@ button {
   border-top: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.plugin-preset-actions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.plugin-preset-actions button,
+.plugin-preset-actions select {
+  height: 32px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #181d1f;
+  color: var(--teal);
+  padding: 0 9px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.plugin-preset-actions select {
+  color: var(--text);
+}
+
+.plugin-preset-actions button:disabled {
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
 .plugin-parameter-grid label {
   display: grid;
   grid-template-columns: minmax(52px, 0.62fr) minmax(0, 1fr) minmax(58px, auto);

@@ -4,9 +4,13 @@ import { flatCurve, moodPresets, normalizeDeckProcessing } from '../lib/presets.
 import { readSavedAppState, writeSavedAppState } from '../lib/storage.js';
 import {
   buildPluginCatalog,
+  deletePluginPreset,
   filterPluginCatalog,
   normalizePluginParameters,
   pluginChainKey,
+  readPluginPresets,
+  savePluginPreset,
+  writePluginPresets,
 } from '../lib/plugins.js';
 import { useDesktopEngine } from '../hooks/useDesktopEngine.js';
 import { PluginChainPanel } from './PluginChainPanel.jsx';
@@ -22,6 +26,7 @@ export function DeckEffectsWindow({ deck = 'A' }) {
   const activeDeck = deck === 'B' ? 'B' : 'A';
   const savedAppState = useMemo(() => readSavedAppState() || {}, []);
   const [deckProcessing, setDeckProcessing] = useState(() => normalizeDeckProcessing(savedAppState.deckProcessing));
+  const [pluginPresets, setPluginPresets] = useState(() => readPluginPresets());
   const [pluginFilter, setPluginFilter] = useState('all');
   const [pluginSort, setPluginSort] = useState('status');
   const activeDeckProcessing = deckProcessing[activeDeck];
@@ -150,6 +155,40 @@ export function DeckEffectsWindow({ deck = 'A' }) {
     }));
   }
 
+  function saveDeckPluginPreset(targetDeck, pluginKey) {
+    const plugin = activeDeckProcessing.pluginChain.find((item) => pluginChainKey(item) === pluginKey);
+    if (!plugin) return;
+    setPluginPresets((current) => {
+      const next = savePluginPreset(current, plugin, plugin.parameters?.presetName, plugin.parameters);
+      writePluginPresets(next);
+      return next;
+    });
+  }
+
+  function applyDeckPluginPreset(targetDeck, pluginKey, presetName) {
+    const plugin = activeDeckProcessing.pluginChain.find((item) => pluginChainKey(item) === pluginKey);
+    const preset = pluginPresets[plugin?.id]?.find((candidate) => candidate.name === presetName);
+    if (!preset) return;
+    updateDeck((settings) => ({
+      ...settings,
+      pluginChain: settings.pluginChain.map((item) => (
+        pluginChainKey(item) === pluginKey
+          ? { ...item, parameters: normalizePluginParameters(preset.parameters) }
+          : item
+      )),
+    }));
+  }
+
+  function deleteDeckPluginPreset(targetDeck, pluginKey, presetName) {
+    const plugin = activeDeckProcessing.pluginChain.find((item) => pluginChainKey(item) === pluginKey);
+    if (!plugin) return;
+    setPluginPresets((current) => {
+      const next = deletePluginPreset(current, plugin.id, presetName);
+      writePluginPresets(next);
+      return next;
+    });
+  }
+
   useEffect(() => {
     window.resonanceDesktop?.engine?.refreshPlugins?.();
   }, []);
@@ -187,6 +226,10 @@ export function DeckEffectsWindow({ deck = 'A' }) {
         resetDeckPluginParameters={resetDeckPluginParameters}
         toggleDeckPluginBypass={toggleDeckPluginBypass}
         setDeckPluginParameter={setDeckPluginParameter}
+        pluginPresets={pluginPresets}
+        savePluginPreset={saveDeckPluginPreset}
+        applyPluginPreset={applyDeckPluginPreset}
+        deletePluginPreset={deleteDeckPluginPreset}
       />
     </main>
   );

@@ -18,6 +18,10 @@ export function PluginChainPanel({
   toggleDeckPlugin,
   toggleDeckPluginBypass,
   setDeckPluginParameter,
+  pluginPresets = {},
+  savePluginPreset,
+  applyPluginPreset,
+  deletePluginPreset,
 }) {
   const pluginChain = activeDeckProcessing.pluginChain || [];
   const pluginKey = (plugin) => plugin.instanceId || plugin.id;
@@ -48,6 +52,7 @@ export function PluginChainPanel({
         {pluginChain.length === 0 && <small className="plugin-empty">No effects staged on Deck {activeInputDeck}.</small>}
         {pluginChain.map((plugin, index) => {
           const key = pluginKey(plugin);
+          const savedPresets = Array.isArray(pluginPresets[plugin.id]) ? pluginPresets[plugin.id] : [];
           const parameters = plugin.parameters || {
             enabled: true,
             wetDry: 100,
@@ -63,6 +68,9 @@ export function PluginChainPanel({
                   <small>
                     {plugin.vendor} | {plugin.format || 'Plugin'} | {plugin.executable === false ? 'scan only' : 'active DSP'} | {parameters.presetName}
                   </small>
+                  {plugin.executable === false && (
+                    <small>Host status: staged only. Native VST loading is pending.</small>
+                  )}
                 </span>
                 <button type="button" onClick={() => toggleDeckPluginBypass(activeInputDeck, key)}>
                   {plugin.bypassed ? 'Bypassed' : plugin.executable === false ? 'Staged' : 'Active'}
@@ -128,6 +136,30 @@ export function PluginChainPanel({
                     onChange={(event) => setDeckPluginParameter(activeInputDeck, key, 'presetName', event.target.value)}
                   />
                 </label>
+              </div>
+              <div className="plugin-preset-actions">
+                <button type="button" onClick={() => savePluginPreset?.(activeInputDeck, key)}>
+                  Save preset
+                </button>
+                <select
+                  value=""
+                  onChange={(event) => {
+                    if (event.target.value) applyPluginPreset?.(activeInputDeck, key, event.target.value);
+                  }}
+                  aria-label={`Recall preset for ${plugin.name}`}
+                >
+                  <option value="">Recall preset</option>
+                  {savedPresets.map((preset) => (
+                    <option value={preset.name} key={preset.name}>{preset.name}</option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => deletePluginPreset?.(activeInputDeck, key, parameters.presetName)}
+                  disabled={!savedPresets.some((preset) => preset.name === parameters.presetName)}
+                >
+                  Delete
+                </button>
               </div>
             </article>
           );

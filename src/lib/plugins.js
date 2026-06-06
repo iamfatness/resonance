@@ -25,6 +25,8 @@ export const defaultPluginParameters = {
   presetName: 'Default',
 };
 
+export const PLUGIN_PRESET_STORAGE_KEY = 'resonance.pluginPresets.v1';
+
 export function normalizePluginParameters(parameters = {}) {
   const clamp = (value, min, max, fallback) => {
     const number = Number(value);
@@ -101,4 +103,65 @@ export function filterPluginCatalog(pluginCatalog = [], pluginChain = [], plugin
       if (pluginSort === 'vendor') return `${a.vendor} ${a.name}`.localeCompare(`${b.vendor} ${b.name}`);
       return (statusWeight[pluginStatus(a)] ?? 3) - (statusWeight[pluginStatus(b)] ?? 3) || a.name.localeCompare(b.name);
     });
+}
+
+function getBrowserStorage() {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage;
+}
+
+export function readPluginPresets(storage = getBrowserStorage()) {
+  if (!storage) return {};
+  try {
+    const raw = storage.getItem(PLUGIN_PRESET_STORAGE_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function writePluginPresets(presets, storage = getBrowserStorage()) {
+  if (!storage) return false;
+  try {
+    storage.setItem(PLUGIN_PRESET_STORAGE_KEY, JSON.stringify(presets || {}));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function presetsForPlugin(pluginPresets = {}, pluginId) {
+  return Array.isArray(pluginPresets?.[pluginId]) ? pluginPresets[pluginId] : [];
+}
+
+export function savePluginPreset(pluginPresets = {}, plugin = {}, presetName, parameters = {}) {
+  const name = typeof presetName === 'string' && presetName.trim() ? presetName.trim().slice(0, 80) : 'Default';
+  const pluginId = plugin.id;
+  if (!pluginId) return pluginPresets;
+  const existing = presetsForPlugin(pluginPresets, pluginId).filter((preset) => preset.name !== name);
+  return {
+    ...pluginPresets,
+    [pluginId]: [
+      {
+        name,
+        pluginId,
+        pluginName: plugin.name || 'Unknown plugin',
+        vendor: plugin.vendor || 'Unknown',
+        format: plugin.format || 'Unknown',
+        parameters: normalizePluginParameters({ ...parameters, presetName: name }),
+        savedAt: new Date().toISOString(),
+      },
+      ...existing,
+    ].slice(0, 24),
+  };
+}
+
+export function deletePluginPreset(pluginPresets = {}, pluginId, presetName) {
+  if (!pluginId || !presetName) return pluginPresets;
+  const nextPresets = presetsForPlugin(pluginPresets, pluginId).filter((preset) => preset.name !== presetName);
+  return {
+    ...pluginPresets,
+    [pluginId]: nextPresets,
+  };
 }
