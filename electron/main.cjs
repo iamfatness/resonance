@@ -1,12 +1,118 @@
 const { app, BrowserWindow, Menu, ipcMain, shell, dialog } = require('electron');
 const { fork } = require('node:child_process');
+const fs = require('node:fs');
+const http = require('node:http');
 const path = require('node:path');
 
 const isDev = Boolean(process.env.RESONANCE_DEV_SERVER_URL);
+const desktopApiOrigin = 'https://resonance.iamfatness.us';
 let engineProcess = null;
 let engineState = null;
+let desktopServer = null;
+let desktopServerUrl = null;
 let requestCounter = 0;
 const pendingEngineRequests = new Map();
+
+if (process.env.RESONANCE_USER_DATA_DIR) {
+  app.setPath('userData', process.env.RESONANCE_USER_DATA_DIR);
+}
+
+const mimeTypes = {
+  '.html': 'text/html; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.webp': 'image/webp',
+  '.ico': 'image/x-icon',
+};
+
+function sendText(res, statusCode, body, contentType = 'text/plain; charset=utf-8') {
+  res.writeHead(statusCode, {
+    'content-type': contentType,
+    'cache-control': 'no-store',
+  });
+  res.end(body);
+}
+
+async function proxyYouTubeApi(req, res, requestUrl) {
+  const upstream = new URL(requestUrl.pathname + requestUrl.search, desktopApiOrigin);
+  try {
+    const response = await fetch(upstream);
+    const body = Buffer.from(await response.arrayBuffer());
+    res.writeHead(response.status, {
+      'content-type': response.headers.get('content-type') || 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+    });
+    res.end(body);
+  } catch (error) {
+    sendText(res, 502, JSON.stringify({ error: error?.message || 'YouTube API proxy failed.' }), 'application/json; charset=utf-8');
+  }
+}
+
+function serveDesktopAsset(req, res, requestUrl) {
+  const distRoot = path.join(__dirname, '..', 'dist');
+  const pathname = decodeURIComponent(requestUrl.pathname);
+  const relativePath = pathname === '/' || pathname === '/app'
+    ? 'index.html'
+    : pathname.replace(/^\/+/, '');
+  const assetPath = path.resolve(distRoot, relativePath);
+  const resolvedDistRoot = path.resolve(distRoot);
+
+  if (!assetPath.startsWith(resolvedDistRoot)) {
+    sendText(res, 403, 'Forbidden');
+    return;
+  }
+
+  fs.readFile(assetPath, (error, data) => {
+    if (error) {
+      fs.readFile(path.join(distRoot, 'index.html'), (indexError, indexData) => {
+        if (indexError) {
+          sendText(res, 404, 'Not found');
+          return;
+        }
+        res.writeHead(200, {
+          'content-type': mimeTypes['.html'],
+          'cache-control': 'no-store',
+        });
+        res.end(indexData);
+      });
+      return;
+    }
+
+    res.writeHead(200, {
+      'content-type': mimeTypes[path.extname(assetPath).toLowerCase()] || 'application/octet-stream',
+      'cache-control': pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-store',
+    });
+    res.end(data);
+  });
+}
+
+function startDesktopServer() {
+  if (isDev) return Promise.resolve(process.env.RESONANCE_DEV_SERVER_URL);
+  if (desktopServerUrl) return Promise.resolve(desktopServerUrl);
+
+  desktopServer = http.createServer((req, res) => {
+    const requestUrl = new URL(req.url || '/', 'http://127.0.0.1');
+    if (requestUrl.pathname === '/api/youtube/search' || requestUrl.pathname === '/api/youtube/playlist') {
+      proxyYouTubeApi(req, res, requestUrl);
+      return;
+    }
+    serveDesktopAsset(req, res, requestUrl);
+  });
+
+  return new Promise((resolve, reject) => {
+    desktopServer.once('error', reject);
+    desktopServer.listen(0, '127.0.0.1', () => {
+      const address = desktopServer.address();
+      desktopServerUrl = `http://127.0.0.1:${address.port}`;
+      resolve(desktopServerUrl);
+    });
+  });
+}
 
 function startAudioEngineProcess() {
   if (engineProcess) return;
@@ -108,7 +214,7 @@ function registerIpc() {
   ipcMain.handle('engine:seekDeck', (_event, payload) => sendEngineCommand('SEEK_DECK', { payload }));
 }
 
-function createMainWindow() {
+async function createMainWindow() {
   const window = new BrowserWindow({
     width: 1320,
     height: 860,
@@ -134,9 +240,8 @@ function createMainWindow() {
     window.loadURL(`${process.env.RESONANCE_DEV_SERVER_URL}/app`);
     window.webContents.openDevTools({ mode: 'detach' });
   } else {
-    window.loadFile(path.join(__dirname, '..', 'dist', 'index.html'), {
-      search: 'view=app',
-    });
+    const serverUrl = await startDesktopServer();
+    window.loadURL(`${serverUrl}/app`);
   }
 }
 
@@ -200,5 +305,10 @@ app.on('before-quit', () => {
   if (engineProcess) {
     engineProcess.kill();
     engineProcess = null;
+  }
+  if (desktopServer) {
+    desktopServer.close();
+    desktopServer = null;
+    desktopServerUrl = null;
   }
 });

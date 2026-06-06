@@ -69,6 +69,7 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 ## Current Scope
 
 - Desktop shell opens the app view by default.
+- Production desktop serves the built UI from a local `127.0.0.1` HTTP server instead of `file://`, so YouTube iframes have a stable web origin and `/api/youtube/*` searches can be proxied to the deployed Worker.
 - Node integration is disabled.
 - A preload bridge exposes minimal desktop metadata at `window.resonanceDesktop`.
 - A preload bridge exposes `window.resonanceDesktop.engine` for engine state, settings, devices, and meters.
