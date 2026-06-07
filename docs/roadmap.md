@@ -392,7 +392,7 @@ Progress:
 - Added `npm run smoke:deploy` for live hosted smoke checks against `https://resonance.iamfatness.us/app`.
 - Added `docs/release-checklist.md` with local verification, Cloudflare deploy, beta artifact, and manual beta checks.
 - Current repeated deploys have passed through `npm run deploy:worker` and live route checks.
-- Current Cloudflare Worker version after the desktop routing UI fix deploy: `f8f90730-23d6-414f-8a6b-b819a8bc56cc`.
+- Current Cloudflare Worker version after the settings button fix deploy: `e42e907f-9f5f-4c22-9e71-1915037a602e`.
 
 Depends on:
 - Current Worker deploy script.

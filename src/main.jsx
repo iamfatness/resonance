@@ -197,6 +197,7 @@ function PlayerApp() {
   const [playHistory, setPlayHistory] = useState(Array.isArray(savedAppState?.playHistory) && savedAppState.playHistory.length ? savedAppState.playHistory : [demoVideoA]);
   const [playbackQueue, setPlaybackQueue] = useState(Array.isArray(savedAppState?.playbackQueue) ? savedAppState.playbackQueue : []);
   const [repeatMode, setRepeatMode] = useState(Boolean(savedAppState?.repeatMode));
+  const [desktopSettingsOpen, setDesktopSettingsOpen] = useState(false);
   const [manualCurve, setManualCurve] = useState(Array.isArray(savedAppState?.manualCurve) ? savedAppState.manualCurve : flatCurve);
   const preset = moodPresets[activePreset] || moodPresets.Focus;
   const [instrumentBoosts, setInstrumentBoosts] = useState(savedAppState?.instrumentBoosts || preset.instruments);
@@ -628,7 +629,11 @@ function PlayerApp() {
   }
 
   function openSettingsPanel() {
-    eqPanelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+    if (desktopEngine.isDesktop) setDesktopSettingsOpen(true);
+    window.requestAnimationFrame(() => {
+      eqPanelRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+      eqPanelRef.current?.focus?.({ preventScroll: true });
+    });
   }
 
   function openDeckEffects(deck) {
@@ -764,7 +769,14 @@ function PlayerApp() {
           <span>{isIOS ? 'iOS' : effectiveDeckCount === 1 ? 'Mode' : 'Active'}</span>
           <strong>{effectiveDeckCount === 1 ? 'Single Deck' : `Deck ${activeDeck}`}</strong>
         </div>
-        <button className="icon-button" aria-label="Open settings" onClick={openSettingsPanel} type="button"><Settings size={18} /></button>
+        <button
+          className={`icon-button ${desktopSettingsOpen ? 'active' : ''}`}
+          aria-label="Open settings"
+          onClick={openSettingsPanel}
+          type="button"
+        >
+          <Settings size={18} />
+        </button>
       </header>
 
       <SearchResultsPanel
@@ -936,6 +948,8 @@ function PlayerApp() {
         resetManualCurve={resetManualCurve}
         setManualBand={setManualBand}
         desktopSettings={desktopSettings}
+        desktopSettingsOpen={desktopSettingsOpen}
+        onDesktopSettingsToggle={setDesktopSettingsOpen}
       />
 
       <footer className="transport">

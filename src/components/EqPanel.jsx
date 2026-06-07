@@ -72,6 +72,8 @@ export function EqPanel({
   resetManualCurve,
   setManualBand,
   desktopSettings,
+  desktopSettingsOpen = false,
+  onDesktopSettingsToggle,
   showPluginControls = false,
 }) {
   const [pluginFilter, setPluginFilter] = useState('all');
@@ -105,7 +107,7 @@ export function EqPanel({
   const pluginKey = (plugin) => plugin.instanceId || plugin.id;
 
   return (
-    <aside className="eq-panel" ref={panelRef}>
+    <aside className="eq-panel" ref={panelRef} tabIndex={-1}>
       <section>
         <div className="panel-heading">
           <h2>Mood Presets</h2>
@@ -136,7 +138,11 @@ export function EqPanel({
 
       {desktopSettings && (
         <section className="settings-section">
-          <details className="desktop-settings-details">
+          <details
+            className="desktop-settings-details"
+            open={desktopSettingsOpen}
+            onToggle={(event) => onDesktopSettingsToggle?.(event.currentTarget.open)}
+          >
             <summary>
               <span>
                 <strong>Desktop Audio Engine</strong>
