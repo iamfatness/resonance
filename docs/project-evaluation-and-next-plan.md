@@ -27,19 +27,19 @@ Resonance is now a functional web app, Electron desktop prototype, Chrome extens
 
 ## New Plan
 
-### Track A: Signed Driver Beta
+### Track A: DAW-Style Desktop Audio
 
-1. Prepare driver signing package for Microsoft attestation or production signing.
-2. Install the signed driver on a Secure Boot beta machine.
-3. Run `npm run driver:capture-readiness`.
-4. Run the 20-minute sustained Deck A/B virtual-device capture test.
-5. File issues for any endpoint naming, routing, underrun, or rollback failures.
+1. Treat app-owned Deck A/B audio as the main product path: local WAV, pushed PCM, and capture streams.
+2. Improve processable-source UI so users know whether a deck is routed through native EQ/pan/plugin processing.
+3. Keep WASAPI loopback/capture available as the bridge for external playback where practical.
+4. Keep the virtual driver as optional later system-wide routing rather than the main blocker.
+5. Use driver signing and the 20-minute virtual-device capture test only when the product specifically needs system-wide routing.
 
-### Track B: Real Plugin Host
+### Track B: Real Plugin Host And Low-Latency IPC
 
 1. Add a native VST3 SDK bridge helper for one known test VST3 plugin. The scaffold now lives in `native/vst3-bridge` and builds with `npm run native:vst3-bridge`.
 2. Install/configure the Steinberg VST3 SDK with `RESONANCE_VST3_SDK_DIR`, set `RESONANCE_TEST_VST3_PLUGIN`, then extend `loadPlugin` from metadata-loaded to real instantiate/unload while keeping crashes isolated.
-3. Define PCM block exchange between `native/audio-router` and the plugin helper.
+3. Replace or supplement JSON/base64 PCM block exchange with a binary/shared-memory transport while preserving fallback compatibility.
 4. Route Deck A and Deck B through independent plugin instances.
 5. Add fallback/degraded behavior if processing misses timing budget or the helper crashes.
 6. Validate Waves VST3 shell behavior only after generic VST3 is stable.
@@ -69,4 +69,4 @@ Resonance is now a functional web app, Electron desktop prototype, Chrome extens
 
 ## Recommended Next Item
 
-Start Track B with the native VST3 SDK bridge design and a single known free/test VST3 plugin. That is the highest-impact unblocked engineering path toward the original goal: per-video plugins, Waves support later, and bypassable app EQ.
+Start Track A and Track B together: make the desktop app-owned audio path the default product path, while reducing VST3 IPC overhead so per-deck plugins feel closer to a DAW.

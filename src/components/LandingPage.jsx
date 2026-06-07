@@ -42,17 +42,17 @@ const docsColumns = [
   },
   {
     icon: Settings,
-    title: 'Virtual audio roadmap',
+    title: 'Desktop plugin engine',
     tone: 'teal',
-    body: 'The long-term target is a desktop app with a virtual playback device.',
+    body: 'The desktop app routes app-owned audio through native per-deck processing.',
     items: [
-      'Windows virtual playback device',
-      'System-wide routing',
-      'Per-source EQ and processing',
+      'Local files and captured PCM',
+      'Per-deck EQ and processing',
+      'Native VST3 bridge path',
       'Crossfades and gain staging',
       'Output device selection',
     ],
-    note: 'The driver plan is documented in the repository roadmap.',
+    note: 'A virtual driver remains optional later for system-wide routing.',
   },
   {
     icon: Upload,
@@ -71,8 +71,8 @@ const docsColumns = [
 ];
 
 const architectureSteps = [
-  { icon: Globe, title: 'Chrome / YouTube', text: 'Browser or system audio plays into Resonance.' },
-  { icon: AudioLines, title: 'Virtual Device', text: 'A playback endpoint receives the stream.' },
+  { icon: Globe, title: 'Source', text: 'Files, captured PCM, or browser workflows feed the deck.' },
+  { icon: AudioLines, title: 'Deck Router', text: 'App-owned audio enters the native Deck A/B engine.' },
   {
     icon: SlidersHorizontal,
     title: 'Resonance Engine',
@@ -106,7 +106,7 @@ export function LandingPage() {
             </h2>
             <p>
               Mix two YouTube decks, shape the feel with mood-driven EQ guidance, and follow the
-              roadmap toward real virtual-audio processing.
+              desktop path toward native per-deck audio processing.
             </p>
             <div className="hero-actions">
               <a className="primary-link" href="/app">

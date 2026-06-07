@@ -7,6 +7,8 @@
 #include <Propvarutil.h>
 #include <algorithm>
 #include <array>
+#include <atomic>
+#include <cctype>
 #include <cstdint>
 #include <cstring>
 #include <cmath>
@@ -14,6 +16,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
 #include <mutex>
 #include <sstream>
 #include <string>
@@ -479,6 +482,15 @@ std::wstring Utf8ToWide(const std::string& value) {
   return wide;
 }
 
+std::string WideToUtf8(const std::wstring& value) {
+  if (value.empty()) return "";
+  const int size = WideCharToMultiByte(CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), nullptr, 0, nullptr, nullptr);
+  if (size <= 0) return "";
+  std::string utf8(size, '\0');
+  WideCharToMultiByte(CP_UTF8, 0, value.c_str(), static_cast<int>(value.size()), utf8.data(), size, nullptr, nullptr);
+  return utf8;
+}
+
 std::string JsonStringValue(const std::string& line, const std::string& key) {
   const std::string marker = "\"" + key + "\"";
   size_t pos = line.find(marker);
@@ -567,6 +579,44 @@ std::string EncodeBase64(const std::vector<uint8_t>& bytes) {
   return output;
 }
 
+std::string EnvValue(const char* name) {
+  size_t required = 0;
+  getenv_s(&required, nullptr, 0, name);
+  if (required == 0) return "";
+  std::vector<char> buffer(required);
+  if (getenv_s(&required, buffer.data(), buffer.size(), name) != 0) return "";
+  return std::string(buffer.data());
+}
+
+bool UseVst3PcmFileTransport() {
+  std::string transport = EnvValue("RESONANCE_VST3_PCM_TRANSPORT");
+  std::transform(transport.begin(), transport.end(), transport.begin(), [](unsigned char ch) {
+    return static_cast<char>(std::tolower(ch));
+  });
+  const std::string enabled = EnvValue("RESONANCE_VST3_PCM_FILE_TRANSPORT");
+  return transport == "file" || transport == "files" || enabled == "1" || enabled == "true";
+}
+
+bool WriteBinaryFile(const std::wstring& path, const std::vector<uint8_t>& bytes) {
+  std::ofstream output(fs::path(path), std::ios::binary | std::ios::trunc);
+  if (!output) return false;
+  output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  return static_cast<bool>(output);
+}
+
+std::vector<uint8_t> ReadBinaryFile(const std::wstring& path) {
+  std::ifstream input(fs::path(path), std::ios::binary);
+  if (!input) return {};
+  input.seekg(0, std::ios::end);
+  const std::streamoff size = input.tellg();
+  if (size <= 0) return {};
+  input.seekg(0, std::ios::beg);
+  std::vector<uint8_t> bytes(static_cast<size_t>(size));
+  input.read(reinterpret_cast<char*>(bytes.data()), size);
+  if (!input) return {};
+  return bytes;
+}
+
 double SampleAsDouble(const BYTE* bytes, WORD bitsPerSample, WORD blockAlign, WORD channelCount, UINT32 frame, WORD channel, bool isFloat) {
   const WORD bytesPerSample = std::max<WORD>(1, bitsPerSample / 8);
   const BYTE* sample = bytes + (frame * blockAlign) + (std::min<WORD>(channel, channelCount - 1) * bytesPerSample);
@@ -631,6 +681,33 @@ std::wstring Vst3BridgePath() {
   fs::path bridge = nativeRoot / L"vst3-bridge" / L"build" / L"Release" / L"resonance-vst3-bridge.exe";
   return bridge.wstring();
 }
+
+struct TempPcmFiles {
+  std::wstring inputPath;
+  std::wstring outputPath;
+  std::string inputPathUtf8;
+  std::string outputPathUtf8;
+
+  TempPcmFiles() {
+    static std::atomic<uint64_t> nextId { 1 };
+    wchar_t tempPathBuffer[MAX_PATH] = {};
+    const DWORD length = GetTempPathW(MAX_PATH, tempPathBuffer);
+    const fs::path tempRoot = length > 0 ? fs::path(tempPathBuffer) : fs::temp_directory_path();
+    const uint64_t id = nextId.fetch_add(1);
+    const std::wstring prefix = L"resonance-vst3-" + std::to_wstring(GetCurrentProcessId()) + L"-" + std::to_wstring(id);
+    inputPath = (tempRoot / (prefix + L"-in.pcm16")).wstring();
+    outputPath = (tempRoot / (prefix + L"-out.pcm16")).wstring();
+    inputPathUtf8 = WideToUtf8(inputPath);
+    outputPathUtf8 = WideToUtf8(outputPath);
+  }
+
+  ~TempPcmFiles() {
+    std::error_code error;
+    if (!inputPath.empty()) fs::remove(fs::path(inputPath), error);
+    error.clear();
+    if (!outputPath.empty()) fs::remove(fs::path(outputPath), error);
+  }
+};
 
 struct Vst3BridgeProcess {
   PROCESS_INFORMATION processInfo {};
@@ -891,6 +968,18 @@ bool ProcessDeckVst3Block(ServerDeck& deck, std::vector<std::array<double, 2>>& 
     std::memcpy(bytes.data() + (frame * 4) + sizeof(int16_t), &right, sizeof(int16_t));
   }
 
+  const bool useFileTransport = UseVst3PcmFileTransport();
+  std::unique_ptr<TempPcmFiles> tempPcm;
+  if (useFileTransport) {
+    tempPcm = std::make_unique<TempPcmFiles>();
+    if (tempPcm->inputPathUtf8.empty() || tempPcm->outputPathUtf8.empty() || !WriteBinaryFile(tempPcm->inputPath, bytes)) {
+      deck.vst3Status = "process-failed";
+      deck.error = "VST3 bridge PCM file transport setup failed";
+      deck.vst3Failures += 1;
+      return false;
+    }
+  }
+
   std::ostringstream request;
   request
     << "{\"type\":\"processPcm\",\"requestId\":\"router-pcm\","
@@ -898,8 +987,14 @@ bool ProcessDeckVst3Block(ServerDeck& deck, std::vector<std::array<double, 2>>& 
     << "\"frames\":" << frames.size() << ","
     << "\"channels\":2,"
     << "\"sampleRate\":" << sampleRate << ","
-    << "\"parameterValues\":\"" << EscapeJsonString(deck.vst3ParameterValues) << "\","
-    << "\"pcm16Base64\":\"" << EncodeBase64(bytes) << "\"}";
+    << "\"parameterValues\":\"" << EscapeJsonString(deck.vst3ParameterValues) << "\",";
+  if (tempPcm) {
+    request
+      << "\"pcm16File\":\"" << EscapeJsonString(tempPcm->inputPathUtf8) << "\","
+      << "\"outputPcm16File\":\"" << EscapeJsonString(tempPcm->outputPathUtf8) << "\"}";
+  } else {
+    request << "\"pcm16Base64\":\"" << EncodeBase64(bytes) << "\"}";
+  }
 
   std::string response;
   if (!deck.vst3Bridge.Request(request.str(), response, error)) {
@@ -922,7 +1017,9 @@ bool ProcessDeckVst3Block(ServerDeck& deck, std::vector<std::array<double, 2>>& 
     return false;
   }
 
-  const std::vector<uint8_t> outputBytes = DecodeBase64(JsonStringValue(response, "pcm16Base64"));
+  const std::vector<uint8_t> outputBytes = tempPcm
+    ? ReadBinaryFile(tempPcm->outputPath)
+    : DecodeBase64(JsonStringValue(response, "pcm16Base64"));
   const size_t outputFrames = std::min(frames.size(), outputBytes.size() / 4);
   if (outputFrames == 0) {
     deck.vst3Status = "empty-output";

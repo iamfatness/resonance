@@ -13,7 +13,34 @@ The current post-roadmap evaluation and next execution plan lives in `docs/proje
 
 ## Phase 1: Desktop Audio Foundation
 
-### [ ] Desktop: productionize virtual audio driver and capture routing
+### [ ] Desktop: DAW-style app-owned playback and plugin routing
+
+Goal: Make the desktop app useful without requiring a kernel driver by prioritizing audio that Resonance owns directly.
+
+Deliverables:
+- Treat local WAV/direct PCM/captured PCM as first-class Deck A/B sources.
+- Keep per-deck EQ, pan, gain, and plugin chains active before the master output.
+- Use WASAPI loopback/capture as the practical bridge for external playback when clean per-deck app-owned audio is unavailable.
+- Keep YouTube iframe playback in the web deck path for discovery/playlist workflows, but do not depend on iframe audio for native EQ/VST routing.
+- Make the desktop UI clearly distinguish app-owned processable sources from browser-isolated YouTube iframe playback.
+
+Acceptance criteria:
+- Deck A and Deck B can run processable app-owned sources through per-deck EQ/pan/VST3 routing without a virtual driver.
+- Users can see whether a deck source is processable by the desktop engine.
+- The plugin path remains functional when the virtual driver is absent.
+- Driver diagnostics are available but do not block the main desktop workflow.
+
+Progress:
+
+- Local WAV, pushed PCM, bounded capture, and continuous capture already flow through the persistent native router.
+- Per-deck EQ, pan, NativeDSP fallback, and first staged bridge-capable VST3 routing are active on the persistent router path.
+- The product direction has pivoted away from requiring the virtual driver for the core desktop app. The driver is now an optional later system-wide routing feature.
+
+Depends on:
+- Persistent native audio router.
+- Current VST3 bridge/plugin-chain path.
+
+### [ ] Desktop: optional virtual audio driver and system-wide routing
 
 Goal: Make the Resonance virtual audio path reliable enough for beta users on Windows with Secure Boot enabled.
 
@@ -85,7 +112,7 @@ Acceptance criteria:
 
 Depends on:
 - Persistent native router.
-- Virtual audio capture validation.
+- Desktop app-owned PCM/capture routing.
 
 ## Phase 2: Plugin Host
 
@@ -364,7 +391,7 @@ Progress:
 - Added `npm run smoke:deploy` for live hosted smoke checks against `https://resonance.iamfatness.us/app`.
 - Added `docs/release-checklist.md` with local verification, Cloudflare deploy, beta artifact, and manual beta checks.
 - Current repeated deploys have passed through `npm run deploy:worker` and live route checks.
-- Current Cloudflare Worker version after the desktop driver diagnostics deploy: `b15bdbc6-2fe0-4c48-971b-987b3c99705c`.
+- Current Cloudflare Worker version after the DAW-style desktop pivot deploy: `373f4b6a-6fbe-49c6-ab9d-02b0a3e67146`.
 
 Depends on:
 - Current Worker deploy script.
@@ -446,10 +473,10 @@ Depends on:
 
 ## Current Priority Order
 
-1. Desktop: productionize virtual audio driver and capture routing.
+1. Desktop: DAW-style app-owned playback and plugin routing.
 2. Plugin host: implement sandboxed VST3 loader prototype.
 3. Plugin UI: plugin browser, chain order, and presets.
-4. Desktop: package Resonance for beta users.
+4. Desktop: optional virtual audio driver and system-wide routing.
 5. Web app: harden YouTube search, playlist import, and queue workflows.
 6. Mobile: finish iOS playlist-first mode.
 7. Extension: beta packaging and tester release flow.

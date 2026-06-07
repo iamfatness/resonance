@@ -5,6 +5,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <map>
 #include <memory>
@@ -77,10 +78,19 @@ std::string Utf16ToUtf8(const Steinberg::Vst::TChar* value, int32_t maxChars) {
   return result;
 }
 
+std::wstring Utf8ToWide(const std::string& value) {
+  if (value.empty()) return L"";
+  const int size = MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, nullptr, 0);
+  if (size <= 0) return L"";
+  std::wstring wide(size - 1, L'\0');
+  MultiByteToWideChar(CP_UTF8, 0, value.c_str(), -1, wide.data(), size);
+  return wide;
+}
+
 bool PathExists(const std::string& path) {
   if (path.empty()) return false;
   std::error_code error;
-  return fs::exists(fs::path(path), error);
+  return fs::exists(fs::path(Utf8ToWide(path)), error);
 }
 
 std::string JsonStringValue(const std::string& line, const std::string& key) {
@@ -91,10 +101,26 @@ std::string JsonStringValue(const std::string& line, const std::string& key) {
   if (position == std::string::npos) return "";
   position = line.find('"', position + 1);
   if (position == std::string::npos) return "";
-  const size_t start = position + 1;
-  position = line.find('"', start);
-  if (position == std::string::npos) return "";
-  return line.substr(start, position - start);
+  std::string value;
+  bool escaped = false;
+  for (size_t index = position + 1; index < line.size(); ++index) {
+    const char character = line[index];
+    if (escaped) {
+      if (character == 'n') value.push_back('\n');
+      else if (character == 'r') value.push_back('\r');
+      else if (character == 't') value.push_back('\t');
+      else value.push_back(character);
+      escaped = false;
+      continue;
+    }
+    if (character == '\\') {
+      escaped = true;
+      continue;
+    }
+    if (character == '"') break;
+    value.push_back(character);
+  }
+  return value;
 }
 
 int Base64Value(char ch) {
@@ -138,6 +164,28 @@ std::string EncodeBase64(const std::vector<uint8_t>& bytes) {
     output.push_back(index + 2 < bytes.size() ? kBase64Alphabet[triple & 0x3f] : '=');
   }
   return output;
+}
+
+std::vector<uint8_t> ReadBinaryFile(const std::string& path) {
+  if (path.empty()) return {};
+  std::ifstream input(fs::path(Utf8ToWide(path)), std::ios::binary);
+  if (!input) throw std::runtime_error("PCM input file could not be opened.");
+  input.seekg(0, std::ios::end);
+  const std::streamoff size = input.tellg();
+  if (size <= 0) return {};
+  input.seekg(0, std::ios::beg);
+  std::vector<uint8_t> bytes(static_cast<size_t>(size));
+  input.read(reinterpret_cast<char*>(bytes.data()), size);
+  if (!input) throw std::runtime_error("PCM input file could not be read.");
+  return bytes;
+}
+
+void WriteBinaryFile(const std::string& path, const std::vector<uint8_t>& bytes) {
+  if (path.empty()) throw std::runtime_error("PCM output file path is empty.");
+  std::ofstream output(fs::path(Utf8ToWide(path)), std::ios::binary | std::ios::trunc);
+  if (!output) throw std::runtime_error("PCM output file could not be opened.");
+  output.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
+  if (!output) throw std::runtime_error("PCM output file could not be written.");
 }
 
 double JsonNumberValue(const std::string& line, const std::string& key, double fallback) {
@@ -337,7 +385,7 @@ struct ProcessPcmResult {
   double maxDelta = 0;
   bool changed = false;
   int32_t parameterValueCount = 0;
-  std::string pcm16Base64;
+  std::vector<uint8_t> pcm16Bytes;
 };
 
 double BufferPeak(Steinberg::Vst::AudioBusBuffers& bus, int32_t frames) {
@@ -449,8 +497,7 @@ ProcessToneResult ProcessTone(LoadedPlugin& plugin, int32_t frames, double sampl
   return result;
 }
 
-ProcessPcmResult ProcessPcm(LoadedPlugin& plugin, const std::string& pcm16Base64, int32_t frames, int32_t channels, double sampleRate, const std::string& parameterValues) {
-  const std::vector<uint8_t> bytes = DecodeBase64(pcm16Base64);
+ProcessPcmResult ProcessPcm(LoadedPlugin& plugin, const std::vector<uint8_t>& bytes, int32_t frames, int32_t channels, double sampleRate, const std::string& parameterValues) {
   const int32_t sourceChannels = std::max<int32_t>(1, std::min<int32_t>(2, channels));
   const int32_t availableFrames = static_cast<int32_t>(bytes.size() / (static_cast<size_t>(sourceChannels) * sizeof(int16_t)));
   const int32_t frameCount = std::max<int32_t>(0, std::min<int32_t>(frames, availableFrames));
@@ -581,7 +628,7 @@ ProcessPcmResult ProcessPcm(LoadedPlugin& plugin, const std::string& pcm16Base64
   result.maxDelta = maxDelta;
   result.changed = maxDelta > 0.00001 || std::abs(outputPeak - inputPeak) > 0.00001;
   result.parameterValueCount = static_cast<int32_t>(parsedParameterValues.size());
-  result.pcm16Base64 = EncodeBase64(outputBytes);
+  result.pcm16Bytes = std::move(outputBytes);
   return result;
 }
 
@@ -611,9 +658,10 @@ std::string DescribeJson(const std::string& requestId = "") {
     << "\"metadataLifecycle\":true,"
     << "\"binaryInstantiation\":" << (sdkFound ? "true" : "false") << ","
     << "\"parameterEnumeration\":" << (sdkFound ? "true" : "false") << ","
-    << "\"pcmProcessing\":" << (sdkFound ? "true" : "false")
+    << "\"pcmProcessing\":" << (sdkFound ? "true" : "false") << ","
+    << "\"pcmFileTransport\":" << (sdkFound ? "true" : "false")
     << "},"
-    << "\"note\":\"Native VST3 bridge can instantiate VST3 modules, enumerate parameters, and process an internal 32-bit float test block when the SDK is present; Deck A/B routing is still pending.\""
+    << "\"note\":\"Native VST3 bridge can instantiate VST3 modules, enumerate parameters, process internal test blocks, and process external Deck A/B PCM blocks when the SDK is present.\""
     << "}";
   return output.str();
 }
@@ -744,12 +792,19 @@ void HandleLine(const std::string& line) {
       Respond("{\"type\":\"processPcm\",\"requestId\":\"" + JsonEscape(requestId) + "\",\"status\":\"not-loaded\",\"pluginId\":\"" + JsonEscape(pluginId) + "\",\"error\":\"Plugin is not loaded.\"}");
       return;
     }
-    const std::string pcm16Base64 = JsonStringValue(line, "pcm16Base64");
+    const std::string pcm16File = JsonStringValue(line, "pcm16File");
+    const std::string outputPcm16File = JsonStringValue(line, "outputPcm16File");
     const int32_t frames = JsonIntValue(line, "frames", 512, 1, 8192);
     const int32_t channels = JsonIntValue(line, "channels", 2, 1, 2);
     const double sampleRate = ClampDouble(JsonNumberValue(line, "sampleRate", 48000), 8000, 384000);
     try {
-      const auto result = ProcessPcm(plugin->second, pcm16Base64, frames, channels, sampleRate, JsonStringValue(line, "parameterValues"));
+      const std::vector<uint8_t> inputBytes = !pcm16File.empty()
+        ? ReadBinaryFile(pcm16File)
+        : DecodeBase64(JsonStringValue(line, "pcm16Base64"));
+      const auto result = ProcessPcm(plugin->second, inputBytes, frames, channels, sampleRate, JsonStringValue(line, "parameterValues"));
+      if (!outputPcm16File.empty()) {
+        WriteBinaryFile(outputPcm16File, result.pcm16Bytes);
+      }
       std::ostringstream output;
       output
         << "{"
@@ -768,9 +823,17 @@ void HandleLine(const std::string& line) {
         << "\"changed\":" << (result.changed ? "true" : "false") << ","
         << "\"bridgePcmProcessing\":true,"
         << "\"processingEnabled\":false,"
-        << "\"parameterValueCount\":" << result.parameterValueCount << ","
-        << "\"pcm16Base64\":\"" << result.pcm16Base64 << "\""
-        << "}";
+        << "\"parameterValueCount\":" << result.parameterValueCount << ",";
+      if (!outputPcm16File.empty()) {
+        output
+          << "\"pcmTransport\":\"file\","
+          << "\"pcm16File\":\"" << JsonEscape(outputPcm16File) << "\"";
+      } else {
+        output
+          << "\"pcmTransport\":\"base64\","
+          << "\"pcm16Base64\":\"" << EncodeBase64(result.pcm16Bytes) << "\"";
+      }
+      output << "}";
       Respond(output.str());
     } catch (const std::exception& error) {
       Respond("{\"type\":\"processPcm\",\"requestId\":\"" + JsonEscape(requestId) + "\",\"status\":\"process-failed\",\"pluginId\":\"" + JsonEscape(pluginId) + "\",\"bridgePcmProcessing\":false,\"processingEnabled\":false,\"error\":\"" + JsonEscape(error.what()) + "\"}");

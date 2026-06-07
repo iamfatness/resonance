@@ -233,9 +233,10 @@ describe('plugin host runtime settings', () => {
     const bridgeScript = path.join(root, 'fake-bridge.cjs');
     fs.writeFileSync(bridgeScript, `
       const readline = require('node:readline');
+      const fs = require('node:fs');
       function send(message) { process.stdout.write(JSON.stringify(message) + '\\n'); }
       if (process.argv.includes('--describe')) {
-        send({ type: 'describe', status: 'ready', protocolVersion: 1, capabilities: { binaryInstantiation: true, pcmProcessing: true } });
+        send({ type: 'describe', status: 'ready', protocolVersion: 1, capabilities: { binaryInstantiation: true, pcmProcessing: true, pcmFileTransport: true } });
         process.exit(0);
       }
       readline.createInterface({ input: process.stdin }).on('line', (line) => {
@@ -244,7 +245,14 @@ describe('plugin host runtime settings', () => {
         if (message.type === 'loadPlugin') send({ type: 'loadPlugin', requestId: message.requestId, status: 'loaded', pluginId: message.id, processingEnabled: false, bridgePcmProcessing: true });
         if (message.type === 'enumerateParameters') send({ type: 'enumerateParameters', requestId: message.requestId, status: 'ready', parameters: [{ id: 'mix', name: 'Mix', minimum: 0, maximum: 1, defaultValue: 0.5 }] });
         if (message.type === 'processTone') send({ type: 'processTone', requestId: message.requestId, status: 'processed', pluginId: message.pluginId, frames: message.frames, sampleRate: message.sampleRate, inputPeak: 0.2, outputPeak: 0.18, maxDelta: 0.02, changed: true, bridgePcmProcessing: true, processingEnabled: false });
-        if (message.type === 'processPcm') send({ type: 'processPcm', requestId: message.requestId, status: 'processed', pluginId: message.pluginId, frames: message.frames, channels: message.channels, sampleRate: message.sampleRate, parameterValues: message.parameterValues, inputPeak: 0.2, outputPeak: 0.18, maxDelta: 0.02, changed: true, bridgePcmProcessing: true, processingEnabled: false, pcm16Base64: message.pcm16Base64 });
+        if (message.type === 'processPcm') {
+          if (message.pcm16File && message.outputPcm16File) {
+            fs.copyFileSync(message.pcm16File, message.outputPcm16File);
+            send({ type: 'processPcm', requestId: message.requestId, status: 'processed', pluginId: message.pluginId, frames: message.frames, channels: message.channels, sampleRate: message.sampleRate, parameterValues: message.parameterValues, inputPeak: 0.2, outputPeak: 0.18, maxDelta: 0.02, changed: true, bridgePcmProcessing: true, processingEnabled: false, pcmTransport: 'file', pcm16File: message.outputPcm16File });
+          } else {
+            send({ type: 'processPcm', requestId: message.requestId, status: 'processed', pluginId: message.pluginId, frames: message.frames, channels: message.channels, sampleRate: message.sampleRate, parameterValues: message.parameterValues, inputPeak: 0.2, outputPeak: 0.18, maxDelta: 0.02, changed: true, bridgePcmProcessing: true, processingEnabled: false, pcmTransport: 'base64', pcm16Base64: message.pcm16Base64 });
+          }
+        }
         if (message.type === 'unloadPlugin') send({ type: 'unloadPlugin', requestId: message.requestId, status: 'unloaded', pluginId: message.pluginId });
         if (message.type === 'exit') {
           send({ type: 'exit', requestId: message.requestId, status: 'ok' });
@@ -287,6 +295,21 @@ describe('plugin host runtime settings', () => {
         parameterValues: '17=0.5',
         pcm16Base64: 'AAAAAA==',
       });
+      const inputPcm = path.join(root, 'input.pcm16');
+      const outputPcm = path.join(root, 'output.pcm16');
+      fs.writeFileSync(inputPcm, Buffer.from([1, 0, 2, 0]));
+      await expect(client.processPcm('desktop-plugin:test', {
+        frames: 1,
+        channels: 2,
+        sampleRate: 48000,
+        pcm16File: inputPcm,
+        outputPcm16File: outputPcm,
+      })).resolves.toMatchObject({
+        status: 'processed',
+        pcmTransport: 'file',
+        pcm16File: outputPcm,
+      });
+      expect(fs.readFileSync(outputPcm)).toEqual(Buffer.from([1, 0, 2, 0]));
       await expect(client.unloadPlugin('desktop-plugin:test')).resolves.toMatchObject({
         status: 'unloaded',
       });

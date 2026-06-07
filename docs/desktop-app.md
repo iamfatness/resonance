@@ -6,12 +6,17 @@ The desktop app is an Electron shell around the existing Resonance React UI.
 
 Electron lets Resonance ship a native desktop window while keeping the current UI, playlist workflow, YouTube decks, direct audio EQ controls, and future extension/driver settings in one codebase.
 
-The virtual audio driver and user-mode engine should remain separate from the UI:
+The core desktop path should work like a small DAW: when Resonance owns the audio source, the user-mode engine routes that deck through EQ, pan, plugin processing, and the selected output device. The virtual audio driver remains separate and optional for future system-wide routing:
 
 ```text
 Resonance Desktop UI
   -> user-mode Resonance audio engine
-  -> Resonance virtual playback device
+  -> app-owned Deck A/B PCM, local files, or capture streams
+  -> per-deck EQ / pan / plugin chain
+  -> selected Windows output
+
+Optional later:
+Windows system audio -> Resonance virtual playback device -> Resonance engine
 ```
 
 ## Development
@@ -75,7 +80,7 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 - A preload bridge exposes `window.resonanceDesktop.engine` for engine state, settings, devices, and meters.
 - The React desktop panel UI lives in `src/components/DesktopEnginePanel.jsx`, while the Electron bridge hook lives in `src/hooks/useDesktopEngine.js`.
 - External links open in the system browser.
-- The desktop app can enumerate Windows audio endpoints, select a native output, run the persistent WASAPI router, and route local WAV, pushed PCM, bounded loopback/capture windows, or continuous capture streams into Deck A/B.
+- The desktop app can enumerate Windows audio endpoints, select a native output, run the persistent WASAPI router, and route app-owned local WAV, pushed PCM, bounded loopback/capture windows, or continuous capture streams into Deck A/B.
 - When Windows reports an available Resonance virtual capture endpoint, the engine selects it as the default input for Deck A/B capture.
 - The UI can stage plugin chain settings and bypass the app EQ.
 - Active staged deck plugins drive a built-in NativeDSP lane in the native router, with Deck A and Deck B processed independently before the master bus.
@@ -123,6 +128,7 @@ Latency settings are saved with the app state and sent to the native router thro
 
 ## Next Desktop Milestones
 
-1. Validate the signed/installable virtual audio driver as the default capture source on the target Windows machine using `npm run driver:capture-readiness` plus the sustained Deck A/B capture checklist.
-2. Replace the built-in NativeDSP lane with a sandboxed VST3 host, then validate Waves plugins on that path.
-3. Surface install/test status in the UI.
+1. Improve processable-source UX so desktop users can tell which decks are routed through the native engine.
+2. Lower VST3 block IPC overhead so live per-deck plugin processing is closer to real time.
+3. Validate Waves plugins on the generic VST3 path after the low-latency host path is stable.
+4. Keep the signed virtual driver path as an optional system-wide routing track, not the main product blocker.

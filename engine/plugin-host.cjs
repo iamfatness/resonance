@@ -20,6 +20,7 @@ const pluginHostCapabilities = {
   vst3ParameterEnumeration: true,
   vst3BridgePcmTest: true,
   vst3ExternalPcmBlocks: true,
+  vst3PcmFileTransport: true,
   vst2Discovery: true,
   pluginBinaryExecution: false,
   vst3Discovery: true,
@@ -450,6 +451,7 @@ function describeNativeVst3Bridge(options = {}) {
         binaryInstantiation: false,
         pcmProcessing: false,
         bridgePcmProcessing: false,
+        pcmFileTransport: false,
       },
       note: 'Native VST3 bridge is not built. Run npm run native:vst3-bridge.',
     };
@@ -659,7 +661,7 @@ class NativeVst3BridgeClient {
   }
 
   async processPcm(pluginId, options = {}) {
-    return this.request('processPcm', {
+    const payload = {
       id: pluginId,
       pluginId,
       frames: Number.isFinite(options.frames) ? options.frames : 512,
@@ -667,7 +669,10 @@ class NativeVst3BridgeClient {
       sampleRate: Number.isFinite(options.sampleRate) ? options.sampleRate : 48000,
       parameterValues: options.parameterValues || '',
       pcm16Base64: options.pcm16Base64 || '',
-    }, {
+    };
+    if (options.pcm16File) payload.pcm16File = options.pcm16File;
+    if (options.outputPcm16File) payload.outputPcm16File = options.outputPcm16File;
+    return this.request('processPcm', payload, {
       timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 3000,
     });
   }

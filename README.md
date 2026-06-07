@@ -18,7 +18,7 @@ Resonance is a web-based music player prototype for mixing two YouTube videos an
 
 Browsers isolate YouTube iframe audio, so the web app cannot directly route YouTube playback through Web Audio EQ filters. Mood presets affect YouTube decks through volume mixing and EQ guidance. Real EQ processing is available for direct audio sources.
 
-The long-term direction is a standalone desktop app with a Windows virtual audio endpoint and a user-mode Resonance engine.
+The desktop direction is a DAW-style local app first: app-owned audio sources route through the user-mode Resonance engine for per-deck EQ, pan, and plugins. A Windows virtual audio endpoint remains an optional future path for system-wide routing rather than a requirement for the main desktop app.
 
 ## Chrome Extension Prototype
 
@@ -84,7 +84,7 @@ The Up next queue supports clearing, loading a queued item, play-next placement,
 
 Search results and imported playlists are enriched with YouTube video metadata, including real durations and live/upcoming status when the YouTube Data API returns it.
 
-Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ bypass, and per-deck plugin-chain state. These settings are sent to the Electron audio engine and persisted. Local WAV decks, pushed PCM, bounded capture buffers, and continuous Deck A/B capture streams can now flow through the native persistent router. When Windows reports a Resonance virtual capture endpoint, the desktop engine selects it as the default capture input. Active staged deck plugins feed a built-in NativeDSP lane, and the first staged bridge-capable VST3 plugin per deck can receive live Deck A/B PCM through the native bridge with NativeDSP fallback when loading, processing, or silence checks fail.
+Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ bypass, and per-deck plugin-chain state. These settings are sent to the Electron audio engine and persisted. Local WAV decks, pushed PCM, bounded capture buffers, and continuous Deck A/B capture streams can now flow through the native persistent router without requiring a virtual driver. When Windows reports a Resonance virtual capture endpoint, the desktop engine can select it as a capture input, but the main product path is app-owned audio first. Active staged deck plugins feed a built-in NativeDSP lane, and the first staged bridge-capable VST3 plugin per deck can receive live Deck A/B PCM through the native bridge with NativeDSP fallback when loading, processing, or silence checks fail.
 
 Desktop VST3/Waves scan results are merged into the app plugin catalog when the Electron engine reports them. The desktop engine now probes eligible VST3 candidates through the native bridge process and reports per-plugin bridge status, path validation, parameter-load availability, bridge PCM block-processing availability, parameter-forwarding availability, and exposed parameter metadata when available. The native bridge builds against the Steinberg VST3 SDK submodule, can instantiate VST3 modules for parameter enumeration, can process an internal 32-bit float test block, and can process external interleaved PCM16 blocks through a loaded VST3 processor. The persistent native router now sends each deck's live PCM blocks to the first staged bridge-capable VST3 plugin for that deck, forwards normalized parameter values only when that plugin passes the parameter-forwarding probe, and falls back to the built-in NativeDSP lane if loading, processing, or silent output checks fail.
 
@@ -244,7 +244,7 @@ npm run driver:verify-signing
 
 The signing package is written under `release/driver-signing/` with a zip and JSON manifest.
 
-Secure Boot beta machines require a Microsoft-signed driver package. The local test-signed SysVAD install path is only for VMs or dedicated test machines with Secure Boot disabled. Full install, capture test, and rollback steps live in:
+Secure Boot beta machines require a Microsoft-signed driver package if the optional virtual audio endpoint is used. The local test-signed SysVAD install path is only for VMs or dedicated test machines with Secure Boot disabled. Full install, capture test, and rollback steps live in:
 
 ```text
 docs/virtual-audio-device.md
