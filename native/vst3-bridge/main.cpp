@@ -16,6 +16,7 @@
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "public.sdk/source/vst/hosting/module.h"
+#include "public.sdk/source/vst/hosting/parameterchanges.h"
 #include "public.sdk/source/vst/hosting/plugprovider.h"
 #include "public.sdk/source/vst/hosting/processdata.h"
 
@@ -179,6 +180,41 @@ bool HasAudioProcessor(const LoadedPlugin& plugin) {
   return processor.getInterface() != nullptr;
 }
 
+std::vector<std::pair<Steinberg::Vst::ParamID, double>> ParseParameterValues(const std::string& value) {
+  std::vector<std::pair<Steinberg::Vst::ParamID, double>> result;
+  size_t start = 0;
+  while (start < value.size()) {
+    const size_t end = value.find(';', start);
+    const std::string item = value.substr(start, end == std::string::npos ? std::string::npos : end - start);
+    const size_t separator = item.find('=');
+    if (separator != std::string::npos) {
+      try {
+        const auto id = static_cast<Steinberg::Vst::ParamID>(std::stoull(item.substr(0, separator)));
+        const double normalized = ClampDouble(std::stod(item.substr(separator + 1)), 0.0, 1.0);
+        result.emplace_back(id, normalized);
+      } catch (...) {
+      }
+    }
+    if (end == std::string::npos) break;
+    start = end + 1;
+  }
+  return result;
+}
+
+void ApplyParameterValues(LoadedPlugin& plugin, Steinberg::Vst::ParameterChanges& parameterChanges, const std::string& parameterValues) {
+  const auto parsed = ParseParameterValues(parameterValues);
+  if (parsed.empty()) return;
+  parameterChanges.setMaxParameters(static_cast<Steinberg::int32>(parsed.size()));
+  parameterChanges.clearQueue();
+  for (const auto& [id, value] : parsed) {
+    Steinberg::int32 queueIndex = 0;
+    if (auto* queue = parameterChanges.addParameterData(id, queueIndex)) {
+      Steinberg::int32 pointIndex = 0;
+      queue->addPoint(0, value, pointIndex);
+    }
+  }
+}
+
 std::string ParameterKind(const ParameterInfo& info) {
   if ((info.flags & ParameterInfo::kIsBypass) != 0) return "boolean";
   if ((info.flags & ParameterInfo::kCanAutomate) != 0) return "normalized";
@@ -300,6 +336,7 @@ struct ProcessPcmResult {
   double outputPeak = 0;
   double maxDelta = 0;
   bool changed = false;
+  int32_t parameterValueCount = 0;
   std::string pcm16Base64;
 };
 
@@ -412,7 +449,7 @@ ProcessToneResult ProcessTone(LoadedPlugin& plugin, int32_t frames, double sampl
   return result;
 }
 
-ProcessPcmResult ProcessPcm(LoadedPlugin& plugin, const std::string& pcm16Base64, int32_t frames, int32_t channels, double sampleRate) {
+ProcessPcmResult ProcessPcm(LoadedPlugin& plugin, const std::string& pcm16Base64, int32_t frames, int32_t channels, double sampleRate, const std::string& parameterValues) {
   const std::vector<uint8_t> bytes = DecodeBase64(pcm16Base64);
   const int32_t sourceChannels = std::max<int32_t>(1, std::min<int32_t>(2, channels));
   const int32_t availableFrames = static_cast<int32_t>(bytes.size() / (static_cast<size_t>(sourceChannels) * sizeof(int16_t)));
@@ -448,6 +485,12 @@ ProcessPcmResult ProcessPcm(LoadedPlugin& plugin, const std::string& pcm16Base64
   processData.numSamples = frameCount;
   processData.processMode = Steinberg::Vst::kRealtime;
   processData.symbolicSampleSize = Steinberg::Vst::kSample32;
+  const auto parsedParameterValues = ParseParameterValues(parameterValues);
+  Steinberg::Vst::ParameterChanges parameterChanges;
+  ApplyParameterValues(plugin, parameterChanges, parameterValues);
+  if (parameterChanges.getParameterCount() > 0) {
+    processData.inputParameterChanges = &parameterChanges;
+  }
 
   if (processData.numInputs <= 0 || !processData.inputs || processData.inputs[0].numChannels <= 0) {
     throw std::runtime_error("Loaded plugin does not expose an audio input bus.");
@@ -537,6 +580,7 @@ ProcessPcmResult ProcessPcm(LoadedPlugin& plugin, const std::string& pcm16Base64
   result.outputPeak = outputPeak;
   result.maxDelta = maxDelta;
   result.changed = maxDelta > 0.00001 || std::abs(outputPeak - inputPeak) > 0.00001;
+  result.parameterValueCount = static_cast<int32_t>(parsedParameterValues.size());
   result.pcm16Base64 = EncodeBase64(outputBytes);
   return result;
 }
@@ -705,7 +749,7 @@ void HandleLine(const std::string& line) {
     const int32_t channels = JsonIntValue(line, "channels", 2, 1, 2);
     const double sampleRate = ClampDouble(JsonNumberValue(line, "sampleRate", 48000), 8000, 384000);
     try {
-      const auto result = ProcessPcm(plugin->second, pcm16Base64, frames, channels, sampleRate);
+      const auto result = ProcessPcm(plugin->second, pcm16Base64, frames, channels, sampleRate, JsonStringValue(line, "parameterValues"));
       std::ostringstream output;
       output
         << "{"
@@ -724,6 +768,7 @@ void HandleLine(const std::string& line) {
         << "\"changed\":" << (result.changed ? "true" : "false") << ","
         << "\"bridgePcmProcessing\":true,"
         << "\"processingEnabled\":false,"
+        << "\"parameterValueCount\":" << result.parameterValueCount << ","
         << "\"pcm16Base64\":\"" << result.pcm16Base64 << "\""
         << "}";
       Respond(output.str());

@@ -72,6 +72,19 @@ function selectedVst3Plugin(pluginChain = []) {
   )) || null;
 }
 
+function vst3ParameterValues(plugin) {
+  const parameters = plugin?.parameters?.pluginParameters;
+  if (!parameters || typeof parameters !== 'object') return '';
+  return Object.entries(parameters)
+    .map(([id, value]) => {
+      const number = Number(value);
+      if (!Number.isFinite(number)) return null;
+      return `${id}=${clamp(number, 0, 1)}`;
+    })
+    .filter(Boolean)
+    .join(';');
+}
+
 function buildRouterState({
   backend = 'mock',
   status = 'idle',
@@ -293,6 +306,7 @@ class DesktopAudioRouter {
       pluginWetDry: pluginSettings.pluginWetDry,
       vst3PluginId: vst3Plugin?.id || '',
       vst3PluginPath: vst3Plugin?.path || '',
+      vst3ParameterValues: vst3Plugin?.nativeLoad?.parameterForwarding ? vst3ParameterValues(vst3Plugin) : '',
       eqLowDb: eq.low,
       eqMidDb: eq.mid,
       eqHighDb: eq.high,

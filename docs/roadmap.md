@@ -136,7 +136,8 @@ Progress:
 - Each deck keeps its own VST3 bridge process/plugin instance warm while the selected plugin path remains unchanged.
 - Router snapshots expose `vst3Status`, `vst3BlocksProcessed`, and `vst3Failures`.
 - NativeDSP fallback remains active if a VST3 plugin cannot load, cannot process, or returns silence for non-silent input.
-- VST3 parameter-change forwarding and lower-latency binary/shared-memory IPC remain open.
+- Normalized exposed VST3 parameter values are forwarded into each `processPcm` block.
+- Rich VST3 parameter display/unit conversion and lower-latency binary/shared-memory IPC remain open.
 
 Depends on:
 - VST3 loader prototype.
@@ -360,7 +361,7 @@ Progress:
 - Added `npm run smoke:deploy` for live hosted smoke checks against `https://resonance.iamfatness.us/app`.
 - Added `docs/release-checklist.md` with local verification, Cloudflare deploy, beta artifact, and manual beta checks.
 - Current repeated deploys have passed through `npm run deploy:worker` and live route checks.
-- Current Cloudflare Worker version after the VST3 live deck routing deploy: `4df546ff-d311-4830-84c9-91dd5edf739a`.
+- Current Cloudflare Worker version after the parameter-gated VST3 routing deploy: `2f98de39-2144-4e0d-b887-58e2b3924919`.
 
 Depends on:
 - Current Worker deploy script.

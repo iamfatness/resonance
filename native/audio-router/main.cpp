@@ -815,6 +815,7 @@ struct ServerDeck {
   double pluginWetDry = 100.0;
   std::string vst3PluginId;
   std::string vst3PluginPath;
+  std::string vst3ParameterValues;
   std::string vst3Status = "disabled";
   uint64_t vst3BlocksProcessed = 0;
   uint32_t vst3Failures = 0;
@@ -897,6 +898,7 @@ bool ProcessDeckVst3Block(ServerDeck& deck, std::vector<std::array<double, 2>>& 
     << "\"frames\":" << frames.size() << ","
     << "\"channels\":2,"
     << "\"sampleRate\":" << sampleRate << ","
+    << "\"parameterValues\":\"" << EscapeJsonString(deck.vst3ParameterValues) << "\","
     << "\"pcm16Base64\":\"" << EncodeBase64(bytes) << "\"}";
 
   std::string response;
@@ -1195,6 +1197,7 @@ void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, cons
       << "\"pluginWetDry\":" << deck.pluginWetDry << ","
       << "\"vst3Status\":\"" << EscapeJsonString(deck.vst3Status) << "\","
       << "\"vst3PluginPath\":\"" << EscapeJsonString(deck.vst3PluginPath) << "\","
+      << "\"vst3ParameterValues\":\"" << EscapeJsonString(deck.vst3ParameterValues) << "\","
       << "\"vst3BlocksProcessed\":" << deck.vst3BlocksProcessed << ","
       << "\"vst3Failures\":" << deck.vst3Failures << ","
       << "\"eqBandsDb\":[";
@@ -1275,6 +1278,7 @@ void ApplyServerSettings(ServerDeck& deck, const std::string& line, double sampl
     if (!deck.vst3PluginPath.empty()) deck.vst3Bridge.Stop();
     deck.vst3PluginPath.clear();
     deck.vst3PluginId.clear();
+    deck.vst3ParameterValues.clear();
     deck.vst3Status = "disabled";
   } else if (vst3PluginPath != deck.vst3PluginPath || vst3PluginId != deck.vst3PluginId) {
     deck.vst3Bridge.Stop();
@@ -1282,6 +1286,7 @@ void ApplyServerSettings(ServerDeck& deck, const std::string& line, double sampl
     deck.vst3PluginId = vst3PluginId.empty() ? std::string("deck-") + deck.id + "-vst3" : vst3PluginId;
     deck.vst3Status = "pending";
   }
+  deck.vst3ParameterValues = JsonStringValue(line, "vst3ParameterValues");
   deck.eq.Configure(sampleRate);
 }
 

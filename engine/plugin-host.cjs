@@ -665,6 +665,7 @@ class NativeVst3BridgeClient {
       frames: Number.isFinite(options.frames) ? options.frames : 512,
       channels: Number.isFinite(options.channels) ? options.channels : 2,
       sampleRate: Number.isFinite(options.sampleRate) ? options.sampleRate : 48000,
+      parameterValues: options.parameterValues || '',
       pcm16Base64: options.pcm16Base64 || '',
     }, {
       timeoutMs: Number.isFinite(options.timeoutMs) ? options.timeoutMs : 3000,

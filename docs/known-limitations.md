@@ -24,7 +24,7 @@
 
 - Built-in NativeDSP processing is active for staged deck plugin chains.
 - VST3 metadata can be loaded in the sandbox helper, and the native bridge can process internal test blocks plus external interleaved PCM16 blocks through a loaded VST3 processor.
-- The native router can route continuous live Deck A/B PCM blocks through the first staged bridge-capable VST3 plugin per deck, but parameter automation is not forwarded into the loaded VST3 controller yet.
+- The native router can route continuous live Deck A/B PCM blocks through the first staged bridge-capable VST3 plugin per deck and forwards normalized exposed parameter values only for plugins that pass the parameter-forwarding probe. Rich plugin-specific display/unit conversion is not implemented yet.
 - Waves candidates are detected as VST2/VST3 vendor shells for planning. If a Waves shell returns silence for non-silent input, Resonance falls back to the built-in NativeDSP lane instead of muting the deck.
 - Plugin failures must stay contained in the helper process before third-party execution is enabled.
 

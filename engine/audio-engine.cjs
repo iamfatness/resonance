@@ -753,11 +753,27 @@ function buildProbePcm16Base64({ frames = 512, channels = 2, sampleRate = 48000,
   return buffer.toString('base64');
 }
 
+function buildProbeParameterValues(parameters = []) {
+  const parameter = parameters.find((item) => (
+    item
+    && item.id !== undefined
+    && item.id !== null
+    && `${item.id}` !== ''
+    && item.bypass !== true
+    && item.automatable !== false
+  ));
+  if (!parameter) return '';
+  const defaultValue = Number.isFinite(Number(parameter.defaultValue)) ? Number(parameter.defaultValue) : 0.5;
+  const value = Math.max(0, Math.min(1, defaultValue === 0.5 ? 0.25 : 0.5));
+  return `${parameter.id}=${value}`;
+}
+
 async function probeNativeVst3Candidate(candidate) {
   const loaded = await nativeVst3BridgeClient.loadPlugin(candidate);
   let parameters = [];
   let processProbe = null;
   let externalPcmProbe = null;
+  let parameterPcmProbe = null;
   if (loaded.processingEnabled || loaded.status === 'loaded' || loaded.status === 'bridge-ready') {
     try {
       parameters = await nativeVst3BridgeClient.enumerateParameters(candidate.id);
@@ -789,16 +805,38 @@ async function probeNativeVst3Candidate(candidate) {
           error: nativeBridgeLoadError(error),
         };
       }
+      const parameterValues = buildProbeParameterValues(parameters);
+      if (externalPcmProbe?.bridgePcmProcessing && parameterValues) {
+        try {
+          parameterPcmProbe = await nativeVst3BridgeClient.processPcm(candidate.id, {
+            frames: 512,
+            channels: 2,
+            sampleRate: 48000,
+            parameterValues,
+            pcm16Base64: buildProbePcm16Base64({ frequency: 660 }),
+            timeoutMs: 3000,
+          });
+        } catch (error) {
+          parameterPcmProbe = {
+            status: 'process-failed',
+            parameterForwarding: false,
+            error: nativeBridgeLoadError(error),
+          };
+        }
+      }
     }
   }
   nativeVst3BridgeClient.unloadPlugin(candidate.id).catch(() => {});
   const bridgePcmProcessing = Boolean(externalPcmProbe?.bridgePcmProcessing || processProbe?.bridgePcmProcessing || loaded.bridgePcmProcessing);
+  const parameterForwarding = Boolean(parameterPcmProbe?.bridgePcmProcessing && Number(parameterPcmProbe.parameterValueCount) > 0);
   return {
     status: loaded.status || 'unknown',
     processingEnabled: Boolean(loaded.processingEnabled),
     bridgePcmProcessing,
+    parameterForwarding,
     processProbe,
     externalPcmProbe,
+    parameterPcmProbe,
     parameterCount: parameters.length,
     parameters,
     error: loaded.error || null,
@@ -864,6 +902,7 @@ function probeNativeVst3Candidates({ publish = false } = {}) {
           probedCount: results.length,
           loadedCount: results.filter((result) => result.nativeLoad.processingEnabled).length,
           bridgePcmReadyCount: results.filter((result) => result.nativeLoad.bridgePcmProcessing).length,
+          parameterForwardingCount: results.filter((result) => result.nativeLoad.parameterForwarding).length,
           parameterLoadedCount: results.filter((result) => result.nativeLoad.status === 'loaded' && result.nativeLoad.parameterCount > 0).length,
           updatedAt: new Date().toISOString(),
         },
@@ -880,7 +919,9 @@ function probeNativeVst3Candidates({ publish = false } = {}) {
               ? 'Native VST3 bridge loaded this plugin and exposed parameters.'
               : nativeLoad.status === 'loaded'
                 ? nativeLoad.bridgePcmProcessing
-                  ? 'Native VST3 bridge loaded this plugin, exposed parameters, and processed an external PCM block; live Deck A/B streaming is not connected yet.'
+                  ? nativeLoad.parameterForwarding
+                    ? 'Native VST3 bridge loaded this plugin, processed external PCM blocks, and accepted normalized parameter forwarding.'
+                    : 'Native VST3 bridge loaded this plugin and processed external PCM blocks; normalized parameter forwarding is disabled for this plugin.'
                   : 'Native VST3 bridge loaded this plugin and exposed parameters; Deck A/B PCM processing is not connected yet.'
               : nativeLoad.error || 'Native VST3 bridge could not execute this plugin.',
             nativeLoad,
