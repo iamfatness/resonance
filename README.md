@@ -7,6 +7,7 @@ Resonance is a DJ-style music player prototype for mixing embedded YouTube decks
 - Two YouTube playback decks.
 - Independent Deck A / Deck B volume controls.
 - DJ mixer strip with cue-style deck selection, crossfader, level meters, and per-deck filter controls.
+- Three hot cues per deck for setting and jumping to YouTube playback positions.
 - Active deck loading from pasted YouTube URLs or video IDs.
 - Queue loading into the selected deck.
 - Mood presets that adjust deck mix levels and instrument boost guidance.

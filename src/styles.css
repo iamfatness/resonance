@@ -1210,6 +1210,46 @@ button {
   background: rgba(56, 213, 200, 0.13);
 }
 
+.hot-cue-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.hot-cue {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 5px;
+}
+
+.hot-cue button {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #121719;
+  color: var(--teal);
+  cursor: pointer;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.hot-cue button:first-child {
+  background: rgba(56, 213, 200, 0.08);
+}
+
+.hot-cue button:disabled {
+  cursor: not-allowed;
+  color: var(--faint);
+  opacity: 0.58;
+}
+
+.hot-cue button:not(:disabled):hover {
+  border-color: rgba(56, 213, 200, 0.65);
+  background: rgba(56, 213, 200, 0.13);
+}
+
 .dj-mixer {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(260px, 1.2fr) minmax(0, 1fr);

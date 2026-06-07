@@ -19,6 +19,9 @@ export function VideoDeck({
   onOpenEffects,
   isDesktop = false,
   nativeRouting = null,
+  hotCues = [],
+  onSetHotCue,
+  onJumpHotCue,
 }) {
   const actionLabel = parseYoutubePlaylistId(query)
     ? 'Import'
@@ -122,6 +125,27 @@ export function VideoDeck({
         />
         <strong>{pan === 0 ? 'C' : pan < 0 ? `L${Math.abs(pan)}` : `R${pan}`}</strong>
       </label>
+      <div className="hot-cue-grid" aria-label={`Deck ${label} hot cues`}>
+        {hotCues.map((cue, index) => (
+          <div className="hot-cue" key={`${label}-cue-${index + 1}`}>
+            <button
+              type="button"
+              onClick={() => onJumpHotCue?.(index)}
+              disabled={!Number.isFinite(cue)}
+              aria-label={`Jump Deck ${label} to hot cue ${index + 1}`}
+            >
+              Cue {index + 1}
+            </button>
+            <button
+              type="button"
+              onClick={() => onSetHotCue?.(index)}
+              aria-label={`Set Deck ${label} hot cue ${index + 1}`}
+            >
+              {Number.isFinite(cue) ? `${Math.floor(cue / 60)}:${String(Math.floor(cue % 60)).padStart(2, '0')}` : 'Set'}
+            </button>
+          </div>
+        ))}
+      </div>
       {onOpenEffects && (
         <button className="deck-effects-button" type="button" onClick={onOpenEffects}>
           <SlidersHorizontal size={16} />

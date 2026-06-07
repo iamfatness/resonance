@@ -69,5 +69,13 @@ export function useYouTubePlayer(videoId, volume, startSeconds = 0) {
     },
     play: () => ready && playerRef.current?.playVideo?.(),
     pause: () => ready && playerRef.current?.pauseVideo?.(),
+    seekTo: (seconds) => {
+      if (!ready || !Number.isFinite(seconds)) return;
+      playerRef.current?.seekTo?.(Math.max(0, seconds), true);
+    },
+    getCurrentTime: () => {
+      if (!ready) return 0;
+      return Number(playerRef.current?.getCurrentTime?.()) || 0;
+    },
   };
 }

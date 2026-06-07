@@ -190,6 +190,17 @@ function deckFilterLabel(value) {
   return value < 0 ? `Dark ${Math.abs(value)}` : `Bright ${value}`;
 }
 
+function normalizeHotCues(cues) {
+  const normalizeDeckCues = (deckCues) => Array.from({ length: 3 }, (_item, index) => {
+    const cue = deckCues?.[index];
+    return Number.isFinite(cue) ? Math.max(0, cue) : null;
+  });
+  return {
+    A: normalizeDeckCues(cues?.A),
+    B: normalizeDeckCues(cues?.B),
+  };
+}
+
 function PlayerApp() {
   const isIOS = useMemo(() => isIOSDevice(), []);
   const savedAppState = useMemo(() => readSavedAppState(), []);
@@ -215,6 +226,7 @@ function PlayerApp() {
   const [activePreset, setActivePreset] = useState(savedPresetName);
   const [deckVolumes, setDeckVolumes] = useState(savedDeckVolumes);
   const [crossfader, setCrossfader] = useState(Number.isFinite(savedAppState?.crossfader) ? Math.max(-50, Math.min(50, savedAppState.crossfader)) : 0);
+  const [hotCues, setHotCues] = useState(() => normalizeHotCues(savedAppState?.hotCues));
   const [directUrl, setDirectUrl] = useState(savedAppState?.directUrl || '');
   const [eqMode, setEqMode] = useState(savedAppState?.eqMode === 'Manual' ? 'Manual' : 'Preset');
   const [appEqBypassed, setAppEqBypassed] = useState(Boolean(savedAppState?.appEqBypassed));
@@ -312,6 +324,7 @@ function PlayerApp() {
       activePreset,
       deckVolumes,
       crossfader,
+      hotCues,
       directUrl,
       eqMode,
       appEqBypassed,
@@ -337,6 +350,7 @@ function PlayerApp() {
     deckCount,
     deckVolumes,
     crossfader,
+    hotCues,
     deckProcessing,
     directUrl,
     eqMode,
@@ -473,6 +487,23 @@ function PlayerApp() {
     updateDeckProcessing(deck, (settings) => ({ ...settings, filter: value }));
   }
 
+  function setDeckHotCue(deck, index) {
+    const player = deck === 'A' ? playerA : playerB;
+    const currentTime = player.getCurrentTime();
+    setHotCues((current) => ({
+      ...current,
+      [deck]: current[deck].map((cue, cueIndex) => (cueIndex === index ? currentTime : cue)),
+    }));
+  }
+
+  function jumpDeckHotCue(deck, index) {
+    const cue = hotCues[deck]?.[index];
+    if (!Number.isFinite(cue)) return;
+    const player = deck === 'A' ? playerA : playerB;
+    player.seekTo(cue);
+    player.play();
+  }
+
   function setDeckEqBand(deck, index, value) {
     updateDeckProcessing(deck, (settings) => ({
       ...settings,
@@ -605,6 +636,10 @@ function PlayerApp() {
       setDeckB(nextVideo);
       setQueryB(youtubeUrlForVideo(nextVideo));
     }
+    setHotCues((current) => ({
+      ...current,
+      [safeTargetDeck]: [null, null, null],
+    }));
     setYoutubeResults([]);
     setYoutubeSearchState({ status: 'idle', message: '' });
     setPlayHistory((current) => [nextVideo, ...current.filter((item) => item.id !== nextVideo.id)].slice(0, 12));
@@ -913,6 +948,9 @@ function PlayerApp() {
             onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('A') : null}
             isDesktop={desktopEngine.isDesktop}
             nativeRouting={deckNativeRouting.A}
+            hotCues={hotCues.A}
+            onSetHotCue={(index) => setDeckHotCue('A', index)}
+            onJumpHotCue={(index) => jumpDeckHotCue('A', index)}
           />
           {!isSingleDeck && (
             <VideoDeck
@@ -933,6 +971,9 @@ function PlayerApp() {
               onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('B') : null}
               isDesktop={desktopEngine.isDesktop}
               nativeRouting={deckNativeRouting.B}
+              hotCues={hotCues.B}
+              onSetHotCue={(index) => setDeckHotCue('B', index)}
+              onJumpHotCue={(index) => jumpDeckHotCue('B', index)}
             />
           )}
         </div>
