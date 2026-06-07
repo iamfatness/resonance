@@ -22,6 +22,7 @@ Deliverables:
 - Keep per-deck EQ, pan, gain, and DJ effects active before the master output.
 - Add DJ-facing controls such as crossfader, deck filter, cue-style deck selection, and readable meters.
 - Add deck performance controls such as hot cues and quick jump behavior.
+- Add mode/status UI that makes YouTube Mix Mode versus Native Processing Mode explicit.
 - Use WASAPI loopback/capture as the practical bridge for external playback when clean per-deck app-owned audio is unavailable.
 - Keep YouTube iframe playback in the web deck path for discovery/playlist workflows, but do not depend on iframe audio for native EQ/VST routing.
 - Make the desktop UI clearly distinguish app-owned processable sources from browser-isolated YouTube iframe playback.
@@ -38,6 +39,7 @@ Progress:
 - Per-deck EQ, pan, DJ filter overlay, NativeDSP fallback, built-in DJ effect presets, and first staged bridge-capable VST3 routing are active on the persistent router path.
 - The main deck surface now has a DJ mixer strip with crossfader, cue-style deck selection, simple level meters, and deck filter status.
 - Each YouTube deck now has three hot cues that can be set from current playback and jumped during a session.
+- Deck cards and the main deck surface now show YouTube Mix Mode versus Native Processing Mode so native-only controls are not mistaken for broken YouTube controls.
 - The product direction has pivoted away from requiring the virtual driver for the core desktop app. The driver is now an optional later system-wide routing feature.
 - YouTube deck cards now show browser-isolated/mix-only status, desktop deck cards show compact native source/VST3 status, and desktop bus cards show native-processable source plus VST3 active/fallback/degraded status.
 
@@ -396,7 +398,7 @@ Progress:
 - Added `npm run smoke:deploy` for live hosted smoke checks against `https://resonance.iamfatness.us/app`.
 - Added `docs/release-checklist.md` with local verification, Cloudflare deploy, beta artifact, and manual beta checks.
 - Current repeated deploys have passed through `npm run deploy:worker` and live route checks.
-- Current Cloudflare Worker version after the hot cue deploy: `7e5a492c-02a1-4880-88a6-38a84603b8cb`.
+- Current Cloudflare Worker version after the deck mode clarity deploy: `3cd299ec-9e63-4651-8d86-9a7cbf3cd545`.
 
 Depends on:
 - Current Worker deploy script.

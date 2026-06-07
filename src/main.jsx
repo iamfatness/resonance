@@ -289,6 +289,7 @@ function PlayerApp() {
     A: buildDeckNativeRouting(desktopEngine.state, 'A'),
     B: buildDeckNativeRouting(desktopEngine.state, 'B'),
   }), [desktopEngine.state]);
+  const hasNativeDeckSource = deckNativeRouting.A.sourceTone === 'ready' || deckNativeRouting.B.sourceTone === 'ready';
   const desktopSettings = useMemo(() => {
     if (!desktopEngine.isDesktop) return null;
     return {
@@ -928,6 +929,18 @@ function PlayerApp() {
         )}
 
         <DirectSourcePanel directUrl={directUrl} setDirectUrl={setDirectUrl} localEq={localEq} />
+
+        <section className={`deck-mode-overview ${hasNativeDeckSource ? 'native' : 'youtube'}`}>
+          <div>
+            <strong>{hasNativeDeckSource ? 'Native Processing Available' : 'YouTube Mix Mode Active'}</strong>
+            <p>
+              {hasNativeDeckSource
+                ? 'At least one deck has a processable native/captured source. EQ, filter, effects, and plugin routing can run there.'
+                : 'Embedded YouTube decks support playback, search, playlists, volume, crossfader, and hot cues. EQ, filter, and effects are armed for native/captured audio.'}
+            </p>
+          </div>
+          <span>{desktopEngine.isDesktop ? 'Desktop engine ready path' : 'Web mix path'}</span>
+        </section>
 
         <div className={`deck-grid ${isSingleDeck ? 'single-deck' : ''}`}>
           <VideoDeck

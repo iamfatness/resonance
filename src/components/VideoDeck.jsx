@@ -28,6 +28,11 @@ export function VideoDeck({
     : isYoutubeLoadInput(query)
       ? 'Load'
       : 'Search';
+  const nativeReady = nativeRouting?.sourceTone === 'ready';
+  const deckModeTitle = nativeReady ? 'Native Processing Mode' : 'YouTube Mix Mode';
+  const deckModeText = nativeReady
+    ? 'Native EQ, filter, and effects are live on this deck source.'
+    : 'YouTube volume, crossfader, play, and hot cues are live. Filter, EQ, and effects are armed for native/captured audio.';
 
   return (
     <article className={`deck ${active ? 'active' : ''}`}>
@@ -38,8 +43,12 @@ export function VideoDeck({
         </button>
         <div className="deck-state-stack">
           <span className="deck-state">{player.ready ? 'YouTube ready' : 'Loading'}</span>
-          <span className="route-chip idle">Browser isolated</span>
+          <span className="route-chip idle">YouTube Mix</span>
         </div>
+      </div>
+      <div className={`deck-mode-banner ${nativeReady ? 'native' : 'youtube'}`}>
+        <strong>{deckModeTitle}</strong>
+        <span>{deckModeText}</span>
       </div>
       {isDesktop && nativeRouting && (
         <div className="deck-routing-summary" aria-label={`Deck ${label} native routing status`}>
@@ -67,9 +76,9 @@ export function VideoDeck({
             {video.channel} - YouTube playback - {video.duration}
           </p>
           <small className="deck-route-note">
-            {isDesktop
-              ? 'YouTube iframe audio is mix-only here. Use a local/captured source for native EQ and VST3.'
-              : 'YouTube iframe audio is mix-only; direct audio sources use real EQ.'}
+            {nativeReady
+              ? 'This deck has a native/captured source ready for processing.'
+              : 'Embedded YouTube audio is mix-only until a native/captured source is routed.'}
           </small>
         </div>
         <button
@@ -98,7 +107,7 @@ export function VideoDeck({
       <label className="deck-volume deck-pan">
         <span>
           <SlidersHorizontal size={16} />
-          Filter
+          Native Filter
         </span>
         <input
           type="range"
@@ -110,6 +119,9 @@ export function VideoDeck({
         />
         <strong>{filter === 0 ? 'Off' : filter < 0 ? `Dark ${Math.abs(filter)}` : `Bright ${filter}`}</strong>
       </label>
+      <small className={`deck-control-note ${nativeReady ? 'live' : ''}`}>
+        {nativeReady ? 'Filter is live on the native source.' : 'Filter is armed for native/captured audio.'}
+      </small>
       <label className="deck-volume deck-pan">
         <span>
           <SlidersHorizontal size={16} />
@@ -149,7 +161,7 @@ export function VideoDeck({
       {onOpenEffects && (
         <button className="deck-effects-button" type="button" onClick={onOpenEffects}>
           <SlidersHorizontal size={16} />
-          Deck {label} Effects
+          {nativeReady ? `Deck ${label} Effects` : `Deck ${label} Native Effects`}
         </button>
       )}
     </article>

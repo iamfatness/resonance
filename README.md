@@ -8,6 +8,7 @@ Resonance is a DJ-style music player prototype for mixing embedded YouTube decks
 - Independent Deck A / Deck B volume controls.
 - DJ mixer strip with cue-style deck selection, crossfader, level meters, and per-deck filter controls.
 - Three hot cues per deck for setting and jumping to YouTube playback positions.
+- Deck mode indicators that separate YouTube Mix Mode from Native Processing Mode.
 - Active deck loading from pasted YouTube URLs or video IDs.
 - Queue loading into the selected deck.
 - Mood presets that adjust deck mix levels and instrument boost guidance.
@@ -18,7 +19,7 @@ Resonance is a DJ-style music player prototype for mixing embedded YouTube decks
 
 ## Important Audio Limitation
 
-Browsers isolate YouTube iframe audio, so the web app cannot directly route YouTube playback through Web Audio EQ filters. Mood presets affect YouTube decks through volume mixing and EQ guidance. Real EQ processing is available for direct audio sources.
+Browsers isolate YouTube iframe audio, so the web app cannot directly route YouTube playback through Web Audio EQ filters. Resonance now labels this as **YouTube Mix Mode**: playback, search, playlists, volume, crossfader, and hot cues are live, while EQ/filter/effects are armed for direct, native, or captured sources. Real EQ processing is available for direct audio sources.
 
 The desktop direction is a DJ app first: Deck A and Deck B stay central, embedded YouTube remains the discovery/playback surface, and app-owned audio sources route through the user-mode Resonance engine for per-deck EQ, pan, DJ effects, and optional advanced plugins. A Windows virtual audio endpoint remains an optional future path for system-wide routing rather than a requirement for the main desktop app.
 
