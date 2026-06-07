@@ -235,6 +235,15 @@ Check driver/capture readiness without installing or removing anything:
 npm run driver:capture-readiness
 ```
 
+Prepare and verify a driver signing submission package without installing anything:
+
+```powershell
+npm run driver:package-signing
+npm run driver:verify-signing
+```
+
+The signing package is written under `release/driver-signing/` with a zip and JSON manifest.
+
 Secure Boot beta machines require a Microsoft-signed driver package. The local test-signed SysVAD install path is only for VMs or dedicated test machines with Secure Boot disabled. Full install, capture test, and rollback steps live in:
 
 ```text

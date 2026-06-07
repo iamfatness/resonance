@@ -35,6 +35,7 @@ Progress:
 - Readiness documentation and the local diagnostic command are in place.
 - The desktop readiness panel now reports the built driver package, Secure Boot signing path, test-signing state, virtual endpoint presence, and next actions for blocked/manual checks.
 - On the current Windows machine, `npm run driver:capture-readiness -- -Json` reports Secure Boot enabled, test signing disabled, the local driver package built, native router helper built, and no installed Resonance endpoint.
+- Added read-only driver signing workflow commands: `npm run driver:package-signing` creates a submission folder/zip under `release/driver-signing/`, and `npm run driver:verify-signing` checks required INF/CAT/SYS files, Authenticode status, SignTool kernel-policy status, and SHA256 hashes.
 - Target-machine install and the 20-minute sustained Deck A/B capture pass remain open.
 
 Depends on:

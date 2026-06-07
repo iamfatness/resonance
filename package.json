@@ -48,6 +48,8 @@
     "driver:capture-readiness": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/driver-capture-readiness.ps1",
     "driver:customize:resonance": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/customize-sysvad-resonance.ps1",
     "driver:build": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/build-sysvad.ps1",
+    "driver:package-signing": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-driver-signing.ps1",
+    "driver:verify-signing": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-driver-signing.ps1",
     "driver:install:sysvad": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/install-sysvad.ps1",
     "preview": "vite preview --host 127.0.0.1",
     "package:extension": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/package-extension.ps1",

@@ -10,6 +10,8 @@ npm test
 npm run build
 npm run smoke:browser
 npm run native:audio-router
+npm run driver:verify-signing
+npm run driver:package-signing
 npm run desktop:package
 npm run desktop:installer
 npm run package:extension
@@ -42,6 +44,8 @@ Record the Worker version ID printed by Wrangler in `docs/roadmap.md` or the rel
 - Desktop package: `release/Resonance-local/Resonance.exe`
 - Desktop package manifest: `release/Resonance-local/resonance-package.json`
 - Windows installer: `release/installer/Resonance-Setup-0.2.0-x64.exe`
+- Driver signing zip: `release/driver-signing/resonance-driver-submission-<timestamp>.zip`
+- Driver signing manifest: `release/driver-signing/resonance-driver-submission-<timestamp>/resonance-driver-submission.json`
 - Extension zip: `public/downloads/resonance-eq-0.1.0.zip`
 - Extension package metadata: `public/downloads/resonance-eq-0.1.0.json`
 
@@ -53,4 +57,5 @@ Record the Worker version ID printed by Wrangler in `docs/roadmap.md` or the rel
 - Toggle one-deck and two-deck modes on desktop.
 - Check iOS-sized layout with playlist controls visible.
 - In Electron, export a diagnostics bundle and confirm no secrets are present.
+- Confirm `npm run driver:verify-signing` reports required files ready and Microsoft signing/manual status clearly before any Secure Boot install attempt.
 - In Chrome, load the extension unpacked and verify Start/Stop restores tab playback.

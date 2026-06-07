@@ -138,9 +138,29 @@ bcdedit /set testsigning on
 Do not turn off Secure Boot on a primary machine that must keep it enabled. For that environment, the Resonance driver needs to move from local WDK test signing to Microsoft driver signing:
 
 1. Create a Hardware Dev Center account.
-2. Sign the package with the required organization certificate.
-3. Submit the driver package for Microsoft attestation or HLK signing.
-4. Install the Microsoft-signed package on Secure Boot systems.
+2. Build the local package:
+
+   ```powershell
+   npm run driver:customize:resonance
+   npm run driver:build
+   ```
+
+3. Prepare the submission folder and zip:
+
+   ```powershell
+   npm run driver:package-signing
+   npm run driver:verify-signing
+   ```
+
+4. Submit the generated `release/driver-signing/resonance-driver-submission-*.zip` package through Microsoft Hardware Dev Center for attestation or HLK signing.
+5. Download the Microsoft-signed package.
+6. Run `npm run driver:verify-signing` against the signed package folder if needed:
+
+   ```powershell
+   npm run driver:verify-signing -- -PackageDir "C:\Path\To\MicrosoftSignedPackage"
+   ```
+
+7. Install only the Microsoft-signed package on Secure Boot systems.
 
 After any install path, rerun:
 
@@ -149,6 +169,14 @@ npm run driver:capture-readiness
 ```
 
 The Secure Boot-compatible path is production or attestation signing. A Secure Boot beta machine should only receive a Microsoft-signed package; the local test-signed SysVAD package is for non-critical VMs or dedicated test machines with Secure Boot disabled.
+
+The signing package command writes:
+
+- `release/driver-signing/resonance-driver-submission-<timestamp>.zip`
+- `release/driver-signing/resonance-driver-submission-<timestamp>/resonance-driver-submission.json`
+- copied package contents under `release/driver-signing/resonance-driver-submission-<timestamp>/package`
+
+The verification command checks required INF/CAT/SYS files, Authenticode status, SignTool kernel-policy verification, and SHA256 hashes. A local WDK test certificate is expected to report `manual` or untrusted on Secure Boot machines until Microsoft returns a signed package.
 
 ## Capture Test Checklist
 
@@ -165,6 +193,8 @@ Use this checklist before marking the virtual audio path beta-ready:
    ```powershell
    npm run driver:customize:resonance
    npm run driver:build
+   npm run driver:package-signing
+   npm run driver:verify-signing
    npm run driver:capture-readiness
    ```
 
