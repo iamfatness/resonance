@@ -81,7 +81,7 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 - Active staged deck plugins drive a built-in NativeDSP lane in the native router, with Deck A and Deck B processed independently before the master bus.
 - The plugin host helper process reports its protocol and resolves staged Deck A/B plugin-chain plans without loading third-party binaries yet.
 - The engine persists selected devices, EQ bypass, and plugin-chain settings under the user's app data folder.
-- The desktop panel shows readiness diagnostics for native metering, SysVAD source, WDK toolsets, virtual device status, and plugin host status.
+- The desktop panel shows readiness diagnostics for native metering, SysVAD source, built driver package, Secure Boot signing path, test-signing state, WDK toolsets, virtual device status, and plugin host status.
 - The desktop panel can export a beta diagnostics bundle with engine state, device scan, router snapshot, plugin scan, diagnostics checks, and recent export status.
 - The left sidebar switches between functional Now Playing, Library, Playlist, History, Liked Videos, and Radio panels.
 - Deck A and Deck B each expose a desktop-only Effects button. Each button opens a separate deck effects window where the user can scan the local Windows machine for VST2/VST3 plugins and stage that deck's chain.
@@ -105,6 +105,8 @@ npm run driver:capture-readiness
 ```
 
 The command is read-only. It summarizes the built driver package, Secure Boot/signing path, active Resonance endpoints, capture endpoint detection, native router helper availability, and the remaining sustained Deck A/B capture test.
+
+The same driver/capture blockers appear in the desktop readiness panel with next-action text. On Secure Boot systems, the panel should show the local package as built but the install path as manual/blocked until a Microsoft-signed package is installed.
 
 For the manual capture pass, build the native router, open the desktop app, select the Resonance capture endpoint for both decks, and run continuous Deck A/B capture for at least 20 minutes while watching the desktop panel meters, capture status, and underrun/failure diagnostics.
 

@@ -99,6 +99,8 @@ This check does not install or remove anything. It reports:
 - whether the native Deck A/B audio router helper is built,
 - the remaining manual sustained-capture validation step.
 
+The desktop readiness panel mirrors the same driver path at runtime. It now distinguishes a missing driver package from a built-but-unsigned package, shows whether Secure Boot is forcing the Microsoft-signed install path, reports test-signing state, and gives the next action for missing virtual endpoints.
+
 ## Required Local Setup
 
 Install the Windows Driver Kit integration for Visual Studio. The required pieces are:
@@ -178,6 +180,8 @@ Use this checklist before marking the virtual audio path beta-ready:
 
 5. In the desktop engine panel, confirm the Resonance capture endpoint is selected, then start continuous capture for Deck A and Deck B.
 6. Run a sustained session for at least 20 minutes. Pass only if both decks show live meters, no stale capture state remains after stop/start, and underruns/capture failures are visible in diagnostics.
+
+Current local status on this development machine: the driver package and native router helper are built, Secure Boot is enabled, test signing is disabled, and no active Resonance endpoint is installed. The next install step for this machine is a Microsoft-signed production or attestation driver package.
 
 ## Rollback
 

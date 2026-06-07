@@ -33,6 +33,8 @@ Acceptance criteria:
 Progress:
 
 - Readiness documentation and the local diagnostic command are in place.
+- The desktop readiness panel now reports the built driver package, Secure Boot signing path, test-signing state, virtual endpoint presence, and next actions for blocked/manual checks.
+- On the current Windows machine, `npm run driver:capture-readiness -- -Json` reports Secure Boot enabled, test signing disabled, the local driver package built, native router helper built, and no installed Resonance endpoint.
 - Target-machine install and the 20-minute sustained Deck A/B capture pass remain open.
 
 Depends on:
@@ -361,7 +363,7 @@ Progress:
 - Added `npm run smoke:deploy` for live hosted smoke checks against `https://resonance.iamfatness.us/app`.
 - Added `docs/release-checklist.md` with local verification, Cloudflare deploy, beta artifact, and manual beta checks.
 - Current repeated deploys have passed through `npm run deploy:worker` and live route checks.
-- Current Cloudflare Worker version after the parameter-gated VST3 routing deploy: `2f98de39-2144-4e0d-b887-58e2b3924919`.
+- Current Cloudflare Worker version after the desktop driver diagnostics deploy: `b15bdbc6-2fe0-4c48-971b-987b3c99705c`.
 
 Depends on:
 - Current Worker deploy script.

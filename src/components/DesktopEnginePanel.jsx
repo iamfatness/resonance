@@ -316,6 +316,7 @@ export function DesktopEnginePanel({
                 <strong>{check.label}</strong>
                 <span>{check.status}</span>
                 <small>{check.detail}</small>
+                {check.nextAction && <small>Next: {check.nextAction}</small>}
               </article>
             ))}
           </div>

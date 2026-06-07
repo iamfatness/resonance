@@ -1,4 +1,4 @@
-const { execFile } = require('node:child_process');
+const { execFile, execFileSync } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 const { DesktopAudioRouter } = require('./audio-router.cjs');
@@ -18,6 +18,7 @@ const listAudioDevicesScript = path.join(rootDir, 'scripts', 'list-audio-devices
 const wasapiMeterExe = path.join(rootDir, 'native', 'wasapi-meter', 'build', 'Release', 'resonance-wasapi-meter.exe');
 const audioRouterExe = path.join(rootDir, 'native', 'audio-router', 'build', 'Release', 'resonance-audio-router.exe');
 const sysvadSolution = path.join(rootDir, 'driver', 'audio', 'sysvad', 'sysvad.sln');
+const sysvadDriverInf = path.join(rootDir, 'driver', 'audio', 'sysvad', 'x64', 'Debug', 'package', 'ComponentizedAudioSample.inf');
 const buildToolsPlatforms = 'C:\\Program Files (x86)\\Microsoft Visual Studio\\2022\\BuildTools\\MSBuild\\Microsoft\\VC\\v170\\Platforms';
 const windowsKitsRoot = 'C:\\Program Files (x86)\\Windows Kits\\10';
 const settingsDir = path.join(process.env.APPDATA || rootDir, 'Resonance');
@@ -229,6 +230,7 @@ let nativeMeterBusy = false;
 let nativeRouterBusy = false;
 let livePlaybackBusy = false;
 let lastRouterStatePublish = 0;
+let driverEnvironmentCache = null;
 const pluginHostClient = new PluginHostClient({
   onStatus: (status) => {
     engineState.pluginHost = {
@@ -303,7 +305,9 @@ function buildDiagnostics() {
   const hasNativeMeterHelper = hasNativeMeter();
   const hasNativeRouterHelper = hasNativeRouter();
   const hasSysvadSource = fs.existsSync(sysvadSolution);
+  const hasDriverPackage = fs.existsSync(sysvadDriverInf);
   const hasPersistedSettings = fs.existsSync(settingsPath);
+  const { secureBootEnabled, testSigningEnabled } = getDriverEnvironment();
   const pluginScanReady = engineState.pluginHost.scanStatus === 'ready';
   const hasWindowsAudioScan = engineState.deviceScan.status === 'ready';
   const hasVirtualDevice = engineState.devices.inputs.some((device) => (
@@ -332,30 +336,62 @@ function buildDiagnostics() {
         label: 'Windows audio endpoints',
         status: hasWindowsAudioScan ? 'ready' : engineState.deviceScan.status === 'error' ? 'blocked' : 'pending',
         detail: hasWindowsAudioScan ? 'Endpoint scan completed.' : engineState.deviceScan.error || 'Endpoint scan is pending.',
+        nextAction: hasWindowsAudioScan ? '' : 'Click Rescan after installing or enabling audio endpoints.',
       },
       {
         id: 'audio-router',
         label: 'Deck audio router',
         status: hasNativeRouterHelper ? 'ready' : engineState.router?.status === 'running' ? 'pending' : 'planned',
         detail: hasNativeRouterHelper ? audioRouterExe : 'Run npm run native:audio-router to build the native router skeleton.',
+        nextAction: hasNativeRouterHelper ? '' : 'Run npm run native:audio-router.',
       },
       {
         id: 'wasapi-meter',
         label: 'Native WASAPI meter',
         status: hasNativeMeterHelper ? 'ready' : 'pending',
         detail: hasNativeMeterHelper ? wasapiMeterExe : 'Run npm run native:wasapi-meter to build the helper.',
+        nextAction: hasNativeMeterHelper ? '' : 'Run npm run native:wasapi-meter.',
       },
       {
         id: 'sysvad-source',
         label: 'SysVAD source',
         status: hasSysvadSource ? 'ready' : 'pending',
         detail: hasSysvadSource ? sysvadSolution : 'Clone the Microsoft SysVAD sample into driver/audio/sysvad.',
+        nextAction: hasSysvadSource ? '' : 'Run npm run driver:customize:resonance after the SysVAD source is present.',
+      },
+      {
+        id: 'driver-package',
+        label: 'Resonance driver package',
+        status: hasDriverPackage ? 'ready' : 'blocked',
+        detail: hasDriverPackage ? sysvadDriverInf : 'ComponentizedAudioSample.inf was not found.',
+        nextAction: hasDriverPackage ? '' : 'Run npm run driver:customize:resonance, then npm run driver:build.',
+      },
+      {
+        id: 'secure-boot',
+        label: 'Secure Boot driver path',
+        status: secureBootEnabled ? 'manual' : 'ready',
+        detail: secureBootEnabled
+          ? 'Secure Boot is enabled; install only a Microsoft-signed production or attestation driver package.'
+          : 'Secure Boot is not blocking local test-signed driver installs on this machine.',
+        nextAction: secureBootEnabled
+          ? 'Do not install the local test-signed SysVAD package here; submit or install a Microsoft-signed package first.'
+          : '',
+      },
+      {
+        id: 'test-signing',
+        label: 'Test signing mode',
+        status: secureBootEnabled ? 'blocked' : testSigningEnabled ? 'ready' : 'manual',
+        detail: `testSigning=${testSigningEnabled}; secureBoot=${secureBootEnabled}`,
+        nextAction: secureBootEnabled
+          ? 'Use Microsoft signing for Secure Boot systems.'
+          : testSigningEnabled ? '' : 'On a VM/test machine, enable test signing from elevated PowerShell and reboot.',
       },
       {
         id: 'wdk-files',
         label: 'WDK files',
         status: hasWdkFiles ? 'ready' : 'blocked',
         detail: hasWdkFiles ? 'Kernel audio headers and libraries are installed.' : 'Install the Windows Driver Kit files.',
+        nextAction: hasWdkFiles ? '' : 'Install WDK files from the Visual Studio Installer.',
       },
       {
         id: 'wdk-toolsets',
@@ -364,12 +400,22 @@ function buildDiagnostics() {
         detail: hasKernelToolset && hasDriverAppToolset
           ? 'Windows driver build toolsets are installed.'
           : 'Missing Component.Microsoft.Windows.DriverKit.BuildTools.',
+        nextAction: hasKernelToolset && hasDriverAppToolset ? '' : 'Install VS WDK Build Tools, then rerun npm run driver:preflight.',
       },
       {
         id: 'virtual-device',
         label: 'Resonance virtual device',
         status: hasVirtualDevice ? 'ready' : 'blocked',
-        detail: hasVirtualDevice ? 'Virtual playback endpoint is installed.' : 'Blocked until SysVAD builds and installs.',
+        detail: hasVirtualDevice
+          ? 'Virtual capture endpoint is installed and selected when available.'
+          : secureBootEnabled
+            ? 'No active Resonance endpoint is installed; Secure Boot requires a Microsoft-signed driver package.'
+            : 'No active Resonance endpoint is installed.',
+        nextAction: hasVirtualDevice
+          ? ''
+          : secureBootEnabled
+            ? 'Install a Microsoft-signed Resonance driver package, then click Rescan.'
+            : 'Install the Resonance/SysVAD package on a test machine, then click Rescan.',
       },
       {
         id: 'plugin-host',
@@ -378,6 +424,7 @@ function buildDiagnostics() {
         detail: pluginHelperReady
           ? `Sandbox helper ready; scan found ${engineState.pluginHost.pluginCount || 0} VST2/VST3 candidates.`
           : engineState.pluginHost.error || 'VST2/VST3 scan is pending.',
+        nextAction: pluginHelperReady ? '' : 'Click Plugin host Rescan after installing plugins or rebuilding helpers.',
       },
     ],
   };
@@ -456,6 +503,43 @@ function hasNativeMeter() {
 
 function hasNativeRouter() {
   return fs.existsSync(audioRouterExe);
+}
+
+function detectSecureBootEnabled() {
+  if (process.platform !== 'win32') return false;
+  try {
+    const output = execFileSync('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      "(Get-ItemProperty -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\SecureBoot\\State' -Name UEFISecureBootEnabled -ErrorAction Stop).UEFISecureBootEnabled",
+    ], { windowsHide: true, timeout: 2000, encoding: 'utf8' });
+    return Number(String(output).trim()) === 1;
+  } catch {
+    return false;
+  }
+}
+
+function detectTestSigningEnabled() {
+  if (process.platform !== 'win32') return false;
+  try {
+    const output = execFileSync('bcdedit.exe', ['/enum', '{current}'], { windowsHide: true, timeout: 2000, encoding: 'utf8' });
+    return /testsigning\s+Yes/i.test(output);
+  } catch {
+    return false;
+  }
+}
+
+function getDriverEnvironment() {
+  const now = Date.now();
+  if (driverEnvironmentCache && now - driverEnvironmentCache.cachedAt < 30000) {
+    return driverEnvironmentCache;
+  }
+  driverEnvironmentCache = {
+    secureBootEnabled: detectSecureBootEnabled(),
+    testSigningEnabled: detectTestSigningEnabled(),
+    cachedAt: now,
+  };
+  return driverEnvironmentCache;
 }
 
 function readWavInfo(filePath) {
