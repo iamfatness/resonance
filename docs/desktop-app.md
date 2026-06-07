@@ -85,6 +85,7 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 - The main deck surface includes a DJ mixer strip with cue-style active deck selection, crossfader, simple level meters, and per-deck filter controls.
 - Each YouTube deck includes three hot cue pads for setting and jumping to playback positions.
 - Deck cards and the main deck surface explicitly show whether the app is in YouTube Mix Mode or Native Processing Mode so users know which controls are live on embedded YouTube versus native/captured audio.
+- Desktop deck cards include a native source lane for each deck: choose WAV, play/pause, stop, and start/stop capture. Those controls use the same engine IPC path as the advanced desktop panel.
 - The UI can stage DJ effect-chain settings, optional advanced plugin-chain settings, and bypass the app EQ.
 - Active staged deck effects drive a built-in NativeDSP lane in the native router, with Deck A and Deck B processed independently before the master bus.
 - The plugin host helper process reports its protocol and resolves staged Deck A/B plugin-chain plans without loading third-party binaries yet.

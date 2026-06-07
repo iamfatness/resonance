@@ -19,6 +19,7 @@ export function VideoDeck({
   onOpenEffects,
   isDesktop = false,
   nativeRouting = null,
+  nativeDeck = null,
   hotCues = [],
   onSetHotCue,
   onJumpHotCue,
@@ -33,6 +34,9 @@ export function VideoDeck({
   const deckModeText = nativeReady
     ? 'Native EQ, filter, and effects are live on this deck source.'
     : 'YouTube volume, crossfader, play, and hot cues are live. Filter, EQ, and effects are armed for native/captured audio.';
+  const nativeHasSource = Boolean(nativeDeck?.hasSource);
+  const nativeIsPlaying = nativeDeck?.status === 'playing';
+  const nativeIsCapturing = Boolean(nativeDeck?.captureStreaming);
 
   return (
     <article className={`deck ${active ? 'active' : ''}`}>
@@ -55,6 +59,32 @@ export function VideoDeck({
           <span className={`route-chip ${nativeRouting.sourceTone}`}>Native: {nativeRouting.sourceLabel}</span>
           <span className={`route-chip ${nativeRouting.vst3Tone}`}>VST3: {nativeRouting.vst3Label}</span>
         </div>
+      )}
+      {isDesktop && nativeDeck && (
+        <section className={`native-deck-strip ${nativeHasSource ? 'ready' : ''}`} aria-label={`Deck ${label} native source controls`}>
+          <div>
+            <strong>{nativeDeck.name || 'No native source loaded'}</strong>
+            <span>
+              {nativeHasSource
+                ? `${nativeDeck.sourceLabel} - ${nativeDeck.timeLabel}`
+                : 'Choose WAV or start capture to run EQ, pan, and effects on this deck.'}
+            </span>
+          </div>
+          <div className="native-deck-actions">
+            <button type="button" onClick={nativeDeck.onChooseWav}>
+              WAV
+            </button>
+            <button type="button" onClick={nativeDeck.onTogglePlay} disabled={!nativeHasSource}>
+              {nativeIsPlaying ? 'Pause' : 'Play'}
+            </button>
+            <button type="button" onClick={nativeDeck.onStop} disabled={!nativeHasSource}>
+              Stop
+            </button>
+            <button type="button" onClick={nativeDeck.onToggleCapture} disabled={!nativeDeck.canCapture}>
+              {nativeIsCapturing ? 'Stop Cap' : 'Capture'}
+            </button>
+          </div>
+        </section>
       )}
       <form className="deck-search" onSubmit={onSubmit}>
         <Search size={16} />

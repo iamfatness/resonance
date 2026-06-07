@@ -190,6 +190,21 @@ function deckFilterLabel(value) {
   return value < 0 ? `Dark ${Math.abs(value)}` : `Bright ${value}`;
 }
 
+function formatDeckTime(ms = 0) {
+  const totalSeconds = Math.max(0, Math.floor((Number(ms) || 0) / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${String(seconds).padStart(2, '0')}`;
+}
+
+function nativeSourceLabel(sourceType) {
+  if (sourceType === 'wav') return 'WAV';
+  if (sourceType === 'pcm') return 'PCM';
+  if (sourceType === 'loopback') return 'Capture';
+  if (sourceType === 'virtual-device') return 'Virtual capture';
+  return 'Native source';
+}
+
 function normalizeHotCues(cues) {
   const normalizeDeckCues = (deckCues) => Array.from({ length: 3 }, (_item, index) => {
     const cue = deckCues?.[index];
@@ -729,6 +744,78 @@ function PlayerApp() {
     openSettingsPanel();
   }
 
+  async function chooseNativeWav(deck) {
+    setActiveDeck(deck);
+    if (deck === 'A') {
+      await desktopEngine.selectDeckAWav?.();
+      return;
+    }
+    await desktopEngine.selectDeckBWav?.();
+  }
+
+  async function toggleNativeDeck(deck) {
+    setActiveDeck(deck);
+    const deckState = desktopEngine.state?.playbackDecks?.[deck] || {};
+    if (deckState.status === 'playing') {
+      await desktopEngine.pauseDeck?.(deck);
+      return;
+    }
+    await desktopEngine.playDeck?.(deck);
+  }
+
+  async function stopNativeDeck(deck) {
+    setActiveDeck(deck);
+    await desktopEngine.stopDeck?.(deck);
+  }
+
+  async function toggleNativeCapture(deck) {
+    setActiveDeck(deck);
+    const deckState = desktopEngine.state?.playbackDecks?.[deck] || {};
+    if (deckState.captureStreaming) {
+      await desktopEngine.stopDeckCapture?.({ deck });
+      return;
+    }
+    if (desktopEngine.state?.status !== 'running') {
+      await desktopEngine.start?.();
+    }
+    const deviceId = desktopEngine.state?.inputDeviceId && desktopEngine.state.inputDeviceId !== 'mock-input'
+      ? desktopEngine.state.inputDeviceId
+      : desktopEngine.state?.outputDeviceId;
+    await desktopEngine.startDeckCapture?.({ deck, deviceId });
+  }
+
+  function buildNativeDeckControls(deck) {
+    if (!desktopEngine.isDesktop) return null;
+    const deckState = desktopEngine.state?.playbackDecks?.[deck] || {};
+    const sourceType = deckState.sourceType || 'empty';
+    const hasSource = Boolean(
+      deckState.path
+        || deckState.source
+        || sourceType === 'wav'
+        || sourceType === 'pcm'
+        || sourceType === 'loopback'
+        || sourceType === 'virtual-device'
+        || deckState.captureStreaming,
+    );
+    const selectedWav = deck === 'A' ? desktopEngine.deckAWav : desktopEngine.deckBWav;
+    const positionMs = deckState.positionMs || 0;
+    const durationMs = deckState.durationMs || 0;
+
+    return {
+      status: deckState.status || 'idle',
+      captureStreaming: Boolean(deckState.captureStreaming),
+      hasSource,
+      canCapture: Boolean(desktopEngine.startDeckCapture),
+      name: deckState.name || selectedWav?.name || '',
+      sourceLabel: nativeSourceLabel(sourceType),
+      timeLabel: `${formatDeckTime(positionMs)} / ${durationMs ? formatDeckTime(durationMs) : '--:--'}`,
+      onChooseWav: () => chooseNativeWav(deck),
+      onTogglePlay: () => toggleNativeDeck(deck),
+      onStop: () => stopNativeDeck(deck),
+      onToggleCapture: () => toggleNativeCapture(deck),
+    };
+  }
+
   function sidebarLoad(video) {
     loadVideo(video, activeInputDeck);
   }
@@ -961,6 +1048,7 @@ function PlayerApp() {
             onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('A') : null}
             isDesktop={desktopEngine.isDesktop}
             nativeRouting={deckNativeRouting.A}
+            nativeDeck={buildNativeDeckControls('A')}
             hotCues={hotCues.A}
             onSetHotCue={(index) => setDeckHotCue('A', index)}
             onJumpHotCue={(index) => jumpDeckHotCue('A', index)}
@@ -984,6 +1072,7 @@ function PlayerApp() {
               onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('B') : null}
               isDesktop={desktopEngine.isDesktop}
               nativeRouting={deckNativeRouting.B}
+              nativeDeck={buildNativeDeckControls('B')}
               hotCues={hotCues.B}
               onSetHotCue={(index) => setDeckHotCue('B', index)}
               onJumpHotCue={(index) => jumpDeckHotCue('B', index)}

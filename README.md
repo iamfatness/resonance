@@ -14,6 +14,7 @@ Resonance is a DJ-style music player prototype for mixing embedded YouTube decks
 - Mood presets that adjust deck mix levels and instrument boost guidance.
 - Direct audio file / URL EQ path for real browser-side audio filtering.
 - DJ-style per-deck effects controls with advanced plugin hosting kept secondary.
+- Desktop deck cards expose native WAV loading, native play/pause/stop, and Deck A/B capture controls.
 - Chrome extension prototype for real current-tab EQ using `chrome.tabCapture`.
 - Cloudflare Worker deployment for `resonance.iamfatness.us`.
 
@@ -93,7 +94,7 @@ Desktop VST3/Waves scan results are merged into the app plugin catalog when the 
 
 Staged plugins persist editable enabled, wet/dry, input gain, output gain, preset-name parameters, exposed plugin control values, and local named presets. NativeDSP plugins apply those values through the current router lane; blocked VST3/Waves candidates keep the same session state without running native code.
 
-The desktop engine has a native two-bus routing prototype for Deck A and Deck B when the audio router helper is built. In the desktop app, each deck card shows whether the native side has a processable source and whether VST3 is active, pending, degraded, or using fallback processing. The collapsed Desktop Audio Engine settings section also exposes the full per-deck bus cards with input/left/right meters from native snapshots for local WAV, pushed PCM, bounded capture, and continuous capture sources, with mock meters still available as a fallback.
+The desktop engine has a native two-bus routing prototype for Deck A and Deck B when the audio router helper is built. In the desktop app, each deck card shows whether the native side has a processable source and whether VST3 is active, pending, degraded, or using fallback processing. The deck cards now also expose the native source lane directly: choose WAV, play/pause, stop, or start/stop capture for Deck A or Deck B without opening advanced settings. The collapsed Desktop Audio Engine settings section still exposes the full per-deck bus cards with input/left/right meters from native snapshots for local WAV, pushed PCM, bounded capture, and continuous capture sources, with mock meters still available as a fallback.
 
 The routing logic lives behind `engine/audio-router.cjs`, which manages the native persistent router process. The renderer reads router state from the existing desktop engine IPC API, so virtual-device capture and plugin-host sources can keep using the same app UI contract.
 

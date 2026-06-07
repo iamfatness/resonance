@@ -1158,6 +1158,66 @@ button {
   line-height: 1.35;
 }
 
+.native-deck-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 9px;
+  border: 1px solid rgba(56, 213, 200, 0.2);
+  border-radius: 6px;
+  background: rgba(56, 213, 200, 0.045);
+}
+
+.native-deck-strip.ready {
+  border-color: rgba(56, 213, 200, 0.42);
+  background: rgba(56, 213, 200, 0.08);
+}
+
+.native-deck-strip strong,
+.native-deck-strip span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.native-deck-strip strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.native-deck-strip span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.native-deck-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.native-deck-actions button {
+  min-width: 44px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #151a1b;
+  color: var(--teal);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.native-deck-actions button:disabled {
+  cursor: not-allowed;
+  color: var(--faint);
+  opacity: 0.55;
+}
+
 .deck-search {
   height: 36px;
   display: grid;
@@ -3428,6 +3488,14 @@ canvas {
 
   .deck-grid {
     grid-template-columns: 1fr;
+  }
+
+  .native-deck-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .native-deck-actions {
+    flex-wrap: wrap;
   }
 
   .deck-mode-overview {
