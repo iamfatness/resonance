@@ -9,6 +9,7 @@
 /**
  * @typedef {Object} DeckProcessing
  * @property {number} pan Per-deck pan value.
+ * @property {number} filter DJ-style per-deck filter value from -50 (dark) to 50 (bright).
  * @property {boolean} eqBypassed Whether native/app deck EQ is bypassed.
  * @property {number[]} curve Eight-band per-deck EQ curve in dB.
  * @property {Array<Object>} pluginChain Staged plugin chain entries.
@@ -75,8 +76,8 @@ export const instrumentBandWeights = {
 };
 
 export const defaultDeckProcessing = {
-  A: { pan: -12, eqBypassed: false, curve: [...flatCurve], pluginChain: [] },
-  B: { pan: 12, eqBypassed: false, curve: [...flatCurve], pluginChain: [] },
+  A: { pan: -12, filter: 0, eqBypassed: false, curve: [...flatCurve], pluginChain: [] },
+  B: { pan: 12, filter: 0, eqBypassed: false, curve: [...flatCurve], pluginChain: [] },
 };
 
 export function clampGain(value) {
@@ -109,6 +110,7 @@ export function getEffectiveCurve({ presetName = 'Focus', useManual = false, man
 export function getDefaultDeckProcessing(deck) {
   const cloneDeck = (settings) => ({
     pan: settings.pan,
+    filter: settings.filter,
     eqBypassed: settings.eqBypassed,
     curve: [...settings.curve],
     pluginChain: [...settings.pluginChain],
@@ -124,6 +126,9 @@ export function getDefaultDeckProcessing(deck) {
 export function normalizeDeckProcessing(savedDeckProcessing) {
   const normalizeDeck = (deck, fallback) => ({
     pan: Number.isFinite(savedDeckProcessing?.[deck]?.pan) ? savedDeckProcessing[deck].pan : fallback.pan,
+    filter: Number.isFinite(savedDeckProcessing?.[deck]?.filter)
+      ? Math.max(-50, Math.min(50, savedDeckProcessing[deck].filter))
+      : fallback.filter,
     eqBypassed: Boolean(savedDeckProcessing?.[deck]?.eqBypassed),
     curve: normalizeCurve(savedDeckProcessing?.[deck]?.curve, fallback.curve),
     pluginChain: Array.isArray(savedDeckProcessing?.[deck]?.pluginChain)

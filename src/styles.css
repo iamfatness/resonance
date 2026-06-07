@@ -1210,6 +1210,114 @@ button {
   background: rgba(56, 213, 200, 0.13);
 }
 
+.dj-mixer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 1.2fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: stretch;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #101516;
+}
+
+.mixer-channel,
+.crossfader-strip {
+  display: grid;
+  gap: 8px;
+  align-content: center;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0d1112;
+}
+
+.mixer-channel.right {
+  text-align: right;
+}
+
+.mixer-cue {
+  width: fit-content;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #121719;
+  color: var(--muted);
+  cursor: pointer;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.mixer-channel.right .mixer-cue {
+  justify-self: end;
+}
+
+.mixer-cue.active {
+  border-color: rgba(56, 213, 200, 0.6);
+  background: rgba(56, 213, 200, 0.1);
+  color: var(--teal);
+}
+
+.mixer-cue:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.mixer-meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #2f3638;
+}
+
+.mixer-meter i {
+  display: block;
+  height: 100%;
+  max-width: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--teal), var(--amber));
+  transition: width 120ms linear;
+}
+
+.mixer-channel span,
+.crossfader-strip span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.mixer-channel small {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.crossfader-strip {
+  justify-items: stretch;
+}
+
+.crossfader-strip div {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 32px;
+  gap: 8px;
+  align-items: center;
+  text-align: center;
+}
+
+.crossfader-strip strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.crossfader-strip input {
+  width: 100%;
+  accent-color: var(--amber);
+}
+
 .track-actions {
   display: flex;
   gap: 9px;
@@ -3189,6 +3297,19 @@ canvas {
 
   .deck-grid {
     grid-template-columns: 1fr;
+  }
+
+  .dj-mixer {
+    grid-template-columns: 1fr;
+    padding: 10px;
+  }
+
+  .mixer-channel.right {
+    text-align: left;
+  }
+
+  .mixer-channel.right .mixer-cue {
+    justify-self: start;
   }
 
   .preset-grid {

@@ -12,6 +12,8 @@ export function VideoDeck({
   setVolume,
   pan,
   setPan,
+  filter,
+  setFilter,
   active,
   onActivate,
   onOpenEffects,
@@ -93,7 +95,22 @@ export function VideoDeck({
       <label className="deck-volume deck-pan">
         <span>
           <SlidersHorizontal size={16} />
-          Pan
+          Filter
+        </span>
+        <input
+          type="range"
+          min="-50"
+          max="50"
+          value={filter}
+          onChange={(event) => setFilter(Number(event.target.value))}
+          aria-label={`Deck ${label} filter`}
+        />
+        <strong>{filter === 0 ? 'Off' : filter < 0 ? `Dark ${Math.abs(filter)}` : `Bright ${filter}`}</strong>
+      </label>
+      <label className="deck-volume deck-pan">
+        <span>
+          <SlidersHorizontal size={16} />
+          Balance
         </span>
         <input
           type="range"

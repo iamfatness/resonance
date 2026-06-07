@@ -29,7 +29,7 @@ describe('preset DSP helpers', () => {
 
   it('normalizes invalid deck processing with defaults', () => {
     expect(normalizeDeckProcessing({ A: { pan: 4, curve: [1, 2], pluginChain: [{ id: 'x' }] } })).toEqual({
-      A: { pan: 4, eqBypassed: false, curve: flatCurve, pluginChain: [{ id: 'x' }] },
+      A: { pan: 4, filter: 0, eqBypassed: false, curve: flatCurve, pluginChain: [{ id: 'x' }] },
       B: getDefaultDeckProcessing('B'),
     });
   });

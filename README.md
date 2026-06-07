@@ -6,6 +6,7 @@ Resonance is a DJ-style music player prototype for mixing embedded YouTube decks
 
 - Two YouTube playback decks.
 - Independent Deck A / Deck B volume controls.
+- DJ mixer strip with cue-style deck selection, crossfader, level meters, and per-deck filter controls.
 - Active deck loading from pasted YouTube URLs or video IDs.
 - Queue loading into the selected deck.
 - Mood presets that adjust deck mix levels and instrument boost guidance.
@@ -84,7 +85,7 @@ The Up next queue supports clearing, loading a queued item, play-next placement,
 
 Search results and imported playlists are enriched with YouTube video metadata, including real durations and live/upcoming status when the YouTube Data API returns it.
 
-Desktop deck processing includes per-deck pan, per-deck EQ curves, per-deck EQ bypass, DJ effect-chain state, and optional advanced plugin-chain state. These settings are sent to the Electron audio engine and persisted. Local WAV decks, pushed PCM, bounded capture buffers, and continuous Deck A/B capture streams can now flow through the native persistent router without requiring a virtual driver. When Windows reports a Resonance virtual capture endpoint, the desktop engine can select it as a capture input, but the main product path is app-owned audio first. Active staged DJ effects feed a built-in NativeDSP lane, and the first staged bridge-capable VST3 plugin per deck can receive live Deck A/B PCM through the native bridge with NativeDSP fallback when loading, processing, or silence checks fail.
+Desktop deck processing includes per-deck pan, DJ filter, per-deck EQ curves, per-deck EQ bypass, DJ effect-chain state, and optional advanced plugin-chain state. These settings are sent to the Electron audio engine and persisted. Local WAV decks, pushed PCM, bounded capture buffers, and continuous Deck A/B capture streams can now flow through the native persistent router without requiring a virtual driver. When Windows reports a Resonance virtual capture endpoint, the desktop engine can select it as a capture input, but the main product path is app-owned audio first. Active staged DJ effects feed a built-in NativeDSP lane, and the first staged bridge-capable VST3 plugin per deck can receive live Deck A/B PCM through the native bridge with NativeDSP fallback when loading, processing, or silence checks fail.
 
 Desktop VST3/Waves scan results are merged into the app plugin catalog when the Electron engine reports them. The desktop engine now probes eligible VST3 candidates through the native bridge process and reports per-plugin bridge status, path validation, parameter-load availability, bridge PCM block-processing availability, parameter-forwarding availability, and exposed parameter metadata when available. The native bridge builds against the Steinberg VST3 SDK submodule, can instantiate VST3 modules for parameter enumeration, can process an internal 32-bit float test block, and can process external interleaved PCM16 blocks through a loaded VST3 processor. The persistent native router now sends each deck's live PCM blocks to the first staged bridge-capable VST3 plugin for that deck, forwards normalized parameter values only when that plugin passes the parameter-forwarding probe, and falls back to the built-in NativeDSP lane if loading, processing, or silent output checks fail.
 

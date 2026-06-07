@@ -22,6 +22,7 @@ import './styles.css';
 import {
   applyInstrumentBoosts,
   bands,
+  clampGain,
   defaultDeckProcessing,
   flatCurve,
   moodPresets,
@@ -163,6 +164,32 @@ function buildDeckNativeRouting(engineState, deck) {
   };
 }
 
+function crossfadeVolumes(deckVolumes, crossfader, isSingleDeck) {
+  if (isSingleDeck) return { A: deckVolumes.A, B: 0 };
+  const position = Math.max(-50, Math.min(50, Number(crossfader) || 0));
+  const aFactor = position <= 0 ? 1 : 1 - position / 50;
+  const bFactor = position >= 0 ? 1 : 1 + position / 50;
+  return {
+    A: Math.round(deckVolumes.A * aFactor),
+    B: Math.round(deckVolumes.B * bFactor),
+  };
+}
+
+function filterCurveOverlay(curve, filterValue = 0) {
+  const filter = Math.max(-50, Math.min(50, Number(filterValue) || 0));
+  if (filter === 0) return curve;
+  const amount = Math.abs(filter) / 50;
+  const lowCut = [-10, -8, -5, -2, 0, 0, 0, 0];
+  const highCut = [0, 0, 0, 0, -2, -5, -8, -10];
+  const shape = filter > 0 ? lowCut : highCut;
+  return curve.map((gain, index) => clampGain(gain + shape[index] * amount));
+}
+
+function deckFilterLabel(value) {
+  if (value === 0) return 'Off';
+  return value < 0 ? `Dark ${Math.abs(value)}` : `Bright ${value}`;
+}
+
 function PlayerApp() {
   const isIOS = useMemo(() => isIOSDevice(), []);
   const savedAppState = useMemo(() => readSavedAppState(), []);
@@ -187,6 +214,7 @@ function PlayerApp() {
   const [activeSidePanel, setActiveSidePanel] = useState(savedAppState?.activeSidePanel || 'playlists');
   const [activePreset, setActivePreset] = useState(savedPresetName);
   const [deckVolumes, setDeckVolumes] = useState(savedDeckVolumes);
+  const [crossfader, setCrossfader] = useState(Number.isFinite(savedAppState?.crossfader) ? Math.max(-50, Math.min(50, savedAppState.crossfader)) : 0);
   const [directUrl, setDirectUrl] = useState(savedAppState?.directUrl || '');
   const [eqMode, setEqMode] = useState(savedAppState?.eqMode === 'Manual' ? 'Manual' : 'Preset');
   const [appEqBypassed, setAppEqBypassed] = useState(Boolean(savedAppState?.appEqBypassed));
@@ -201,8 +229,12 @@ function PlayerApp() {
   const [manualCurve, setManualCurve] = useState(Array.isArray(savedAppState?.manualCurve) ? savedAppState.manualCurve : flatCurve);
   const preset = moodPresets[activePreset] || moodPresets.Focus;
   const [instrumentBoosts, setInstrumentBoosts] = useState(savedAppState?.instrumentBoosts || preset.instruments);
-  const playerA = useYouTubePlayer(deckA.id, deckVolumes.A, deckA.startSeconds);
-  const playerB = useYouTubePlayer(deckB.id, deckVolumes.B, deckB.startSeconds);
+  const effectiveDeckVolumes = useMemo(
+    () => crossfadeVolumes(deckVolumes, crossfader, isIOS ? true : deckCount === 1),
+    [crossfader, deckCount, deckVolumes, isIOS],
+  );
+  const playerA = useYouTubePlayer(deckA.id, effectiveDeckVolumes.A, deckA.startSeconds);
+  const playerB = useYouTubePlayer(deckB.id, effectiveDeckVolumes.B, deckB.startSeconds);
   const availablePlaylists = useMemo(() => (
     importedPlaylist ? [importedPlaylist, ...playlistCatalog] : playlistCatalog
   ), [importedPlaylist]);
@@ -219,17 +251,27 @@ function PlayerApp() {
     [baseCurve, instrumentBoosts],
   );
   const processedCurve = appEqBypassed ? flatCurve : effectiveCurve;
+  const routedDeckProcessing = useMemo(() => ({
+    A: {
+      ...deckProcessing.A,
+      curve: filterCurveOverlay(deckProcessing.A.curve, deckProcessing.A.filter),
+    },
+    B: {
+      ...deckProcessing.B,
+      curve: filterCurveOverlay(deckProcessing.B.curve, deckProcessing.B.filter),
+    },
+  }), [deckProcessing]);
   const desktopEngineSettings = useMemo(() => ({
     preset: activePreset,
     eqMode,
     curve: processedCurve,
     appEqBypassed,
-    deckProcessing,
-    deckVolumes,
-    outputGain: deckVolumes.A / 100,
+    deckProcessing: routedDeckProcessing,
+    deckVolumes: effectiveDeckVolumes,
+    outputGain: effectiveDeckVolumes.A / 100,
     audioLatencyProfile,
     audioBufferMs,
-  }), [activePreset, appEqBypassed, audioBufferMs, audioLatencyProfile, deckProcessing, deckVolumes, eqMode, processedCurve]);
+  }), [activePreset, appEqBypassed, audioBufferMs, audioLatencyProfile, effectiveDeckVolumes, eqMode, processedCurve, routedDeckProcessing]);
   const desktopEngine = useDesktopEngine(desktopEngineSettings);
   const deckNativeRouting = useMemo(() => ({
     A: buildDeckNativeRouting(desktopEngine.state, 'A'),
@@ -269,6 +311,7 @@ function PlayerApp() {
       activeSidePanel,
       activePreset,
       deckVolumes,
+      crossfader,
       directUrl,
       eqMode,
       appEqBypassed,
@@ -293,6 +336,7 @@ function PlayerApp() {
     deckB,
     deckCount,
     deckVolumes,
+    crossfader,
     deckProcessing,
     directUrl,
     eqMode,
@@ -423,6 +467,10 @@ function PlayerApp() {
 
   function setDeckPan(deck, value) {
     updateDeckProcessing(deck, (settings) => ({ ...settings, pan: value }));
+  }
+
+  function setDeckFilter(deck, value) {
+    updateDeckProcessing(deck, (settings) => ({ ...settings, filter: value }));
   }
 
   function setDeckEqBand(deck, index, value) {
@@ -858,6 +906,8 @@ function PlayerApp() {
             setVolume={(value) => setDeckVolume('A', value)}
             pan={deckProcessing.A.pan}
             setPan={(value) => setDeckPan('A', value)}
+            filter={deckProcessing.A.filter}
+            setFilter={(value) => setDeckFilter('A', value)}
             active={activeDeck === 'A'}
             onActivate={() => setActiveDeck('A')}
             onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('A') : null}
@@ -876,6 +926,8 @@ function PlayerApp() {
               setVolume={(value) => setDeckVolume('B', value)}
               pan={deckProcessing.B.pan}
               setPan={(value) => setDeckPan('B', value)}
+              filter={deckProcessing.B.filter}
+              setFilter={(value) => setDeckFilter('B', value)}
               active={activeDeck === 'B'}
               onActivate={() => setActiveDeck('B')}
               onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('B') : null}
@@ -884,6 +936,54 @@ function PlayerApp() {
             />
           )}
         </div>
+
+        <section className="dj-mixer" aria-label="DJ mixer">
+          <div className="mixer-channel">
+            <button
+              className={`mixer-cue ${activeDeck === 'A' ? 'active' : ''}`}
+              type="button"
+              onClick={() => setActiveDeck('A')}
+            >
+              Cue A
+            </button>
+            <div className="mixer-meter" aria-label="Deck A output level">
+              <i style={{ width: `${playerA.playing ? Math.max(8, effectiveDeckVolumes.A) : 0}%` }} />
+            </div>
+            <span>A {effectiveDeckVolumes.A}%</span>
+            <small>{deckFilterLabel(deckProcessing.A.filter)}</small>
+          </div>
+          <div className="crossfader-strip">
+            <div>
+              <span>A</span>
+              <strong>{crossfader === 0 ? 'Center' : crossfader < 0 ? `A +${Math.abs(crossfader)}` : `B +${crossfader}`}</strong>
+              <span>B</span>
+            </div>
+            <input
+              type="range"
+              min="-50"
+              max="50"
+              value={isSingleDeck ? -50 : crossfader}
+              disabled={isSingleDeck}
+              onChange={(event) => setCrossfader(Number(event.target.value))}
+              aria-label="Crossfader"
+            />
+          </div>
+          <div className="mixer-channel right">
+            <button
+              className={`mixer-cue ${activeDeck === 'B' ? 'active' : ''}`}
+              type="button"
+              onClick={() => setActiveDeck('B')}
+              disabled={isSingleDeck}
+            >
+              Cue B
+            </button>
+            <div className="mixer-meter" aria-label="Deck B output level">
+              <i style={{ width: `${!isSingleDeck && playerB.playing ? Math.max(8, effectiveDeckVolumes.B) : 0}%` }} />
+            </div>
+            <span>B {isSingleDeck ? 0 : effectiveDeckVolumes.B}%</span>
+            <small>{isSingleDeck ? 'Single Deck' : deckFilterLabel(deckProcessing.B.filter)}</small>
+          </div>
+        </section>
 
         <QueuePanel
           activePreset={activePreset}
