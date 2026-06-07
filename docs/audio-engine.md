@@ -84,7 +84,6 @@ The native backend should replace the mock meter source without changing the ren
 
 ## Next Milestones
 
-1. Improve processable-source UX for desktop Deck A/B so users know what is routed through the native engine.
-2. Reduce VST3 block IPC overhead with a binary or shared-memory transport while preserving the current JSON/base64 fallback.
-3. Validate audible live output with a known non-silent VST3 effect, then improve VST3 parameter display/unit mapping.
-4. Keep virtual-driver validation as an optional system-wide routing track after Microsoft signing is available.
+1. Reduce VST3 block IPC overhead with a binary or shared-memory transport while preserving the current JSON/base64 fallback.
+2. Validate audible live output with a known non-silent VST3 effect, then improve VST3 parameter display/unit mapping.
+3. Keep virtual-driver validation as an optional system-wide routing track after Microsoft signing is available.

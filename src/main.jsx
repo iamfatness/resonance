@@ -795,6 +795,7 @@ function PlayerApp() {
             active={activeDeck === 'A'}
             onActivate={() => setActiveDeck('A')}
             onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('A') : null}
+            isDesktop={desktopEngine.isDesktop}
           />
           {!isSingleDeck && (
             <VideoDeck
@@ -811,6 +812,7 @@ function PlayerApp() {
               active={activeDeck === 'B'}
               onActivate={() => setActiveDeck('B')}
               onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('B') : null}
+              isDesktop={desktopEngine.isDesktop}
             />
           )}
         </div>

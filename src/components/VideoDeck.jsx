@@ -15,6 +15,7 @@ export function VideoDeck({
   active,
   onActivate,
   onOpenEffects,
+  isDesktop = false,
 }) {
   const actionLabel = parseYoutubePlaylistId(query)
     ? 'Import'
@@ -29,7 +30,10 @@ export function VideoDeck({
           <Music2 size={17} />
           <span>Deck {label}</span>
         </button>
-        <span className="deck-state">{player.ready ? 'YouTube ready' : 'Loading'}</span>
+        <div className="deck-state-stack">
+          <span className="deck-state">{player.ready ? 'YouTube ready' : 'Loading'}</span>
+          <span className="route-chip idle">Browser isolated</span>
+        </div>
       </div>
       <form className="deck-search" onSubmit={onSubmit}>
         <Search size={16} />
@@ -50,6 +54,11 @@ export function VideoDeck({
           <p>
             {video.channel} - YouTube playback - {video.duration}
           </p>
+          <small className="deck-route-note">
+            {isDesktop
+              ? 'YouTube iframe audio is mix-only here. Use a local/captured source for native EQ and VST3.'
+              : 'YouTube iframe audio is mix-only; direct audio sources use real EQ.'}
+          </small>
         </div>
         <button
           className="icon-button"

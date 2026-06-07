@@ -1053,6 +1053,23 @@ button {
   white-space: nowrap;
 }
 
+.deck-state-stack {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.deck-route-note {
+  display: block;
+  margin-top: 4px;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .deck-search {
   height: 36px;
   display: grid;
@@ -2332,9 +2349,64 @@ button {
   font-size: 13px;
 }
 
+.route-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.route-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: #0d1112;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.route-chip.ready {
+  border-color: rgba(56, 213, 200, 0.35);
+  color: var(--teal);
+}
+
+.route-chip.manual {
+  border-color: rgba(245, 176, 65, 0.35);
+  color: var(--amber);
+}
+
+.route-chip.blocked {
+  border-color: rgba(255, 91, 91, 0.35);
+  color: var(--red);
+}
+
 .deck-bus-meter span {
   color: var(--muted);
   font-size: 12px;
+}
+
+.deck-bus-meter .route-chip {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.deck-bus-meter .route-chip.ready {
+  color: var(--teal);
+}
+
+.deck-bus-meter .route-chip.manual {
+  color: var(--amber);
+}
+
+.deck-bus-meter .route-chip.blocked {
+  color: var(--red);
 }
 
 .deck-bus-meter small {

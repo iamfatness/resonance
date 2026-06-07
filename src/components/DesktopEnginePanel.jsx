@@ -5,6 +5,37 @@ function formatPlaybackTime(ms = 0) {
   return `${minutes}:${String(seconds).padStart(2, '0')}`;
 }
 
+function sourceLabel(sourceType) {
+  if (sourceType === 'wav') return 'Native processing active';
+  if (sourceType === 'pcm') return 'Native PCM active';
+  if (sourceType === 'loopback') return 'Capture processing active';
+  if (sourceType === 'virtual-device') return 'Virtual capture active';
+  return 'No native source';
+}
+
+function sourceTone(sourceType) {
+  if (sourceType === 'wav' || sourceType === 'pcm' || sourceType === 'loopback' || sourceType === 'virtual-device') return 'ready';
+  return 'idle';
+}
+
+function vst3Label(route) {
+  const status = route?.vst3Status || 'disabled';
+  if (status === 'processing') return 'VST3 bridge active';
+  if (status === 'pending') return 'VST3 bridge pending';
+  if (status === 'disabled') return 'NativeDSP fallback';
+  if (status.includes('fallback')) return 'VST3 fallback';
+  if (status.includes('failed') || status.includes('empty')) return 'VST3 degraded';
+  return `VST3 ${status}`;
+}
+
+function vst3Tone(route) {
+  const status = route?.vst3Status || 'disabled';
+  if (status === 'processing') return 'ready';
+  if (status === 'pending') return 'manual';
+  if (status === 'disabled') return 'idle';
+  return 'blocked';
+}
+
 export function DesktopEnginePanel({
   engine,
   latencyProfile = 'balanced',
@@ -170,14 +201,27 @@ export function DesktopEnginePanel({
       <div className="deck-bus-grid">
         {['A', 'B'].map((deck) => {
           const deckMeter = meters.decks?.[deck] || { inputPeak: 0, outputPeak: 0, leftPeak: 0, rightPeak: 0, pan: 0, pluginCount: 0, eqActivity: 0 };
-          const route = routes.find((candidate) => candidate.deck === deck);
+          const nativeRoute = state.router?.nativeSnapshot?.routes?.find((candidate) => candidate.deck === deck);
+          const route = nativeRoute || routes.find((candidate) => candidate.deck === deck);
           const source = state.router?.nativeSnapshot?.sources?.find((candidate) => candidate.deck === deck);
+          const sourceType = source?.sourceType || playbackDecks[deck]?.sourceType || 'empty';
           return (
             <div className="deck-bus-meter" key={deck}>
               <div>
                 <strong>Deck {deck} Bus</strong>
+                <div className="route-chip-row">
+                  <span className={`route-chip ${sourceTone(sourceType)}`}>{sourceLabel(sourceType)}</span>
+                  <span className={`route-chip ${vst3Tone(route)}`}>{vst3Label(route)}</span>
+                </div>
                 <span>Pan {deckMeter.pan === 0 ? 'C' : deckMeter.pan < 0 ? `L${Math.abs(deckMeter.pan)}` : `R${deckMeter.pan}`} | EQ {Math.round((deckMeter.eqActivity || 0) * 100)}% | {deckMeter.pluginCount || 0} plugins</span>
                 {route && <small>{route.status} route: {route.source} to {route.destination}</small>}
+                {route?.vst3Status && (
+                  <small>
+                    VST3 {route.vst3Status}
+                    {Number.isFinite(route.vst3BlocksProcessed) ? ` | blocks ${route.vst3BlocksProcessed}` : ''}
+                    {route.vst3Failures ? ` | failures ${route.vst3Failures}` : ''}
+                  </small>
+                )}
                 {source && (
                   <small>
                     Source {source.sourceType || 'empty'}
@@ -255,7 +299,7 @@ export function DesktopEnginePanel({
         </div>
       )}
       <p>
-        The engine is running in {state.mode || 'mock'} mode. Native per-source PCM routing will replace the simulated deck buses when the desktop router backend is connected.
+        The engine is running in {state.mode || 'mock'} mode. Local WAV, pushed PCM, and capture streams are routed through native Deck A/B processing; browser YouTube iframes remain mix-only unless captured through another path.
       </p>
       {state.pluginHost && (
         <div className="plugin-host-status">

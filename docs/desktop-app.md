@@ -87,6 +87,8 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 - The plugin host helper process reports its protocol and resolves staged Deck A/B plugin-chain plans without loading third-party binaries yet.
 - The engine persists selected devices, EQ bypass, and plugin-chain settings under the user's app data folder.
 - The desktop panel shows readiness diagnostics for native metering, SysVAD source, built driver package, Secure Boot signing path, test-signing state, WDK toolsets, virtual device status, and plugin host status.
+- Deck bus cards show whether each deck is using native-processable audio, NativeDSP fallback, VST3 bridge processing, or a degraded VST3 state.
+- YouTube deck cards are labeled as browser-isolated so users know those iframe decks are mix-only unless audio is captured through another path.
 - The desktop panel can export a beta diagnostics bundle with engine state, device scan, router snapshot, plugin scan, diagnostics checks, and recent export status.
 - The left sidebar switches between functional Now Playing, Library, Playlist, History, Liked Videos, and Radio panels.
 - Deck A and Deck B each expose a desktop-only Effects button. Each button opens a separate deck effects window where the user can scan the local Windows machine for VST2/VST3 plugins and stage that deck's chain.
@@ -128,7 +130,6 @@ Latency settings are saved with the app state and sent to the native router thro
 
 ## Next Desktop Milestones
 
-1. Improve processable-source UX so desktop users can tell which decks are routed through the native engine.
-2. Lower VST3 block IPC overhead so live per-deck plugin processing is closer to real time.
-3. Validate Waves plugins on the generic VST3 path after the low-latency host path is stable.
-4. Keep the signed virtual driver path as an optional system-wide routing track, not the main product blocker.
+1. Lower VST3 block IPC overhead so live per-deck plugin processing is closer to real time.
+2. Validate Waves plugins on the generic VST3 path after the low-latency host path is stable.
+3. Keep the signed virtual driver path as an optional system-wide routing track, not the main product blocker.
