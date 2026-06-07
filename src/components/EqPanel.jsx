@@ -234,6 +234,11 @@ export function EqPanel({
           {pluginChain.length === 0 && <small className="plugin-empty">No plugins staged on Deck {activeInputDeck}.</small>}
           {pluginChain.map((plugin, index) => {
             const key = pluginKey(plugin);
+            const runtimeLabel = plugin.nativeLoad?.bridgePcmProcessing
+              ? 'VST routed'
+              : plugin.executable === false
+                ? 'staged only'
+                : 'active DSP';
             const parameters = plugin.parameters || {
               enabled: true,
               wetDry: 100,
@@ -247,7 +252,7 @@ export function EqPanel({
                   <span>
                     <strong>{index + 1}. {plugin.name}</strong>
                     <small>
-                      {plugin.vendor} | {plugin.format || 'Plugin'} | {plugin.executable === false ? 'staged only' : 'active DSP'} | {parameters.presetName}
+                      {plugin.vendor} | {plugin.format || 'Plugin'} | {runtimeLabel} | {parameters.presetName}
                     </small>
                   </span>
                   <button type="button" onClick={() => toggleDeckPluginBypass(activeInputDeck, key)}>
@@ -344,6 +349,11 @@ export function EqPanel({
         <div className="plugin-list">
           {filteredPlugins.map((plugin) => {
             const stagedCount = pluginChain.filter((item) => item.id === plugin.id).length;
+            const nativeStatus = plugin.nativeLoad?.bridgePcmProcessing
+              ? 'VST routed'
+              : plugin.executable === false
+                ? 'scan only'
+                : '';
             return (
               <article className={`plugin-item ${stagedCount ? 'active' : ''} ${plugin.executable === false ? 'blocked-plugin' : ''}`} key={plugin.id}>
                 <div className="plugin-item-header">
@@ -352,7 +362,7 @@ export function EqPanel({
                     <small>
                       {plugin.vendor} | {plugin.format || 'Plugin'}
                       {plugin.architecture ? ` | ${plugin.architecture}` : ''}
-                      {plugin.executable === false ? ' | scan only' : ''}
+                      {nativeStatus ? ` | ${nativeStatus}` : ''}
                       {stagedCount ? ` | ${stagedCount} staged` : ''}
                     </small>
                   </span>

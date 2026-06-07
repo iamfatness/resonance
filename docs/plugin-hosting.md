@@ -23,11 +23,11 @@ Resonance can stage plugin-chain settings in the desktop UI now, and the native 
 - The EQ panel includes an active deck plugin rack with chain order controls, duplicate, remove, reset-parameter, and preset-name editing. The catalog can be filtered by all, active, built-in, VST2, VST3, Waves vendor, or blocked candidates.
 - In the desktop app, each deck opens its own Effects window. VST2/VST3 scanning happens on the client's Windows machine through the local Electron audio engine, not on Cloudflare or GitHub.
 - The desktop panel reports scan status, candidate count, supported formats, a short candidate summary, and the VST3 loader prototype status.
-- VST3 plugins can be instantiated for parameter discovery and bridge PCM block testing, but live continuous Deck A/B VST2/VST3 audio streaming is not connected yet; the current executable deck processor is the built-in NativeDSP test lane.
+- VST3 plugins can be instantiated for parameter discovery and bridge PCM block testing. The persistent native router now routes each deck's live PCM blocks to the first staged bridge-capable VST3 plugin for that deck. The built-in NativeDSP lane remains the fallback when the bridge cannot load, process, or returns silence for non-silent input.
 
 Waves is treated as a vendor/shell classification, not a separate plugin format. A Waves candidate can still be VST2 or VST3 depending on the discovered shell/bundle.
 
-The scanner enumerates files and directories, then the native bridge is asked to load eligible VST3 candidates. The current native bridge validates the command protocol and plugin paths, instantiates VST3 modules, initializes component/controller pairs, enumerates real plugin parameters, runs an internal tone buffer and an external PCM16 block through the loaded processor when available, and unloads the instance. It still does not route continuous Deck A/B PCM streams through a third-party binary.
+The scanner enumerates files and directories, then the native bridge is asked to load eligible VST3 candidates. The current native bridge validates the command protocol and plugin paths, instantiates VST3 modules, initializes component/controller pairs, enumerates real plugin parameters, runs an internal tone buffer and an external PCM16 block through the loaded processor when available, and unloads the probe instance. During persistent playback, the router keeps a per-deck bridge process warm for the selected staged VST3 plugin and sends Deck A/B PCM blocks through `processPcm` before pan/mix/output.
 
 The helper process currently supports:
 
@@ -78,7 +78,7 @@ $env:RESONANCE_TEST_VST3_PLUGIN='C:\Program Files\Common Files\VST3\SomePlugin.v
 
 The VST3 SDK is distributed by Steinberg through the official `steinbergmedia/vst3sdk` repository and VST developer portal. As of Steinberg's VST 3.8 announcement, the SDK is available under the MIT license, while the VST name/logo remain Steinberg trademarks.
 
-NativeDSP parameters are applied today through the router's plugin lane: input gain drives the saturation input, output gain trims the processed signal, and wet/dry blends processed and dry deck audio. VST3 candidates can expose real parameter controls after bridge loading and can run bridge PCM block tests, but live deck execution stays blocked until continuous Deck A/B PCM processing is connected.
+NativeDSP parameters are applied through the router's fallback plugin lane: input gain drives the saturation input, output gain trims the processed signal, and wet/dry blends processed and dry deck audio. VST3 candidates can expose real parameter controls after bridge loading and staged bridge-capable VST3 plugins are routed through `processPcm` during persistent deck playback. NativeDSP remains available when a VST3 plugin fails or returns silence.
 
 ## Why Waves Requires Desktop Hosting
 
@@ -97,9 +97,9 @@ Resonance virtual playback device
 ## Native Host Milestones
 
 1. Validate continuous virtual-device capture streams against the installed Resonance driver.
-2. Connect the native router's render callback to the verified bridge `processPcm` block exchange.
-3. Keep per-deck plugin instances warm instead of loading/unloading per block.
-4. Replace or augment the built-in NativeDSP lane with one real VST3 processing instance through the sandboxed helper.
+2. Validate audible output with a known non-silent VST3 effect and a Waves VST3 shell on Deck A and Deck B.
+3. Add parameter-change forwarding from the deck effects controls into the loaded VST3 controller.
+4. Improve latency by moving from JSON/base64 IPC to a shared-memory or binary block protocol if needed.
 5. Add plugin parameter state, bypass, ordering, and preset persistence.
 6. Validate Waves VST3 shells specifically after the generic VST3 path works.
 

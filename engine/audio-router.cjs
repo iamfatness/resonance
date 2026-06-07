@@ -61,6 +61,17 @@ function eqBandGains(processing = {}) {
   return [0, 1, 2, 3, 4, 5, 6, 7].map((index) => clamp(curve[index], -18, 18));
 }
 
+function selectedVst3Plugin(pluginChain = []) {
+  return (Array.isArray(pluginChain) ? pluginChain : []).find((plugin) => (
+    plugin
+    && !plugin.bypassed
+    && plugin.format === 'VST3'
+    && plugin.path
+    && plugin.nativeLoad?.bridgePcmProcessing
+    && plugin.parameters?.enabled !== false
+  )) || null;
+}
+
 function buildRouterState({
   backend = 'mock',
   status = 'idle',
@@ -266,6 +277,7 @@ class DesktopAudioRouter {
     const eq = eqBands(processing);
     const eqGains = eqBandGains(processing);
     const pluginSettings = buildNativePluginSettings(processing.pluginChain);
+    const vst3Plugin = selectedVst3Plugin(processing.pluginChain);
     const latency = normalizeLatencySettings(this.settings);
     return {
       type: 'settings',
@@ -279,6 +291,8 @@ class DesktopAudioRouter {
       pluginOutputGainDb: pluginSettings.pluginOutputGainDb,
       pluginDrive: pluginSettings.pluginDrive,
       pluginWetDry: pluginSettings.pluginWetDry,
+      vst3PluginId: vst3Plugin?.id || '',
+      vst3PluginPath: vst3Plugin?.path || '',
       eqLowDb: eq.low,
       eqMidDb: eq.mid,
       eqHighDb: eq.high,

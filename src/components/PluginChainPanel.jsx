@@ -87,7 +87,7 @@ export function PluginChainPanel({
           const runtimeLabel = nativeLoad.processingEnabled
             ? 'native loaded'
             : nativeLoad.bridgePcmProcessing
-              ? 'bridge tested'
+              ? 'VST routed'
               : plugin.executable === false
                 ? 'scan only'
                 : 'active DSP';
@@ -256,7 +256,7 @@ export function PluginChainPanel({
           const nativeStatus = plugin.nativeLoad?.processingEnabled
             ? 'native loaded'
             : plugin.nativeLoad?.bridgePcmProcessing
-              ? 'bridge tested'
+              ? 'VST routed'
               : plugin.executable === false
                 ? 'scan only'
                 : '';

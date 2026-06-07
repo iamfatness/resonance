@@ -108,7 +108,7 @@ Progress:
 - The prototype can load VST3 bundle metadata in the sandbox process and expose the initial host-side parameter contract.
 - Native VST3 bridge scaffold is in `native/vst3-bridge`, builds with `npm run native:vst3-bridge`, and reports SDK/test-plugin readiness to the desktop panel.
 - Native VST3 bridge builds against the Steinberg SDK submodule, loads real VST3 modules, enumerates real parameters, processes an internal 32-bit float test block, and processes external interleaved PCM16 blocks through a loaded processor.
-- Live third-party deck execution remains disabled; the next step is routing continuous Deck A/B PCM blocks from the native router into the verified bridge processor lifecycle.
+- Persistent Deck A/B playback now routes each deck's live PCM blocks through the first staged bridge-capable VST3 plugin for that deck, using a warm per-deck bridge process and NativeDSP fallback on load, process, or silent-output failures.
 
 Depends on:
 - Persistent `PluginHostClient`.
@@ -129,6 +129,14 @@ Acceptance criteria:
 - Deck A and Deck B can run separate plugin chains.
 - Bypass, enabled state, wet/dry, and gain parameters affect processing.
 - If plugin processing fails, audio falls back or stops gracefully with a visible error.
+
+Progress:
+
+- The native router now sends each deck's live PCM blocks to the first staged bridge-capable VST3 plugin for that deck.
+- Each deck keeps its own VST3 bridge process/plugin instance warm while the selected plugin path remains unchanged.
+- Router snapshots expose `vst3Status`, `vst3BlocksProcessed`, and `vst3Failures`.
+- NativeDSP fallback remains active if a VST3 plugin cannot load, cannot process, or returns silence for non-silent input.
+- VST3 parameter-change forwarding and lower-latency binary/shared-memory IPC remain open.
 
 Depends on:
 - VST3 loader prototype.
@@ -352,7 +360,7 @@ Progress:
 - Added `npm run smoke:deploy` for live hosted smoke checks against `https://resonance.iamfatness.us/app`.
 - Added `docs/release-checklist.md` with local verification, Cloudflare deploy, beta artifact, and manual beta checks.
 - Current repeated deploys have passed through `npm run deploy:worker` and live route checks.
-- Current Cloudflare Worker version after the VST3 bridge PCM block-processing deploy: `bb556961-4d2f-4c00-a648-3b06670d88c5`.
+- Current Cloudflare Worker version after the VST3 live deck routing deploy: `4df546ff-d311-4830-84c9-91dd5edf739a`.
 
 Depends on:
 - Current Worker deploy script.

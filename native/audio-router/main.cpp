@@ -11,6 +11,7 @@
 #include <cstring>
 #include <cmath>
 #include <deque>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <mutex>
@@ -21,6 +22,7 @@
 #include <wrl/client.h>
 
 using Microsoft::WRL::ComPtr;
+namespace fs = std::filesystem;
 
 struct ComInit {
   HRESULT hr;
@@ -37,6 +39,19 @@ std::string EscapeJson(const std::wstring& value) {
     else if (ch == L'"') out << "\\\"";
     else if (ch >= 32 && ch < 127) out << static_cast<char>(ch);
     else out << "?";
+  }
+  return out.str();
+}
+
+std::string EscapeJsonString(const std::string& value) {
+  std::ostringstream out;
+  for (char ch : value) {
+    if (ch == '\\') out << "\\\\";
+    else if (ch == '"') out << "\\\"";
+    else if (ch == '\n') out << "\\n";
+    else if (ch == '\r') out << "\\r";
+    else if (ch == '\t') out << "\\t";
+    else out << ch;
   }
   return out.str();
 }
@@ -516,6 +531,8 @@ int Base64Value(char ch) {
   return -1;
 }
 
+const char kBase64Alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+
 std::vector<uint8_t> DecodeBase64(const std::string& value) {
   std::vector<uint8_t> bytes;
   int accumulator = 0;
@@ -532,6 +549,22 @@ std::vector<uint8_t> DecodeBase64(const std::string& value) {
     }
   }
   return bytes;
+}
+
+std::string EncodeBase64(const std::vector<uint8_t>& bytes) {
+  std::string output;
+  output.reserve(((bytes.size() + 2) / 3) * 4);
+  for (size_t index = 0; index < bytes.size(); index += 3) {
+    const uint32_t octetA = bytes[index];
+    const uint32_t octetB = index + 1 < bytes.size() ? bytes[index + 1] : 0;
+    const uint32_t octetC = index + 2 < bytes.size() ? bytes[index + 2] : 0;
+    const uint32_t triple = (octetA << 16) | (octetB << 8) | octetC;
+    output.push_back(kBase64Alphabet[(triple >> 18) & 0x3f]);
+    output.push_back(kBase64Alphabet[(triple >> 12) & 0x3f]);
+    output.push_back(index + 1 < bytes.size() ? kBase64Alphabet[(triple >> 6) & 0x3f] : '=');
+    output.push_back(index + 2 < bytes.size() ? kBase64Alphabet[triple & 0x3f] : '=');
+  }
+  return output;
 }
 
 double SampleAsDouble(const BYTE* bytes, WORD bitsPerSample, WORD blockAlign, WORD channelCount, UINT32 frame, WORD channel, bool isFloat) {
@@ -590,6 +623,162 @@ void AppendInterleavedCaptureFrames(
   while (buffer.size() > maxFrames) buffer.pop_front();
 }
 
+std::wstring Vst3BridgePath() {
+  wchar_t modulePath[MAX_PATH] = {};
+  GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+  fs::path current(modulePath);
+  fs::path nativeRoot = current.parent_path().parent_path().parent_path().parent_path();
+  fs::path bridge = nativeRoot / L"vst3-bridge" / L"build" / L"Release" / L"resonance-vst3-bridge.exe";
+  return bridge.wstring();
+}
+
+struct Vst3BridgeProcess {
+  PROCESS_INFORMATION processInfo {};
+  HANDLE stdinWrite = nullptr;
+  HANDLE stdoutRead = nullptr;
+  std::string pluginId;
+  std::string pluginPath;
+  bool loaded = false;
+
+  ~Vst3BridgeProcess() {
+    Stop();
+  }
+
+  void Stop() {
+    if (stdinWrite) {
+      const std::string exitLine = "{\"type\":\"exit\",\"requestId\":\"router-exit\"}\n";
+      DWORD written = 0;
+      WriteFile(stdinWrite, exitLine.data(), static_cast<DWORD>(exitLine.size()), &written, nullptr);
+    }
+    if (processInfo.hProcess) {
+      WaitForSingleObject(processInfo.hProcess, 500);
+      DWORD exitCode = 0;
+      if (GetExitCodeProcess(processInfo.hProcess, &exitCode) && exitCode == STILL_ACTIVE) {
+        TerminateProcess(processInfo.hProcess, 0);
+      }
+      CloseHandle(processInfo.hProcess);
+      processInfo.hProcess = nullptr;
+    }
+    if (processInfo.hThread) {
+      CloseHandle(processInfo.hThread);
+      processInfo.hThread = nullptr;
+    }
+    if (stdinWrite) {
+      CloseHandle(stdinWrite);
+      stdinWrite = nullptr;
+    }
+    if (stdoutRead) {
+      CloseHandle(stdoutRead);
+      stdoutRead = nullptr;
+    }
+    loaded = false;
+    pluginId.clear();
+    pluginPath.clear();
+  }
+
+  bool Start(std::string& error) {
+    if (processInfo.hProcess && stdinWrite && stdoutRead) return true;
+
+    SECURITY_ATTRIBUTES security {};
+    security.nLength = sizeof(SECURITY_ATTRIBUTES);
+    security.bInheritHandle = TRUE;
+    security.lpSecurityDescriptor = nullptr;
+
+    HANDLE stdinRead = nullptr;
+    HANDLE stdoutWrite = nullptr;
+    if (!CreatePipe(&stdinRead, &stdinWrite, &security, 0)) {
+      error = "VST3 bridge stdin pipe failed";
+      return false;
+    }
+    if (!CreatePipe(&stdoutRead, &stdoutWrite, &security, 0)) {
+      CloseHandle(stdinRead);
+      CloseHandle(stdinWrite);
+      stdinWrite = nullptr;
+      error = "VST3 bridge stdout pipe failed";
+      return false;
+    }
+    SetHandleInformation(stdinWrite, HANDLE_FLAG_INHERIT, 0);
+    SetHandleInformation(stdoutRead, HANDLE_FLAG_INHERIT, 0);
+
+    STARTUPINFOW startup {};
+    startup.cb = sizeof(startup);
+    startup.dwFlags = STARTF_USESTDHANDLES;
+    startup.hStdInput = stdinRead;
+    startup.hStdOutput = stdoutWrite;
+    startup.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+
+    std::wstring command = L"\"" + Vst3BridgePath() + L"\"";
+    BOOL created = CreateProcessW(
+      nullptr,
+      command.data(),
+      nullptr,
+      nullptr,
+      TRUE,
+      CREATE_NO_WINDOW,
+      nullptr,
+      nullptr,
+      &startup,
+      &processInfo);
+
+    CloseHandle(stdinRead);
+    CloseHandle(stdoutWrite);
+    if (!created) {
+      Stop();
+      error = "VST3 bridge process could not start";
+      return false;
+    }
+    return true;
+  }
+
+  bool ReadLine(std::string& line, std::string& error) {
+    line.clear();
+    char ch = 0;
+    DWORD read = 0;
+    while (ReadFile(stdoutRead, &ch, 1, &read, nullptr) && read == 1) {
+      if (ch == '\n') return true;
+      if (ch != '\r') line.push_back(ch);
+    }
+    error = "VST3 bridge closed before responding";
+    return false;
+  }
+
+  bool Request(const std::string& message, std::string& response, std::string& error) {
+    if (!stdinWrite || !stdoutRead) {
+      error = "VST3 bridge is not running";
+      return false;
+    }
+    const std::string line = message + "\n";
+    DWORD written = 0;
+    if (!WriteFile(stdinWrite, line.data(), static_cast<DWORD>(line.size()), &written, nullptr) || written != line.size()) {
+      error = "VST3 bridge write failed";
+      return false;
+    }
+    return ReadLine(response, error);
+  }
+
+  bool EnsureLoaded(const std::string& nextPluginId, const std::string& nextPluginPath, std::string& error) {
+    if (nextPluginPath.empty()) {
+      Stop();
+      return false;
+    }
+    if (loaded && pluginPath == nextPluginPath && pluginId == nextPluginId) return true;
+    Stop();
+    if (!Start(error)) return false;
+    pluginId = nextPluginId.empty() ? "router-plugin" : nextPluginId;
+    pluginPath = nextPluginPath;
+    std::ostringstream request;
+    request
+      << "{\"type\":\"loadPlugin\",\"requestId\":\"router-load\","
+      << "\"id\":\"" << EscapeJsonString(pluginId) << "\","
+      << "\"path\":\"" << EscapeJsonString(pluginPath) << "\"}";
+    std::string response;
+    if (!Request(request.str(), response, error)) return false;
+    loaded = response.find("\"status\":\"loaded\"") != std::string::npos;
+    if (!loaded) error = "VST3 bridge plugin load failed";
+    return loaded;
+  }
+};
+
 struct ServerState;
 void CaptureLoopbackIntoDeck(
   ServerState& state,
@@ -624,6 +813,12 @@ struct ServerDeck {
   double pluginOutputGainDb = 0.0;
   double pluginDrive = 1.0;
   double pluginWetDry = 100.0;
+  std::string vst3PluginId;
+  std::string vst3PluginPath;
+  std::string vst3Status = "disabled";
+  uint64_t vst3BlocksProcessed = 0;
+  uint32_t vst3Failures = 0;
+  Vst3BridgeProcess vst3Bridge;
   DeckStats stats;
   std::wstring name;
   std::string error;
@@ -672,6 +867,79 @@ void ApplyDeckPluginLane(ServerDeck& deck, double& left, double& right) {
   const double wetRight = (std::tanh(right * inputGain * drive) / denominator) * outputGain;
   left = (dryLeft * (1.0 - wet)) + (wetLeft * wet);
   right = (dryRight * (1.0 - wet)) + (wetRight * wet);
+}
+
+bool ProcessDeckVst3Block(ServerDeck& deck, std::vector<std::array<double, 2>>& frames, double sampleRate) {
+  if (deck.vst3PluginPath.empty() || frames.empty()) return false;
+  std::string error;
+  if (!deck.vst3Bridge.EnsureLoaded(deck.vst3PluginId, deck.vst3PluginPath, error)) {
+    deck.vst3Status = "load-failed";
+    deck.error = error;
+    deck.vst3Failures += 1;
+    return false;
+  }
+
+  std::vector<uint8_t> bytes(frames.size() * 4);
+  double inputPeak = 0.0;
+  for (size_t frame = 0; frame < frames.size(); ++frame) {
+    inputPeak = std::max(inputPeak, std::abs(frames[frame][0]));
+    inputPeak = std::max(inputPeak, std::abs(frames[frame][1]));
+    const int16_t left = static_cast<int16_t>(ClampDouble(frames[frame][0], -1.0, 1.0) * 32767.0);
+    const int16_t right = static_cast<int16_t>(ClampDouble(frames[frame][1], -1.0, 1.0) * 32767.0);
+    std::memcpy(bytes.data() + (frame * 4), &left, sizeof(int16_t));
+    std::memcpy(bytes.data() + (frame * 4) + sizeof(int16_t), &right, sizeof(int16_t));
+  }
+
+  std::ostringstream request;
+  request
+    << "{\"type\":\"processPcm\",\"requestId\":\"router-pcm\","
+    << "\"pluginId\":\"" << EscapeJsonString(deck.vst3PluginId) << "\","
+    << "\"frames\":" << frames.size() << ","
+    << "\"channels\":2,"
+    << "\"sampleRate\":" << sampleRate << ","
+    << "\"pcm16Base64\":\"" << EncodeBase64(bytes) << "\"}";
+
+  std::string response;
+  if (!deck.vst3Bridge.Request(request.str(), response, error)) {
+    deck.vst3Status = "process-failed";
+    deck.error = error;
+    deck.vst3Failures += 1;
+    return false;
+  }
+  if (response.find("\"status\":\"processed\"") == std::string::npos) {
+    deck.vst3Status = "process-failed";
+    deck.error = "VST3 bridge processPcm failed";
+    deck.vst3Failures += 1;
+    return false;
+  }
+  const double outputPeak = JsonNumberValue(response, "outputPeak", 0.0);
+  if (inputPeak > 0.001 && outputPeak < 0.000001) {
+    deck.vst3Status = "silent-output-fallback";
+    deck.error = "VST3 bridge returned silence; using fallback DSP";
+    deck.vst3Failures += 1;
+    return false;
+  }
+
+  const std::vector<uint8_t> outputBytes = DecodeBase64(JsonStringValue(response, "pcm16Base64"));
+  const size_t outputFrames = std::min(frames.size(), outputBytes.size() / 4);
+  if (outputFrames == 0) {
+    deck.vst3Status = "empty-output";
+    deck.error = "VST3 bridge returned empty PCM";
+    deck.vst3Failures += 1;
+    return false;
+  }
+  for (size_t frame = 0; frame < outputFrames; ++frame) {
+    int16_t left = 0;
+    int16_t right = 0;
+    std::memcpy(&left, outputBytes.data() + (frame * 4), sizeof(int16_t));
+    std::memcpy(&right, outputBytes.data() + (frame * 4) + sizeof(int16_t), sizeof(int16_t));
+    frames[frame][0] = ClampDouble(static_cast<double>(left) / 32768.0, -1.0, 1.0);
+    frames[frame][1] = ClampDouble(static_cast<double>(right) / 32768.0, -1.0, 1.0);
+  }
+  deck.vst3Status = "processing";
+  deck.vst3BlocksProcessed += 1;
+  deck.error.clear();
+  return true;
 }
 
 void CaptureLoopbackIntoDeck(
@@ -925,6 +1193,10 @@ void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, cons
       << "\"pluginOutputGainDb\":" << deck.pluginOutputGainDb << ","
       << "\"pluginDrive\":" << deck.pluginDrive << ","
       << "\"pluginWetDry\":" << deck.pluginWetDry << ","
+      << "\"vst3Status\":\"" << EscapeJsonString(deck.vst3Status) << "\","
+      << "\"vst3PluginPath\":\"" << EscapeJsonString(deck.vst3PluginPath) << "\","
+      << "\"vst3BlocksProcessed\":" << deck.vst3BlocksProcessed << ","
+      << "\"vst3Failures\":" << deck.vst3Failures << ","
       << "\"eqBandsDb\":[";
     for (size_t index = 0; index < kPersistentEqBandCount; ++index) {
       if (index > 0) std::cout << ",";
@@ -997,6 +1269,19 @@ void ApplyServerSettings(ServerDeck& deck, const std::string& line, double sampl
   deck.pluginOutputGainDb = ClampDouble(JsonNumberValue(line, "pluginOutputGainDb", deck.pluginOutputGainDb), -24.0, 24.0);
   deck.pluginDrive = ClampDouble(JsonNumberValue(line, "pluginDrive", deck.pluginDrive), 1.0, 3.0);
   deck.pluginWetDry = ClampDouble(JsonNumberValue(line, "pluginWetDry", deck.pluginWetDry), 0.0, 100.0);
+  const std::string vst3PluginPath = JsonStringValue(line, "vst3PluginPath");
+  const std::string vst3PluginId = JsonStringValue(line, "vst3PluginId");
+  if (vst3PluginPath.empty()) {
+    if (!deck.vst3PluginPath.empty()) deck.vst3Bridge.Stop();
+    deck.vst3PluginPath.clear();
+    deck.vst3PluginId.clear();
+    deck.vst3Status = "disabled";
+  } else if (vst3PluginPath != deck.vst3PluginPath || vst3PluginId != deck.vst3PluginId) {
+    deck.vst3Bridge.Stop();
+    deck.vst3PluginPath = vst3PluginPath;
+    deck.vst3PluginId = vst3PluginId.empty() ? std::string("deck-") + deck.id + "-vst3" : vst3PluginId;
+    deck.vst3Status = "pending";
+  }
   deck.eq.Configure(sampleRate);
 }
 
@@ -1302,17 +1587,16 @@ int RunPersistentServer(const std::wstring& outputDeviceId, LatencySettings late
 
     {
       std::lock_guard<std::mutex> lock(state.mutex);
-      for (UINT32 frame = 0; frame < availableFrames; ++frame) {
-        double left = 0.0;
-        double right = 0.0;
-        auto mixDeck = [&](ServerDeck& deck) {
-          if (!deck.loaded || !deck.playing) return;
+      auto renderDeckBlock = [&](ServerDeck& deck) {
+        std::vector<std::array<double, 2>> frames(availableFrames, {0.0, 0.0});
+        if (!deck.loaded || !deck.playing) return frames;
+        for (UINT32 frame = 0; frame < availableFrames; ++frame) {
           double sourceLeft = 0.0;
           double sourceRight = 0.0;
           if (deck.sourceType == "pcm" || deck.sourceType == "loopback") {
             if (deck.pcmFrames.empty()) {
               deck.pcmUnderruns += 1;
-              return;
+              continue;
             }
             const auto sourceFrame = deck.pcmFrames.front();
             deck.pcmFrames.pop_front();
@@ -1320,23 +1604,40 @@ int RunPersistentServer(const std::wstring& outputDeviceId, LatencySettings late
             sourceRight = sourceFrame[1];
             deck.pcmFramesRendered += 1;
           } else {
-            if (deck.wav.channels == 0) return;
+            if (deck.wav.channels == 0) continue;
             const uint64_t frameCount = deck.wav.samples.size() / deck.wav.channels;
             if (deck.positionFrames + frame >= frameCount) {
               deck.playing = false;
               deck.positionFrames = frameCount;
-              return;
+              continue;
             }
             const double renderFrame = static_cast<double>(deck.positionFrames + frame);
             sourceLeft = WavSample(deck.wav, renderFrame, sampleRate, 0);
             sourceRight = WavSample(deck.wav, renderFrame, sampleRate, 1);
           }
           deck.eq.Process(sourceLeft, sourceRight);
-          ApplyDeckPluginLane(deck, sourceLeft, sourceRight);
-          MixDeckStereoFrameWithoutEq(deck.processing, deck.stats, sourceLeft, sourceRight, left, right);
-        };
-        mixDeck(state.deckA);
-        mixDeck(state.deckB);
+          frames[frame] = {sourceLeft, sourceRight};
+        }
+
+        if (!ProcessDeckVst3Block(deck, frames, sampleRate)) {
+          for (auto& frame : frames) {
+            ApplyDeckPluginLane(deck, frame[0], frame[1]);
+          }
+        }
+        return frames;
+      };
+
+      auto deckABlock = renderDeckBlock(state.deckA);
+      auto deckBBlock = renderDeckBlock(state.deckB);
+      for (UINT32 frame = 0; frame < availableFrames; ++frame) {
+        double left = 0.0;
+        double right = 0.0;
+        if (frame < deckABlock.size()) {
+          MixDeckStereoFrameWithoutEq(state.deckA.processing, state.deckA.stats, deckABlock[frame][0], deckABlock[frame][1], left, right);
+        }
+        if (frame < deckBBlock.size()) {
+          MixDeckStereoFrameWithoutEq(state.deckB.processing, state.deckB.stats, deckBBlock[frame][0], deckBBlock[frame][1], left, right);
+        }
         left = ClampDouble(left, -0.95, 0.95);
         right = ClampDouble(right, -0.95, 0.95);
         state.masterPeakLeft = std::max(state.masterPeakLeft * 0.995, std::abs(left));
