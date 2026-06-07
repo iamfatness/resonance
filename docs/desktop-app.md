@@ -78,7 +78,7 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 - Node integration is disabled.
 - A preload bridge exposes minimal desktop metadata at `window.resonanceDesktop`.
 - A preload bridge exposes `window.resonanceDesktop.engine` for engine state, settings, devices, and meters.
-- The React desktop panel UI lives in `src/components/DesktopEnginePanel.jsx`, while the Electron bridge hook lives in `src/hooks/useDesktopEngine.js`.
+- The React desktop panel UI lives in `src/components/DesktopEnginePanel.jsx`, is mounted inside the collapsed Desktop Audio Engine settings section, and reads Electron state through `src/hooks/useDesktopEngine.js`.
 - External links open in the system browser.
 - The desktop app can enumerate Windows audio endpoints, select a native output, run the persistent WASAPI router, and route app-owned local WAV, pushed PCM, bounded loopback/capture windows, or continuous capture streams into Deck A/B.
 - When Windows reports an available Resonance virtual capture endpoint, the engine selects it as the default input for Deck A/B capture.
@@ -87,6 +87,7 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 - The plugin host helper process reports its protocol and resolves staged Deck A/B plugin-chain plans without loading third-party binaries yet.
 - The engine persists selected devices, EQ bypass, and plugin-chain settings under the user's app data folder.
 - The desktop panel shows readiness diagnostics for native metering, SysVAD source, built driver package, Secure Boot signing path, test-signing state, WDK toolsets, virtual device status, and plugin host status.
+- Deck cards show a compact native source/VST3 route summary in the desktop app, and the Desktop Audio Engine settings panel expands into detailed Deck A/B bus cards.
 - Deck bus cards show whether each deck is using native-processable audio, NativeDSP fallback, VST3 bridge processing, or a degraded VST3 state.
 - YouTube deck cards are labeled as browser-isolated so users know those iframe decks are mix-only unless audio is captured through another path.
 - The desktop panel can export a beta diagnostics bundle with engine state, device scan, router snapshot, plugin scan, diagnostics checks, and recent export status.

@@ -35,7 +35,7 @@ Progress:
 - Local WAV, pushed PCM, bounded capture, and continuous capture already flow through the persistent native router.
 - Per-deck EQ, pan, NativeDSP fallback, and first staged bridge-capable VST3 routing are active on the persistent router path.
 - The product direction has pivoted away from requiring the virtual driver for the core desktop app. The driver is now an optional later system-wide routing feature.
-- YouTube deck cards now show browser-isolated/mix-only status, and desktop bus cards show native-processable source plus VST3 active/fallback/degraded status.
+- YouTube deck cards now show browser-isolated/mix-only status, desktop deck cards show compact native source/VST3 status, and desktop bus cards show native-processable source plus VST3 active/fallback/degraded status.
 
 Depends on:
 - Persistent native audio router.
@@ -392,7 +392,7 @@ Progress:
 - Added `npm run smoke:deploy` for live hosted smoke checks against `https://resonance.iamfatness.us/app`.
 - Added `docs/release-checklist.md` with local verification, Cloudflare deploy, beta artifact, and manual beta checks.
 - Current repeated deploys have passed through `npm run deploy:worker` and live route checks.
-- Current Cloudflare Worker version after the deck routing status deploy: `27131807-5176-44b5-8f28-9d12911581ce`.
+- Current Cloudflare Worker version after the desktop routing UI fix deploy: `f8f90730-23d6-414f-8a6b-b819a8bc56cc`.
 
 Depends on:
 - Current Worker deploy script.

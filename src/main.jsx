@@ -40,6 +40,7 @@ import { VideoDeck } from './components/VideoDeck.jsx';
 import { LandingPage } from './components/LandingPage.jsx';
 import { DirectSourcePanel } from './components/DirectSourcePanel.jsx';
 import { DeckEffectsWindow } from './components/DeckEffectsWindow.jsx';
+import { DesktopEnginePanel } from './components/DesktopEnginePanel.jsx';
 import { EqPanel } from './components/EqPanel.jsx';
 import { QueuePanel } from './components/QueuePanel.jsx';
 import { SearchResultsPanel } from './components/SearchResultsPanel.jsx';
@@ -128,6 +129,40 @@ function isIOSDevice() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
+function deckSourceStatus(sourceType) {
+  if (sourceType === 'wav') return { label: 'WAV active', tone: 'ready' };
+  if (sourceType === 'pcm') return { label: 'PCM active', tone: 'ready' };
+  if (sourceType === 'loopback') return { label: 'Capture active', tone: 'ready' };
+  if (sourceType === 'virtual-device') return { label: 'Virtual capture', tone: 'ready' };
+  return { label: 'No source', tone: 'idle' };
+}
+
+function deckVst3Status(route) {
+  const status = route?.vst3Status || 'disabled';
+  if (status === 'processing') return { label: 'Active', tone: 'ready' };
+  if (status === 'pending') return { label: 'Pending', tone: 'manual' };
+  if (status === 'disabled') return { label: 'Fallback', tone: 'idle' };
+  if (status.includes('fallback')) return { label: 'Fallback', tone: 'blocked' };
+  if (status.includes('failed') || status.includes('empty')) return { label: 'Degraded', tone: 'blocked' };
+  return { label: status, tone: 'blocked' };
+}
+
+function buildDeckNativeRouting(engineState, deck) {
+  const routes = engineState?.router?.routes || [];
+  const nativeRoutes = engineState?.router?.nativeSnapshot?.routes || [];
+  const route = nativeRoutes.find((candidate) => candidate.deck === deck) || routes.find((candidate) => candidate.deck === deck);
+  const source = engineState?.router?.nativeSnapshot?.sources?.find((candidate) => candidate.deck === deck);
+  const sourceType = source?.sourceType || engineState?.playbackDecks?.[deck]?.sourceType || 'empty';
+  const sourceStatus = deckSourceStatus(sourceType);
+  const vst3Status = deckVst3Status(route);
+  return {
+    sourceLabel: sourceStatus.label,
+    sourceTone: sourceStatus.tone,
+    vst3Label: vst3Status.label,
+    vst3Tone: vst3Status.tone,
+  };
+}
+
 function PlayerApp() {
   const isIOS = useMemo(() => isIOSDevice(), []);
   const savedAppState = useMemo(() => readSavedAppState(), []);
@@ -195,6 +230,25 @@ function PlayerApp() {
     audioBufferMs,
   }), [activePreset, appEqBypassed, audioBufferMs, audioLatencyProfile, deckProcessing, deckVolumes, eqMode, processedCurve]);
   const desktopEngine = useDesktopEngine(desktopEngineSettings);
+  const deckNativeRouting = useMemo(() => ({
+    A: buildDeckNativeRouting(desktopEngine.state, 'A'),
+    B: buildDeckNativeRouting(desktopEngine.state, 'B'),
+  }), [desktopEngine.state]);
+  const desktopSettings = useMemo(() => {
+    if (!desktopEngine.isDesktop) return null;
+    return {
+      status: desktopEngine.state?.status || 'Starting',
+      content: (
+        <DesktopEnginePanel
+          engine={desktopEngine}
+          latencyProfile={audioLatencyProfile}
+          bufferMs={audioBufferMs}
+          onLatencyProfileChange={setAudioLatencyProfile}
+          onBufferMsChange={setAudioBufferMs}
+        />
+      ),
+    };
+  }, [audioBufferMs, audioLatencyProfile, desktopEngine]);
   const desktopPluginCatalog = useMemo(() => {
     return buildPluginCatalog(desktopEngine.state?.pluginHost?.candidates || []);
   }, [desktopEngine.state?.pluginHost?.candidates]);
@@ -796,6 +850,7 @@ function PlayerApp() {
             onActivate={() => setActiveDeck('A')}
             onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('A') : null}
             isDesktop={desktopEngine.isDesktop}
+            nativeRouting={deckNativeRouting.A}
           />
           {!isSingleDeck && (
             <VideoDeck
@@ -813,6 +868,7 @@ function PlayerApp() {
               onActivate={() => setActiveDeck('B')}
               onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('B') : null}
               isDesktop={desktopEngine.isDesktop}
+              nativeRouting={deckNativeRouting.B}
             />
           )}
         </div>
@@ -879,6 +935,7 @@ function PlayerApp() {
         manualCurve={manualCurve}
         resetManualCurve={resetManualCurve}
         setManualBand={setManualBand}
+        desktopSettings={desktopSettings}
       />
 
       <footer className="transport">

@@ -1062,6 +1062,14 @@ button {
   flex-wrap: wrap;
 }
 
+.deck-routing-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
 .deck-route-note {
   display: block;
   margin-top: 4px;

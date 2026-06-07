@@ -16,6 +16,7 @@ export function VideoDeck({
   onActivate,
   onOpenEffects,
   isDesktop = false,
+  nativeRouting = null,
 }) {
   const actionLabel = parseYoutubePlaylistId(query)
     ? 'Import'
@@ -35,6 +36,12 @@ export function VideoDeck({
           <span className="route-chip idle">Browser isolated</span>
         </div>
       </div>
+      {isDesktop && nativeRouting && (
+        <div className="deck-routing-summary" aria-label={`Deck ${label} native routing status`}>
+          <span className={`route-chip ${nativeRouting.sourceTone}`}>Native: {nativeRouting.sourceLabel}</span>
+          <span className={`route-chip ${nativeRouting.vst3Tone}`}>VST3: {nativeRouting.vst3Label}</span>
+        </div>
+      )}
       <form className="deck-search" onSubmit={onSubmit}>
         <Search size={16} />
         <input
