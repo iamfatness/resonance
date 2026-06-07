@@ -1,7 +1,7 @@
 export const basePluginCatalog = [
   {
     id: 'resonance-native-drive',
-    name: 'Resonance Native Drive',
+    name: 'Drive',
     vendor: 'Resonance',
     format: 'NativeDSP',
     loadStrategy: 'native-dsp',
@@ -14,6 +14,98 @@ export const basePluginCatalog = [
       outputGainDb: 0,
       presetName: 'Default',
     },
+  },
+  {
+    id: 'resonance-dj-filter',
+    name: 'Filter Sweep',
+    vendor: 'Resonance',
+    format: 'NativeDSP',
+    loadStrategy: 'native-dsp',
+    executable: true,
+    status: 'NativeDSP',
+    parameters: {
+      enabled: true,
+      wetDry: 70,
+      inputGainDb: -1,
+      outputGainDb: 0,
+      presetName: 'Sweep',
+    },
+  },
+  {
+    id: 'resonance-dj-punch',
+    name: 'Punch',
+    vendor: 'Resonance',
+    format: 'NativeDSP',
+    loadStrategy: 'native-dsp',
+    executable: true,
+    status: 'NativeDSP',
+    parameters: {
+      enabled: true,
+      wetDry: 82,
+      inputGainDb: 2,
+      outputGainDb: -1,
+      presetName: 'Punch',
+    },
+  },
+  {
+    id: 'resonance-dj-space',
+    name: 'Space',
+    vendor: 'Resonance',
+    format: 'NativeDSP',
+    loadStrategy: 'native-dsp',
+    executable: true,
+    status: 'NativeDSP',
+    parameters: {
+      enabled: true,
+      wetDry: 45,
+      inputGainDb: -2,
+      outputGainDb: 1,
+      presetName: 'Space',
+    },
+  },
+  {
+    id: 'resonance-dj-limiter',
+    name: 'Limiter',
+    vendor: 'Resonance',
+    format: 'NativeDSP',
+    loadStrategy: 'native-dsp',
+    executable: true,
+    status: 'NativeDSP',
+    parameters: {
+      enabled: true,
+      wetDry: 100,
+      inputGainDb: 0,
+      outputGainDb: -2,
+      presetName: 'Deck Safe',
+    },
+  },
+];
+
+export const djEffectPresets = [
+  {
+    id: 'resonance-dj-filter',
+    label: 'Filter',
+    description: 'Fast sweep-style tone movement for transitions.',
+  },
+  {
+    id: 'resonance-native-drive',
+    label: 'Drive',
+    description: 'Adds weight and saturation for a stronger deck.',
+  },
+  {
+    id: 'resonance-dj-punch',
+    label: 'Punch',
+    description: 'Pushes transient feel and presence before the mix.',
+  },
+  {
+    id: 'resonance-dj-space',
+    label: 'Space',
+    description: 'A lighter atmosphere macro for breakdowns.',
+  },
+  {
+    id: 'resonance-dj-limiter',
+    label: 'Limiter',
+    description: 'Keeps the deck controlled when effects stack.',
   },
 ];
 

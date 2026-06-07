@@ -29,16 +29,52 @@ const pluginHostCapabilities = {
 const builtInRuntimePlugins = [
   {
     id: 'resonance-native-drive',
-    name: 'Resonance Native Drive',
+    name: 'Drive',
     vendor: 'Resonance',
     format: 'NativeDSP',
     loadable: true,
     note: 'Built-in per-deck DSP used to validate the plugin processing lane before VST2/VST3 loading.',
   },
+  {
+    id: 'resonance-dj-filter',
+    name: 'Filter Sweep',
+    vendor: 'Resonance',
+    format: 'NativeDSP',
+    loadable: true,
+    note: 'Built-in DJ transition macro routed through the native deck DSP lane.',
+  },
+  {
+    id: 'resonance-dj-punch',
+    name: 'Punch',
+    vendor: 'Resonance',
+    format: 'NativeDSP',
+    loadable: true,
+    note: 'Built-in DJ punch macro routed through the native deck DSP lane.',
+  },
+  {
+    id: 'resonance-dj-space',
+    name: 'Space',
+    vendor: 'Resonance',
+    format: 'NativeDSP',
+    loadable: true,
+    note: 'Built-in DJ atmosphere macro routed through the native deck DSP lane.',
+  },
+  {
+    id: 'resonance-dj-limiter',
+    name: 'Limiter',
+    vendor: 'Resonance',
+    format: 'NativeDSP',
+    loadable: true,
+    note: 'Built-in deck control macro routed through the native deck DSP lane.',
+  },
 ];
 
 const stagedPluginRuntimeProfiles = {
   'resonance-native-drive': { gainDb: 1.5, drive: 1.12 },
+  'resonance-dj-filter': { gainDb: -0.5, drive: 1.04 },
+  'resonance-dj-punch': { gainDb: 2.5, drive: 1.1 },
+  'resonance-dj-space': { gainDb: -1, drive: 1.06 },
+  'resonance-dj-limiter': { gainDb: 0, drive: 1.02 },
   'vst3-generic': { gainDb: 1.5, drive: 1.08 },
   'waves-vst3': { gainDb: 2.25, drive: 1.16 },
 };

@@ -5,6 +5,7 @@ import { readSavedAppState, writeSavedAppState } from '../lib/storage.js';
 import {
   buildPluginCatalog,
   deletePluginPreset,
+  djEffectPresets,
   filterPluginCatalog,
   normalizePluginParameters,
   pluginChainKey,
@@ -45,6 +46,14 @@ export function DeckEffectsWindow({ deck = 'A' }) {
   const pluginCatalog = useMemo(() => {
     return buildPluginCatalog(desktopEngine.state?.pluginHost?.candidates || []);
   }, [desktopEngine.state?.pluginHost?.candidates]);
+  const djEffects = useMemo(() => {
+    return djEffectPresets
+      .map((effect) => ({
+        ...effect,
+        plugin: pluginCatalog.find((plugin) => plugin.id === effect.id),
+      }))
+      .filter((effect) => effect.plugin);
+  }, [pluginCatalog]);
   const filteredPlugins = useMemo(() => {
     return filterPluginCatalog(pluginCatalog, activeDeckProcessing.pluginChain, pluginFilter, pluginSort);
   }, [activeDeckProcessing.pluginChain, pluginCatalog, pluginFilter, pluginSort]);
@@ -93,6 +102,10 @@ export function DeckEffectsWindow({ deck = 'A' }) {
           }
         : settings;
     });
+  }
+
+  function addDjEffect(pluginId) {
+    addDeckPlugin(activeDeck, pluginId);
   }
 
   function removeDeckPlugin(targetDeck, pluginKey) {
@@ -208,32 +221,93 @@ export function DeckEffectsWindow({ deck = 'A' }) {
       <section className="effects-window-summary">
         <SlidersHorizontal size={18} />
         <p>
-          Scan this computer for VST2/VST3 plugins, then add effects into Deck {activeDeck}'s chain.
-          The native bridge reports whether each plugin loaded and which controls are exposed.
+          Treat Deck {activeDeck} like a DJ channel: add fast built-in effects first, then use advanced
+          plugin hosting only when you need local VST2/VST3 experiments.
         </p>
       </section>
-      <PluginChainPanel
-        activeInputDeck={activeDeck}
-        activeDeckProcessing={activeDeckProcessing || { pan: 0, eqBypassed: false, curve: flatCurve, pluginChain: [] }}
-        pluginCatalog={pluginCatalog}
-        pluginFilter={pluginFilter}
-        setPluginFilter={setPluginFilter}
-        pluginSort={pluginSort}
-        setPluginSort={setPluginSort}
-        filteredPlugins={filteredPlugins}
-        pluginScan={pluginScan}
-        addDeckPlugin={addDeckPlugin}
-        removeDeckPlugin={removeDeckPlugin}
-        moveDeckPlugin={moveDeckPlugin}
-        duplicateDeckPlugin={duplicateDeckPlugin}
-        resetDeckPluginParameters={resetDeckPluginParameters}
-        toggleDeckPluginBypass={toggleDeckPluginBypass}
-        setDeckPluginParameter={setDeckPluginParameter}
-        pluginPresets={pluginPresets}
-        savePluginPreset={saveDeckPluginPreset}
-        applyPluginPreset={applyDeckPluginPreset}
-        deletePluginPreset={deleteDeckPluginPreset}
-      />
+      <section className="dj-effects-panel">
+        <div className="panel-heading">
+          <h2>Deck {activeDeck} DJ Effects</h2>
+          <span>{activeDeckProcessing.pluginChain.length} active</span>
+        </div>
+        <div className="dj-effect-grid">
+          {djEffects.map((effect) => (
+            <button type="button" key={effect.id} onClick={() => addDjEffect(effect.id)}>
+              <strong>{effect.label}</strong>
+              <span>{effect.description}</span>
+            </button>
+          ))}
+        </div>
+        <div className="dj-active-chain">
+          <div className="plugin-rack-header">
+            <span>Live Deck Chain</span>
+            <strong>{activeDeckProcessing.pluginChain.length}</strong>
+          </div>
+          {activeDeckProcessing.pluginChain.length === 0 && (
+            <small className="plugin-empty">Add a DJ effect to shape Deck {activeDeck} before the master mix.</small>
+          )}
+          {activeDeckProcessing.pluginChain.map((plugin) => {
+            const key = pluginChainKey(plugin);
+            const parameters = normalizePluginParameters(plugin.parameters);
+            return (
+              <article className={`dj-chain-item ${plugin.bypassed ? 'bypassed' : ''}`} key={key}>
+                <span>
+                  <strong>{plugin.name}</strong>
+                  <small>{plugin.format || 'Effect'} | {parameters.presetName}</small>
+                </span>
+                <label>
+                  <small>Mix</small>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={parameters.wetDry}
+                    onChange={(event) => setDeckPluginParameter(activeDeck, key, 'wetDry', Number(event.target.value))}
+                  />
+                  <strong>{parameters.wetDry}%</strong>
+                </label>
+                <div>
+                  <button type="button" onClick={() => toggleDeckPluginBypass(activeDeck, key)}>
+                    {plugin.bypassed ? 'Enable' : 'Bypass'}
+                  </button>
+                  <button type="button" onClick={() => removeDeckPlugin(activeDeck, key)}>Remove</button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      </section>
+      <details className="advanced-plugin-hosting">
+        <summary>
+          <span>
+            <strong>Advanced Plugin Hosting</strong>
+            <small>Scan and stage local VST2/VST3 plugins after the DJ effects rack.</small>
+          </span>
+          <SlidersHorizontal size={16} />
+        </summary>
+        <PluginChainPanel
+          activeInputDeck={activeDeck}
+          activeDeckProcessing={activeDeckProcessing || { pan: 0, eqBypassed: false, curve: flatCurve, pluginChain: [] }}
+          pluginCatalog={pluginCatalog}
+          pluginFilter={pluginFilter}
+          setPluginFilter={setPluginFilter}
+          pluginSort={pluginSort}
+          setPluginSort={setPluginSort}
+          filteredPlugins={filteredPlugins}
+          pluginScan={pluginScan}
+          addDeckPlugin={addDeckPlugin}
+          removeDeckPlugin={removeDeckPlugin}
+          moveDeckPlugin={moveDeckPlugin}
+          duplicateDeckPlugin={duplicateDeckPlugin}
+          resetDeckPluginParameters={resetDeckPluginParameters}
+          toggleDeckPluginBypass={toggleDeckPluginBypass}
+          setDeckPluginParameter={setDeckPluginParameter}
+          pluginPresets={pluginPresets}
+          savePluginPreset={saveDeckPluginPreset}
+          applyPluginPreset={applyDeckPluginPreset}
+          deletePluginPreset={deleteDeckPluginPreset}
+        />
+      </details>
     </main>
   );
 }

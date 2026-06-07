@@ -2661,6 +2661,158 @@ button {
   margin: 0;
 }
 
+.dj-effects-panel,
+.advanced-plugin-hosting {
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #101516;
+}
+
+.dj-effect-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.dj-effect-grid button {
+  min-height: 92px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0d1112;
+  color: var(--text);
+  cursor: pointer;
+  padding: 11px;
+  text-align: left;
+}
+
+.dj-effect-grid button:hover {
+  border-color: rgba(56, 213, 200, 0.55);
+  background: rgba(56, 213, 200, 0.08);
+}
+
+.dj-effect-grid strong {
+  color: var(--teal);
+  font-size: 14px;
+  text-transform: uppercase;
+}
+
+.dj-effect-grid span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.dj-active-chain {
+  display: grid;
+  gap: 8px;
+}
+
+.dj-chain-item {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) minmax(220px, 1.1fr) auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #0d1112;
+}
+
+.dj-chain-item.bypassed {
+  opacity: 0.64;
+}
+
+.dj-chain-item > span,
+.dj-chain-item label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dj-chain-item strong {
+  color: var(--text);
+}
+
+.dj-chain-item small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.dj-chain-item label {
+  grid-template-columns: 34px minmax(0, 1fr) 44px;
+  align-items: center;
+}
+
+.dj-chain-item > div {
+  display: flex;
+  gap: 6px;
+}
+
+.dj-chain-item button,
+.advanced-plugin-hosting summary {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #121719;
+  color: var(--teal);
+}
+
+.dj-chain-item button {
+  min-height: 32px;
+  cursor: pointer;
+  padding: 0 9px;
+  font-weight: 850;
+}
+
+.advanced-plugin-hosting {
+  background: #0d1112;
+}
+
+.advanced-plugin-hosting summary {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+  padding: 0 12px;
+  list-style: none;
+}
+
+.advanced-plugin-hosting summary::-webkit-details-marker {
+  display: none;
+}
+
+.advanced-plugin-hosting summary span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.advanced-plugin-hosting summary strong {
+  color: var(--amber);
+  font-size: 13px;
+  text-transform: uppercase;
+}
+
+.advanced-plugin-hosting summary small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.advanced-plugin-hosting > section {
+  padding-top: 4px;
+}
+
 .direct-controls {
   display: grid;
   grid-template-columns: 130px 1fr;
@@ -3060,6 +3212,15 @@ canvas {
   .deck-eq-grid,
   .manual-band-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dj-effect-grid,
+  .dj-chain-item {
+    grid-template-columns: 1fr;
+  }
+
+  .dj-chain-item > div {
+    justify-content: flex-start;
   }
 
   .track-row,

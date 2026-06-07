@@ -4,15 +4,15 @@ The desktop app is an Electron shell around the existing Resonance React UI.
 
 ## Why Electron First
 
-Electron lets Resonance ship a native desktop window while keeping the current UI, playlist workflow, YouTube decks, direct audio EQ controls, and future extension/driver settings in one codebase.
+Electron lets Resonance ship a native desktop window while keeping the current UI, playlist workflow, YouTube decks, DJ effects, direct audio EQ controls, and future extension/driver settings in one codebase.
 
-The core desktop path should work like a small DAW: when Resonance owns the audio source, the user-mode engine routes that deck through EQ, pan, plugin processing, and the selected output device. The virtual audio driver remains separate and optional for future system-wide routing:
+The core desktop path should work like a DJ app with embedded YouTube: Deck A and Deck B stay central, and when Resonance owns the audio source, the user-mode engine routes that deck through EQ, pan, DJ effects, optional advanced plugin processing, and the selected output device. The virtual audio driver remains separate and optional for future system-wide routing:
 
 ```text
 Resonance Desktop UI
   -> user-mode Resonance audio engine
   -> app-owned Deck A/B PCM, local files, or capture streams
-  -> per-deck EQ / pan / plugin chain
+  -> per-deck EQ / pan / DJ effects / optional plugin chain
   -> selected Windows output
 
 Optional later:
@@ -82,8 +82,8 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 - External links open in the system browser.
 - The desktop app can enumerate Windows audio endpoints, select a native output, run the persistent WASAPI router, and route app-owned local WAV, pushed PCM, bounded loopback/capture windows, or continuous capture streams into Deck A/B.
 - When Windows reports an available Resonance virtual capture endpoint, the engine selects it as the default input for Deck A/B capture.
-- The UI can stage plugin chain settings and bypass the app EQ.
-- Active staged deck plugins drive a built-in NativeDSP lane in the native router, with Deck A and Deck B processed independently before the master bus.
+- The UI can stage DJ effect-chain settings, optional advanced plugin-chain settings, and bypass the app EQ.
+- Active staged deck effects drive a built-in NativeDSP lane in the native router, with Deck A and Deck B processed independently before the master bus.
 - The plugin host helper process reports its protocol and resolves staged Deck A/B plugin-chain plans without loading third-party binaries yet.
 - The engine persists selected devices, EQ bypass, and plugin-chain settings under the user's app data folder.
 - The desktop panel shows readiness diagnostics for native metering, SysVAD source, built driver package, Secure Boot signing path, test-signing state, WDK toolsets, virtual device status, and plugin host status.
@@ -92,7 +92,7 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 - YouTube deck cards are labeled as browser-isolated so users know those iframe decks are mix-only unless audio is captured through another path.
 - The desktop panel can export a beta diagnostics bundle with engine state, device scan, router snapshot, plugin scan, diagnostics checks, and recent export status.
 - The left sidebar switches between functional Now Playing, Library, Playlist, History, Liked Videos, and Radio panels.
-- Deck A and Deck B each expose a desktop-only Effects button. Each button opens a separate deck effects window where the user can scan the local Windows machine for VST2/VST3 plugins and stage that deck's chain.
+- Deck A and Deck B each expose a desktop-only Effects button. Each button opens a separate DJ effects window with built-in effect quick-add controls first and local VST2/VST3 scanning behind Advanced Plugin Hosting.
 
 ## Beta Diagnostics
 

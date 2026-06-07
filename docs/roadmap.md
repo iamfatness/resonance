@@ -9,17 +9,17 @@ The current post-roadmap evaluation and next execution plan lives in `docs/proje
 - One issue per top-level roadmap item.
 - Each issue should keep the same title, goal, acceptance criteria, and dependencies from this file.
 - Close an item only after code, docs, and verification are complete.
-- Prefer shipping in this order: core audio path, plugin host, desktop packaging, beta readiness, then polish.
+- Prefer shipping in this order: core DJ deck path, built-in effects, desktop packaging, beta readiness, then advanced plugin hosting polish.
 
 ## Phase 1: Desktop Audio Foundation
 
-### [ ] Desktop: DAW-style app-owned playback and plugin routing
+### [ ] Desktop: DJ-style app-owned playback and effects routing
 
-Goal: Make the desktop app useful without requiring a kernel driver by prioritizing audio that Resonance owns directly.
+Goal: Make the desktop app useful as a DJ app without requiring a kernel driver by prioritizing embedded YouTube workflow plus audio that Resonance owns directly.
 
 Deliverables:
 - Treat local WAV/direct PCM/captured PCM as first-class Deck A/B sources.
-- Keep per-deck EQ, pan, gain, and plugin chains active before the master output.
+- Keep per-deck EQ, pan, gain, and DJ effects active before the master output.
 - Use WASAPI loopback/capture as the practical bridge for external playback when clean per-deck app-owned audio is unavailable.
 - Keep YouTube iframe playback in the web deck path for discovery/playlist workflows, but do not depend on iframe audio for native EQ/VST routing.
 - Make the desktop UI clearly distinguish app-owned processable sources from browser-isolated YouTube iframe playback.
@@ -27,13 +27,13 @@ Deliverables:
 Acceptance criteria:
 - Deck A and Deck B can run processable app-owned sources through per-deck EQ/pan/VST3 routing without a virtual driver.
 - Users can see whether a deck source is processable by the desktop engine.
-- The plugin path remains functional when the virtual driver is absent.
+- Built-in DJ effects remain functional when the virtual driver is absent.
 - Driver diagnostics are available but do not block the main desktop workflow.
 
 Progress:
 
 - Local WAV, pushed PCM, bounded capture, and continuous capture already flow through the persistent native router.
-- Per-deck EQ, pan, NativeDSP fallback, and first staged bridge-capable VST3 routing are active on the persistent router path.
+- Per-deck EQ, pan, NativeDSP fallback, built-in DJ effect presets, and first staged bridge-capable VST3 routing are active on the persistent router path.
 - The product direction has pivoted away from requiring the virtual driver for the core desktop app. The driver is now an optional later system-wide routing feature.
 - YouTube deck cards now show browser-isolated/mix-only status, desktop deck cards show compact native source/VST3 status, and desktop bus cards show native-processable source plus VST3 active/fallback/degraded status.
 
@@ -392,7 +392,7 @@ Progress:
 - Added `npm run smoke:deploy` for live hosted smoke checks against `https://resonance.iamfatness.us/app`.
 - Added `docs/release-checklist.md` with local verification, Cloudflare deploy, beta artifact, and manual beta checks.
 - Current repeated deploys have passed through `npm run deploy:worker` and live route checks.
-- Current Cloudflare Worker version after the settings button fix deploy: `e42e907f-9f5f-4c22-9e71-1915037a602e`.
+- Current Cloudflare Worker version after the DJ effects rack deploy: `50c7cf99-b7f3-4df4-8f44-e65dbb94262c`.
 
 Depends on:
 - Current Worker deploy script.
