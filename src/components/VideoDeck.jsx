@@ -80,6 +80,11 @@ export function VideoDeck({
             <button type="button" onClick={nativeDeck.onStop} disabled={!nativeHasSource}>
               Stop
             </button>
+            {nativeDeck.onTestTone && (
+              <button type="button" onClick={nativeDeck.onTestTone}>
+                Tone
+              </button>
+            )}
             <button type="button" onClick={nativeDeck.onToggleCapture} disabled={!nativeDeck.canCapture}>
               {nativeIsCapturing ? 'Stop Cap' : 'Capture'}
             </button>

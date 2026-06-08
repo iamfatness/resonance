@@ -812,6 +812,7 @@ function PlayerApp() {
       onChooseWav: () => chooseNativeWav(deck),
       onTogglePlay: () => toggleNativeDeck(deck),
       onStop: () => stopNativeDeck(deck),
+      onTestTone: () => desktopEngine.renderTone?.(500),
       onToggleCapture: () => toggleNativeCapture(deck),
     };
   }
@@ -1015,8 +1016,6 @@ function PlayerApp() {
           </section>
         )}
 
-        <DirectSourcePanel directUrl={directUrl} setDirectUrl={setDirectUrl} localEq={localEq} />
-
         <section className={`deck-mode-overview ${hasNativeDeckSource ? 'native' : 'youtube'}`}>
           <div>
             <strong>{hasNativeDeckSource ? 'Native Processing Available' : 'YouTube Mix Mode Active'}</strong>
@@ -1028,57 +1027,6 @@ function PlayerApp() {
           </div>
           <span>{desktopEngine.isDesktop ? 'Desktop engine ready path' : 'Web mix path'}</span>
         </section>
-
-        <div className={`deck-grid ${isSingleDeck ? 'single-deck' : ''}`}>
-          <VideoDeck
-            label="A"
-            video={deckA}
-            query={queryA}
-            setQuery={setQueryA}
-            onSubmit={(event) => submitVideo(event, 'A')}
-            player={playerA}
-            volume={deckVolumes.A}
-            setVolume={(value) => setDeckVolume('A', value)}
-            pan={deckProcessing.A.pan}
-            setPan={(value) => setDeckPan('A', value)}
-            filter={deckProcessing.A.filter}
-            setFilter={(value) => setDeckFilter('A', value)}
-            active={activeDeck === 'A'}
-            onActivate={() => setActiveDeck('A')}
-            onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('A') : null}
-            isDesktop={desktopEngine.isDesktop}
-            nativeRouting={deckNativeRouting.A}
-            nativeDeck={buildNativeDeckControls('A')}
-            hotCues={hotCues.A}
-            onSetHotCue={(index) => setDeckHotCue('A', index)}
-            onJumpHotCue={(index) => jumpDeckHotCue('A', index)}
-          />
-          {!isSingleDeck && (
-            <VideoDeck
-              label="B"
-              video={deckB}
-              query={queryB}
-              setQuery={setQueryB}
-              onSubmit={(event) => submitVideo(event, 'B')}
-              player={playerB}
-              volume={deckVolumes.B}
-              setVolume={(value) => setDeckVolume('B', value)}
-              pan={deckProcessing.B.pan}
-              setPan={(value) => setDeckPan('B', value)}
-              filter={deckProcessing.B.filter}
-              setFilter={(value) => setDeckFilter('B', value)}
-              active={activeDeck === 'B'}
-              onActivate={() => setActiveDeck('B')}
-              onOpenEffects={desktopEngine.isDesktop ? () => openDeckEffects('B') : null}
-              isDesktop={desktopEngine.isDesktop}
-              nativeRouting={deckNativeRouting.B}
-              nativeDeck={buildNativeDeckControls('B')}
-              hotCues={hotCues.B}
-              onSetHotCue={(index) => setDeckHotCue('B', index)}
-              onJumpHotCue={(index) => jumpDeckHotCue('B', index)}
-            />
-          )}
-        </div>
 
         <section className="dj-mixer" aria-label="DJ mixer">
           <div className="mixer-channel">
@@ -1127,6 +1075,59 @@ function PlayerApp() {
             <small>{isSingleDeck ? 'Single Deck' : deckFilterLabel(deckProcessing.B.filter)}</small>
           </div>
         </section>
+
+        <div className={`deck-grid ${isSingleDeck ? 'single-deck' : ''}`}>
+          <VideoDeck
+            label="A"
+            video={deckA}
+            query={queryA}
+            setQuery={setQueryA}
+            onSubmit={(event) => submitVideo(event, 'A')}
+            player={playerA}
+            volume={deckVolumes.A}
+            setVolume={(value) => setDeckVolume('A', value)}
+            pan={deckProcessing.A.pan}
+            setPan={(value) => setDeckPan('A', value)}
+            filter={deckProcessing.A.filter}
+            setFilter={(value) => setDeckFilter('A', value)}
+            active={activeDeck === 'A'}
+            onActivate={() => setActiveDeck('A')}
+            onOpenEffects={() => openDeckEffects('A')}
+            isDesktop={desktopEngine.isDesktop}
+            nativeRouting={deckNativeRouting.A}
+            nativeDeck={buildNativeDeckControls('A')}
+            hotCues={hotCues.A}
+            onSetHotCue={(index) => setDeckHotCue('A', index)}
+            onJumpHotCue={(index) => jumpDeckHotCue('A', index)}
+          />
+          {!isSingleDeck && (
+            <VideoDeck
+              label="B"
+              video={deckB}
+              query={queryB}
+              setQuery={setQueryB}
+              onSubmit={(event) => submitVideo(event, 'B')}
+              player={playerB}
+              volume={deckVolumes.B}
+              setVolume={(value) => setDeckVolume('B', value)}
+              pan={deckProcessing.B.pan}
+              setPan={(value) => setDeckPan('B', value)}
+              filter={deckProcessing.B.filter}
+              setFilter={(value) => setDeckFilter('B', value)}
+              active={activeDeck === 'B'}
+              onActivate={() => setActiveDeck('B')}
+              onOpenEffects={() => openDeckEffects('B')}
+              isDesktop={desktopEngine.isDesktop}
+              nativeRouting={deckNativeRouting.B}
+              nativeDeck={buildNativeDeckControls('B')}
+              hotCues={hotCues.B}
+              onSetHotCue={(index) => setDeckHotCue('B', index)}
+              onJumpHotCue={(index) => jumpDeckHotCue('B', index)}
+            />
+          )}
+        </div>
+
+        <DirectSourcePanel directUrl={directUrl} setDirectUrl={setDirectUrl} localEq={localEq} />
 
         <QueuePanel
           activePreset={activePreset}

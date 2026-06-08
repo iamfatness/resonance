@@ -83,9 +83,10 @@ The installer uses NSIS through `electron-builder`, creates Start Menu and deskt
 - The desktop app can enumerate Windows audio endpoints, select a native output, run the persistent WASAPI router, and route app-owned local WAV, pushed PCM, bounded loopback/capture windows, or continuous capture streams into Deck A/B.
 - When Windows reports an available Resonance virtual capture endpoint, the engine selects it as the default input for Deck A/B capture.
 - The main deck surface includes a DJ mixer strip with cue-style active deck selection, crossfader, simple level meters, and per-deck filter controls.
+- The desktop layout prioritizes the player surface: mode status, mixer, and YouTube deck videos appear before direct-audio utility panels.
 - Each YouTube deck includes three hot cue pads for setting and jumping to playback positions.
 - Deck cards and the main deck surface explicitly show whether the app is in YouTube Mix Mode or Native Processing Mode so users know which controls are live on embedded YouTube versus native/captured audio.
-- Desktop deck cards include a native source lane for each deck: choose WAV, play/pause, stop, and start/stop capture. Those controls use the same engine IPC path as the advanced desktop panel.
+- Desktop deck cards include a native source lane for each deck: choose WAV, play/pause, stop, native tone test, and start/stop capture. Those controls use the same engine IPC path as the advanced desktop panel.
 - The UI can stage DJ effect-chain settings, optional advanced plugin-chain settings, and bypass the app EQ.
 - Active staged deck effects drive a built-in NativeDSP lane in the native router, with Deck A and Deck B processed independently before the master bus.
 - The plugin host helper process reports its protocol and resolves staged Deck A/B plugin-chain plans without loading third-party binaries yet.

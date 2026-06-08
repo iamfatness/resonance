@@ -7,6 +7,7 @@ Resonance is a DJ-style music player prototype for mixing embedded YouTube decks
 - Two YouTube playback decks.
 - Independent Deck A / Deck B volume controls.
 - DJ mixer strip with cue-style deck selection, crossfader, level meters, and per-deck filter controls.
+- Player-first app layout that keeps the mixer and video decks ahead of utility panels.
 - Three hot cues per deck for setting and jumping to YouTube playback positions.
 - Deck mode indicators that separate YouTube Mix Mode from Native Processing Mode.
 - Active deck loading from pasted YouTube URLs or video IDs.
@@ -14,7 +15,7 @@ Resonance is a DJ-style music player prototype for mixing embedded YouTube decks
 - Mood presets that adjust deck mix levels and instrument boost guidance.
 - Direct audio file / URL EQ path for real browser-side audio filtering.
 - DJ-style per-deck effects controls with advanced plugin hosting kept secondary.
-- Desktop deck cards expose native WAV loading, native play/pause/stop, and Deck A/B capture controls.
+- Desktop deck cards expose native WAV loading, native play/pause/stop, Deck A/B capture controls, and a quick tone test for the native engine.
 - Chrome extension prototype for real current-tab EQ using `chrome.tabCapture`.
 - Cloudflare Worker deployment for `resonance.iamfatness.us`.
 
