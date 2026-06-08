@@ -207,12 +207,19 @@ function registerIpc() {
   ipcMain.handle('engine:pushDeckPcm', (_event, payload) => sendEngineCommand('PUSH_DECK_PCM', { payload }));
   ipcMain.handle('engine:captureLoopback', (_event, payload) => sendEngineCommand('CAPTURE_LOOPBACK', { payload }));
   ipcMain.handle('engine:startDeckCapture', (_event, payload) => sendEngineCommand('START_DECK_CAPTURE', { payload }));
+  ipcMain.handle('engine:startDeckProcessCapture', (_event, payload) => sendEngineCommand('START_DECK_PROCESS_CAPTURE', { payload }));
   ipcMain.handle('engine:stopDeckCapture', (_event, payload) => sendEngineCommand('STOP_DECK_CAPTURE', { payload }));
   ipcMain.handle('engine:loadDeckWav', (_event, payload) => sendEngineCommand('LOAD_DECK_WAV', { payload }));
   ipcMain.handle('engine:playDeck', (_event, payload) => sendEngineCommand('PLAY_DECK', { payload }));
   ipcMain.handle('engine:pauseDeck', (_event, payload) => sendEngineCommand('PAUSE_DECK', { payload }));
   ipcMain.handle('engine:stopDeck', (_event, payload) => sendEngineCommand('STOP_DECK', { payload }));
   ipcMain.handle('engine:seekDeck', (_event, payload) => sendEngineCommand('SEEK_DECK', { payload }));
+  ipcMain.handle('engine:getAppAudioProcessId', (event) => {
+    const webContents = event.sender;
+    return {
+      processId: typeof webContents.getOSProcessId === 'function' ? webContents.getOSProcessId() : null,
+    };
+  });
   ipcMain.handle('window:openDeckEffects', (_event, deck) => openDeckEffectsWindow(deck));
 }
 

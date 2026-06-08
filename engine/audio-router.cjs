@@ -381,6 +381,20 @@ class DesktopAudioRouter {
     return true;
   }
 
+  startDeckProcessCapture({ deck = 'A', targetPid } = {}) {
+    if (!this.startPersistentServer()) return false;
+    const deckId = deck === 'B' ? 'B' : 'A';
+    const pid = Number(targetPid);
+    if (!Number.isFinite(pid) || pid <= 0) return false;
+    this.sendServerCommand({
+      type: 'startProcessCapture',
+      deck: deckId,
+      targetPid: Math.floor(pid),
+    });
+    this.sendServerCommand(this.deckCommandSettings(deckId));
+    return true;
+  }
+
   stopDeckCapture({ deck = 'A' } = {}) {
     return this.sendServerCommand({
       type: 'stopCapture',

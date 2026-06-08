@@ -9,12 +9,13 @@ function sourceLabel(sourceType) {
   if (sourceType === 'wav') return 'Native processing active';
   if (sourceType === 'pcm') return 'Native PCM active';
   if (sourceType === 'loopback') return 'Capture processing active';
+  if (sourceType === 'process-loopback') return 'App capture active';
   if (sourceType === 'virtual-device') return 'Virtual capture active';
   return 'No native source';
 }
 
 function sourceTone(sourceType) {
-  if (sourceType === 'wav' || sourceType === 'pcm' || sourceType === 'loopback' || sourceType === 'virtual-device') return 'ready';
+  if (sourceType === 'wav' || sourceType === 'pcm' || sourceType === 'loopback' || sourceType === 'process-loopback' || sourceType === 'virtual-device') return 'ready';
   return 'idle';
 }
 
@@ -140,7 +141,7 @@ export function DesktopEnginePanel({
             const positionMs = deckState.positionMs || 0;
             const isPlaying = deckState.status === 'playing';
             const isCapturing = Boolean(deckState.captureStreaming);
-            const hasDeckSource = Boolean(deckState.path || deckState.source || deckState.sourceType === 'pcm' || deckState.sourceType === 'loopback' || deckState.sourceType === 'virtual-device' || isCapturing);
+            const hasDeckSource = Boolean(deckState.path || deckState.source || deckState.sourceType === 'pcm' || deckState.sourceType === 'loopback' || deckState.sourceType === 'process-loopback' || deckState.sourceType === 'virtual-device' || isCapturing);
             const captureDeviceId = state.inputDeviceId && state.inputDeviceId !== 'mock-input' ? state.inputDeviceId : state.outputDeviceId;
             return (
               <div className="wav-playback-row" key={deck}>

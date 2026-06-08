@@ -17,7 +17,7 @@
 ## Desktop Audio
 
 - The main desktop path does not require a virtual driver; app-owned sources such as WAV, pushed PCM, and capture streams can be routed through the native engine.
-- YouTube iframe audio remains browser-isolated unless it is captured through an extension, loopback/capture path, or a future system-wide routing device.
+- YouTube iframe audio remains browser-isolated in the web app. The desktop app now has an experimental driverless process-loopback capture path for the app renderer process, plus endpoint loopback/capture and Chrome extension options.
 - The local SysVAD package is test-signed and cannot be installed on Secure Boot machines.
 - Secure Boot beta machines require a Microsoft-signed production or attestation driver package.
 - The virtual audio endpoint is now an optional system-wide routing track and still needs target-machine install validation and a sustained Deck A/B capture pass.

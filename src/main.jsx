@@ -134,6 +134,7 @@ function deckSourceStatus(sourceType) {
   if (sourceType === 'wav') return { label: 'WAV active', tone: 'ready' };
   if (sourceType === 'pcm') return { label: 'PCM active', tone: 'ready' };
   if (sourceType === 'loopback') return { label: 'Capture active', tone: 'ready' };
+  if (sourceType === 'process-loopback') return { label: 'App capture', tone: 'ready' };
   if (sourceType === 'virtual-device') return { label: 'Virtual capture', tone: 'ready' };
   return { label: 'No source', tone: 'idle' };
 }
@@ -201,6 +202,7 @@ function nativeSourceLabel(sourceType) {
   if (sourceType === 'wav') return 'WAV';
   if (sourceType === 'pcm') return 'PCM';
   if (sourceType === 'loopback') return 'Capture';
+  if (sourceType === 'process-loopback') return 'App capture';
   if (sourceType === 'virtual-device') return 'Virtual capture';
   return 'Native source';
 }
@@ -784,6 +786,17 @@ function PlayerApp() {
     await desktopEngine.startDeckCapture?.({ deck, deviceId });
   }
 
+  async function startAppProcessCapture(deck) {
+    setActiveDeck(deck);
+    if (desktopEngine.state?.status !== 'running') {
+      await desktopEngine.start?.();
+    }
+    const processInfo = await desktopEngine.getAppAudioProcessId?.();
+    const targetPid = Number(processInfo?.processId);
+    if (!Number.isFinite(targetPid) || targetPid <= 0) return;
+    await desktopEngine.startDeckProcessCapture?.({ deck, targetPid });
+  }
+
   function buildNativeDeckControls(deck) {
     if (!desktopEngine.isDesktop) return null;
     const deckState = desktopEngine.state?.playbackDecks?.[deck] || {};
@@ -794,6 +807,7 @@ function PlayerApp() {
         || sourceType === 'wav'
         || sourceType === 'pcm'
         || sourceType === 'loopback'
+        || sourceType === 'process-loopback'
         || sourceType === 'virtual-device'
         || deckState.captureStreaming,
     );
@@ -813,6 +827,7 @@ function PlayerApp() {
       onTogglePlay: () => toggleNativeDeck(deck),
       onStop: () => stopNativeDeck(deck),
       onTestTone: () => desktopEngine.renderTone?.(500),
+      onAppCapture: () => startAppProcessCapture(deck),
       onToggleCapture: () => toggleNativeCapture(deck),
     };
   }

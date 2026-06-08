@@ -36,6 +36,37 @@ describe('audio engine deck source state', () => {
     expect(deckSourceTypeForDevice('{0.0.1.00000000}.default-render')).toBe('loopback');
   });
 
+  it('normalizes process-loopback capture sources', () => {
+    const deck = buildDeckSourceState(defaultPlaybackDeck, {
+      type: 'process-loopback',
+      mode: 'process-loopback-capture',
+      label: 'Process loopback capture',
+      streaming: true,
+      metadata: {
+        processId: 1234,
+      },
+    }, {
+      name: 'Process capture 1234',
+      status: 'playing',
+    });
+
+    expect(deck).toMatchObject({
+      name: 'Process capture 1234',
+      status: 'playing',
+      sourceType: 'process-loopback',
+      captureStreaming: true,
+      source: {
+        type: 'process-loopback',
+        mode: 'process-loopback-capture',
+        streaming: true,
+        metadata: {
+          processId: 1234,
+        },
+      },
+    });
+    expect(normalizeSnapshotSourceType('process-loopback', deck)).toBe('process-loopback');
+  });
+
   it('mirrors normalized source state to legacy deck fields for IPC compatibility', () => {
     const startedAt = '2026-06-06T12:00:00.000Z';
     const deck = buildDeckSourceState(defaultPlaybackDeck, {

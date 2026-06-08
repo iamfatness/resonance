@@ -50,6 +50,7 @@ export function useDesktopEngine(settings) {
     pushDeckPcm: (payload) => desktopApi?.engine?.pushDeckPcm?.(payload),
     captureLoopback: (payload) => desktopApi?.engine?.captureLoopback?.(payload),
     startDeckCapture: (payload) => desktopApi?.engine?.startDeckCapture?.(payload),
+    startDeckProcessCapture: (payload) => desktopApi?.engine?.startDeckProcessCapture?.(payload),
     stopDeckCapture: (payload) => desktopApi?.engine?.stopDeckCapture?.(payload),
     selectDeckAWav: async () => {
       const selection = await desktopApi?.selectWavFile?.();
@@ -85,5 +86,6 @@ export function useDesktopEngine(settings) {
     refreshPlugins: () => desktopApi?.engine?.refreshPlugins?.(),
     exportDiagnostics: () => desktopApi?.engine?.exportDiagnostics?.(),
     selectDevices: (devices) => desktopApi?.engine?.selectDevices?.(devices),
+    getAppAudioProcessId: () => desktopApi?.engine?.getAppAudioProcessId?.(),
   };
 }

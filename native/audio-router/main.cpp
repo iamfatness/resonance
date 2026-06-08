@@ -1,5 +1,6 @@
 #include <Windows.h>
 #include <Audioclient.h>
+#include <audioclientactivationparams.h>
 #include <Propkeydef.h>
 #include <Functiondiscoverykeys_devpkey.h>
 #include <ksmedia.h>
@@ -23,6 +24,7 @@
 #include <thread>
 #include <vector>
 #include <wrl/client.h>
+#include <wrl/implements.h>
 
 using Microsoft::WRL::ComPtr;
 namespace fs = std::filesystem;
@@ -33,6 +35,60 @@ struct ComInit {
   ~ComInit() {
     if (SUCCEEDED(hr)) CoUninitialize();
   }
+};
+
+class AudioInterfaceCompletionHandler final
+  : public Microsoft::WRL::RuntimeClass<
+      Microsoft::WRL::RuntimeClassFlags<Microsoft::WRL::ClassicCom>,
+      IActivateAudioInterfaceCompletionHandler> {
+public:
+  AudioInterfaceCompletionHandler() = default;
+
+  STDMETHOD(ActivateCompleted)(IActivateAudioInterfaceAsyncOperation* operation) override {
+    HRESULT activateResult = E_FAIL;
+    ComPtr<IUnknown> activatedInterface;
+    HRESULT hr = operation->GetActivateResult(&activateResult, &activatedInterface);
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      result_ = FAILED(hr) ? hr : activateResult;
+      if (SUCCEEDED(result_)) {
+        activatedInterface.As(&audioClient_);
+      }
+      completed_ = true;
+    }
+    event_.Set();
+    return S_OK;
+  }
+
+  HRESULT WaitForResult(ComPtr<IAudioClient>& audioClient, DWORD timeoutMs = 5000) {
+    const DWORD wait = WaitForSingleObject(event_.Get(), timeoutMs);
+    if (wait != WAIT_OBJECT_0) return HRESULT_FROM_WIN32(ERROR_TIMEOUT);
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!completed_) return E_FAIL;
+    audioClient = audioClient_;
+    return result_;
+  }
+
+private:
+  class EventHandle {
+  public:
+    EventHandle() : handle_(CreateEventW(nullptr, TRUE, FALSE, nullptr)) {}
+    ~EventHandle() {
+      if (handle_) CloseHandle(handle_);
+    }
+    HANDLE Get() const { return handle_; }
+    void Set() {
+      if (handle_) SetEvent(handle_);
+    }
+  private:
+    HANDLE handle_ = nullptr;
+  };
+
+  EventHandle event_;
+  std::mutex mutex_;
+  bool completed_ = false;
+  HRESULT result_ = E_FAIL;
+  ComPtr<IAudioClient> audioClient_;
 };
 
 std::string EscapeJson(const std::wstring& value) {
@@ -926,7 +982,7 @@ ServerDeck& SelectServerDeck(ServerState& state, const std::string& deck) {
 }
 
 double ServerDeckPositionMs(const ServerDeck& deck) {
-  if (deck.sourceType == "pcm" || deck.sourceType == "loopback") return 0.0;
+  if (deck.sourceType == "pcm" || deck.sourceType == "loopback" || deck.sourceType == "process-loopback") return 0.0;
   if (!deck.loaded || deck.wav.sampleRate == 0) return 0.0;
   return static_cast<double>(deck.positionFrames) * 1000.0 / static_cast<double>(deck.wav.sampleRate);
 }
@@ -1255,6 +1311,137 @@ void ContinuousCaptureIntoDeck(
   }
 }
 
+HRESULT ActivateProcessLoopbackClient(DWORD targetPid, ComPtr<IAudioClient>& audioClient) {
+  AUDIOCLIENT_ACTIVATION_PARAMS params {};
+  params.ActivationType = AUDIOCLIENT_ACTIVATION_TYPE_PROCESS_LOOPBACK;
+  params.ProcessLoopbackParams.TargetProcessId = targetPid;
+  params.ProcessLoopbackParams.ProcessLoopbackMode = PROCESS_LOOPBACK_MODE_INCLUDE_TARGET_PROCESS_TREE;
+
+  PROPVARIANT activationParams;
+  PropVariantInit(&activationParams);
+  activationParams.vt = VT_BLOB;
+  activationParams.blob.cbSize = sizeof(params);
+  activationParams.blob.pBlobData = reinterpret_cast<BYTE*>(&params);
+
+  ComPtr<AudioInterfaceCompletionHandler> completionHandler =
+    Microsoft::WRL::Make<AudioInterfaceCompletionHandler>();
+  ComPtr<IActivateAudioInterfaceAsyncOperation> asyncOperation;
+  HRESULT hr = ActivateAudioInterfaceAsync(
+    VIRTUAL_AUDIO_DEVICE_PROCESS_LOOPBACK,
+    __uuidof(IAudioClient),
+    &activationParams,
+    completionHandler.Get(),
+    &asyncOperation);
+  if (FAILED(hr)) return hr;
+  return completionHandler->WaitForResult(audioClient);
+}
+
+void ContinuousProcessLoopbackIntoDeck(
+  ServerState& state,
+  char deckId,
+  DWORD targetPid,
+  size_t maxPcmFrames) {
+  ComInit com;
+  const std::string deckKey = deckId == 'B' ? "B" : "A";
+  auto failDeck = [&](const std::string& message) {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    ServerDeck& deck = SelectServerDeck(state, deckKey);
+    deck.error = message;
+    deck.captureStreaming = false;
+  };
+  if (FAILED(com.hr) && com.hr != RPC_E_CHANGED_MODE) {
+    failDeck("COM initialization failed for process loopback");
+    return;
+  }
+  if (targetPid == 0) {
+    failDeck("Process loopback target PID is missing");
+    return;
+  }
+
+  ComPtr<IAudioClient> audioClient;
+  HRESULT hr = ActivateProcessLoopbackClient(targetPid, audioClient);
+  if (FAILED(hr) || !audioClient) {
+    failDeck("Process loopback activation failed");
+    return;
+  }
+
+  WAVEFORMATEX* mixFormat = nullptr;
+  hr = audioClient->GetMixFormat(&mixFormat);
+  if (FAILED(hr) || !mixFormat) {
+    failDeck("Process loopback mix format unavailable");
+    return;
+  }
+
+  const REFERENCE_TIME bufferDuration = 10000000;
+  hr = audioClient->Initialize(
+    AUDCLNT_SHAREMODE_SHARED,
+    AUDCLNT_STREAMFLAGS_LOOPBACK,
+    bufferDuration,
+    0,
+    mixFormat,
+    nullptr);
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    failDeck("Process loopback initialize failed");
+    return;
+  }
+
+  ComPtr<IAudioCaptureClient> captureClient;
+  hr = audioClient->GetService(IID_PPV_ARGS(&captureClient));
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    failDeck("Process loopback capture client unavailable");
+    return;
+  }
+
+  hr = audioClient->Start();
+  if (FAILED(hr)) {
+    CoTaskMemFree(mixFormat);
+    failDeck("Process loopback start failed");
+    return;
+  }
+
+  while (true) {
+    {
+      std::lock_guard<std::mutex> lock(state.mutex);
+      const ServerDeck& deck = SelectServerDeck(state, deckKey);
+      if (!state.running || !deck.captureStreaming) break;
+    }
+
+    UINT32 packetFrames = 0;
+    captureClient->GetNextPacketSize(&packetFrames);
+    while (packetFrames > 0) {
+      BYTE* data = nullptr;
+      UINT32 frames = 0;
+      DWORD flags = 0;
+      hr = captureClient->GetBuffer(&data, &frames, &flags, nullptr, nullptr);
+      if (SUCCEEDED(hr)) {
+        if (!(flags & AUDCLNT_BUFFERFLAGS_SILENT) && data) {
+          std::lock_guard<std::mutex> lock(state.mutex);
+          ServerDeck& deck = SelectServerDeck(state, deckKey);
+          AppendInterleavedCaptureFrames(deck.pcmFrames, data, frames, mixFormat, maxPcmFrames);
+          deck.loaded = true;
+          deck.playing = true;
+          deck.sourceType = "process-loopback";
+          deck.pcmFramesReceived += frames;
+          deck.captureFramesReceived += frames;
+          deck.error.clear();
+        }
+        captureClient->ReleaseBuffer(frames);
+      }
+      captureClient->GetNextPacketSize(&packetFrames);
+    }
+    Sleep(10);
+  }
+
+  audioClient->Stop();
+  CoTaskMemFree(mixFormat);
+  {
+    std::lock_guard<std::mutex> lock(state.mutex);
+    SelectServerDeck(state, deckKey).captureStreaming = false;
+  }
+}
+
 void PrintServerSnapshot(ServerState& state, const WAVEFORMATEX* mixFormat, const std::wstring& deviceName, const std::wstring& deviceId, const char* eventType) {
   std::lock_guard<std::mutex> lock(state.mutex);
   const double sampleRate = mixFormat ? std::max<DWORD>(1, mixFormat->nSamplesPerSec) : 48000.0;
@@ -1514,6 +1701,30 @@ void RunServerCommand(ServerState& state, const std::string& line, double sample
     return;
   }
 
+  if (type == "startProcessCapture") {
+    std::thread& captureThread = deck.id == 'B' ? state.captureBThread : state.captureAThread;
+    if (captureThread.joinable()) {
+      deck.captureStreaming = false;
+      lock.unlock();
+      captureThread.join();
+      lock.lock();
+    }
+    const DWORD targetPid = static_cast<DWORD>(std::max(0.0, JsonNumberValue(line, "targetPid", 0.0)));
+    const char captureDeckId = deck.id;
+    deck.loaded = true;
+    deck.playing = true;
+    deck.sourceType = "process-loopback";
+    deck.wav = {};
+    deck.positionFrames = 0;
+    deck.error.clear();
+    deck.captureStreaming = true;
+    const size_t maxFrames = static_cast<size_t>(std::max(48000.0, sampleRate * 8.0));
+    lock.unlock();
+    captureThread = std::thread(ContinuousProcessLoopbackIntoDeck, std::ref(state), captureDeckId, targetPid, maxFrames);
+    lock.lock();
+    return;
+  }
+
   if (type == "stopCapture") {
     std::thread& captureThread = deck.id == 'B' ? state.captureBThread : state.captureAThread;
     deck.captureStreaming = false;
@@ -1695,7 +1906,7 @@ int RunPersistentServer(const std::wstring& outputDeviceId, LatencySettings late
         for (UINT32 frame = 0; frame < availableFrames; ++frame) {
           double sourceLeft = 0.0;
           double sourceRight = 0.0;
-          if (deck.sourceType == "pcm" || deck.sourceType == "loopback") {
+          if (deck.sourceType == "pcm" || deck.sourceType == "loopback" || deck.sourceType == "process-loopback") {
             if (deck.pcmFrames.empty()) {
               deck.pcmUnderruns += 1;
               continue;

@@ -18,6 +18,7 @@ contextBridge.exposeInMainWorld('resonanceDesktop', {
     pushDeckPcm: (payload) => ipcRenderer.invoke('engine:pushDeckPcm', payload),
     captureLoopback: (payload) => ipcRenderer.invoke('engine:captureLoopback', payload),
     startDeckCapture: (payload) => ipcRenderer.invoke('engine:startDeckCapture', payload),
+    startDeckProcessCapture: (payload) => ipcRenderer.invoke('engine:startDeckProcessCapture', payload),
     stopDeckCapture: (payload) => ipcRenderer.invoke('engine:stopDeckCapture', payload),
     loadDeckWav: (payload) => ipcRenderer.invoke('engine:loadDeckWav', payload),
     playDeck: (payload) => ipcRenderer.invoke('engine:playDeck', payload),
@@ -26,6 +27,7 @@ contextBridge.exposeInMainWorld('resonanceDesktop', {
     seekDeck: (payload) => ipcRenderer.invoke('engine:seekDeck', payload),
     updateSettings: (settings) => ipcRenderer.invoke('engine:updateSettings', settings),
     selectDevices: (devices) => ipcRenderer.invoke('engine:selectDevices', devices),
+    getAppAudioProcessId: () => ipcRenderer.invoke('engine:getAppAudioProcessId'),
     onState: (callback) => {
       const listener = (_event, state) => callback(state);
       ipcRenderer.on('engine:state', listener);

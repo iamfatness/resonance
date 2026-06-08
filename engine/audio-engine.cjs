@@ -119,8 +119,13 @@ function normalizeSnapshotSourceType(incomingType, deckState) {
 }
 
 function deckSourceLabel(sourceType, { streaming = false, fallback = 'WAV source' } = {}) {
-  if (streaming) return sourceType === 'virtual-device' ? 'Continuous virtual-device capture' : 'Continuous capture';
+  if (streaming) {
+    if (sourceType === 'virtual-device') return 'Continuous virtual-device capture';
+    if (sourceType === 'process-loopback') return 'Process loopback capture';
+    return 'Continuous capture';
+  }
   if (sourceType === 'pcm') return 'Pushed PCM';
+  if (sourceType === 'process-loopback') return 'Process loopback capture';
   if (sourceType === 'virtual-device') return 'Virtual-device capture';
   if (sourceType === 'loopback') return 'Loopback capture';
   return fallback;
@@ -1108,7 +1113,7 @@ function handleNativeRouterSnapshot(snapshot) {
           ? 'continuous-capture'
           : sourceType === 'pcm'
             ? 'pushed-pcm'
-            : sourceType === 'loopback' || sourceType === 'virtual-device'
+            : sourceType === 'loopback' || sourceType === 'virtual-device' || sourceType === 'process-loopback'
               ? deckState.source?.mode || 'bounded-capture'
               : 'file';
         const label = deckSourceLabel(sourceType, { streaming, fallback: deckState.name || 'WAV source' });
@@ -1709,6 +1714,45 @@ function startDeckCapture(requestId, payload = {}) {
   publishState(requestId);
 }
 
+function startDeckProcessCapture(requestId, payload = {}) {
+  if (!hasNativeRouter()) {
+    publishState(requestId);
+    return;
+  }
+
+  ensureNativeRouterStarted();
+  const deckId = payload.deck === 'B' ? 'B' : 'A';
+  const targetPid = Number(payload.targetPid);
+  if (!Number.isFinite(targetPid) || targetPid <= 0) {
+    publishState(requestId);
+    return;
+  }
+  audioRouter.startDeckProcessCapture({
+    deck: deckId,
+    targetPid,
+  });
+  const now = new Date().toISOString();
+  engineState.playbackDecks[deckId] = buildDeckSourceState(engineState.playbackDecks[deckId], {
+    type: 'process-loopback',
+    mode: 'process-loopback-capture',
+    label: 'Process loopback capture',
+    streaming: true,
+    startedAt: now,
+    stoppedAt: null,
+    metadata: {
+      processId: Math.floor(targetPid),
+    },
+  }, {
+    name: `Process capture ${Math.floor(targetPid)}`,
+    status: 'playing',
+    positionMs: 0,
+    durationMs: 0,
+    lastStartedAt: now,
+  });
+  engineState.router = audioRouter.getState();
+  publishState(requestId);
+}
+
 function stopDeckCapture(requestId, payload = {}) {
   if (!hasNativeRouter()) {
     publishState(requestId);
@@ -1749,6 +1793,7 @@ function handleEngineMessage(message = {}) {
   if (message.type === 'PUSH_DECK_PCM') pushDeckPcm(message.requestId, message.payload);
   if (message.type === 'CAPTURE_LOOPBACK') captureLoopback(message.requestId, message.payload);
   if (message.type === 'START_DECK_CAPTURE') startDeckCapture(message.requestId, message.payload);
+  if (message.type === 'START_DECK_PROCESS_CAPTURE') startDeckProcessCapture(message.requestId, message.payload);
   if (message.type === 'STOP_DECK_CAPTURE') stopDeckCapture(message.requestId, message.payload);
   if (message.type === 'LOAD_DECK_WAV') loadDeckWav(message.requestId, message.payload);
   if (message.type === 'PLAY_DECK') playDeck(message.requestId, message.payload);
