@@ -1,0 +1,21 @@
+{
+  "skill_name": "desktop-audio-engine",
+  "evals": [
+    {
+      "id": 1,
+      "name": "per-deck-mono-sum-toggle",
+      "prompt": "In Resonance's desktop app, add a per-deck mono-sum toggle that collapses a deck's stereo output to mono. Wire it through the preload bridge (electron/preload.cjs), the main-process IPC (electron/main.cjs), and the audio engine (engine/audio-engine.cjs), persist it in the engine settings, and add a vitest test. Keep the scan-but-blocked plugin discipline intact and don't touch the native binaries.",
+      "expected_output": "A change that threads the toggle renderer->main->engine: a method exposed on window.resonanceDesktop in preload.cjs, an ipcMain.handle in main.cjs calling sendEngineCommand, handling + settings persistence in audio-engine.cjs, and a vitest test in engine/*.test.js (ideally exercising a pure helper). npm test passes; no edits to native/ or the scan-but-blocked logic.",
+      "files": [],
+      "expectations": []
+    },
+    {
+      "id": 2,
+      "name": "vst3-bridge-bypass-message",
+      "prompt": "In Resonance I want to be able to bypass a staged VST3 plugin so its deck PCM passes through unprocessed without unloading it. Add a 'bypassPlugin' message to the Node side of the VST3 bridge protocol (NativeVst3BridgeClient in engine/plugin-host.cjs and the plugin-host-worker capabilities/describe), keep the NativeDSP fallback and the scan-but-blocked rules intact, and add a vitest test. Briefly note where the native C++ side (native/vst3-bridge/main.cpp) would need to handle it.",
+      "expected_output": "A new JSON-line 'bypassPlugin' request/response added to NativeVst3BridgeClient with requestId correlation + timeout like the other messages, the worker/describe capabilities updated, the scan-but-blocked discipline and NativeDSP fallback preserved (no plugin made executable by default), a vitest test in engine/plugin-host.test.js, and a short note on the native C++ handler. npm test passes.",
+      "files": [],
+      "expectations": []
+    }
+  ]
+}
